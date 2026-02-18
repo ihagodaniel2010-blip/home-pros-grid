@@ -1,14 +1,16 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Check, Star, Shield } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Check, MapPin, Home, Building2, ChevronRight, Star, Shield, ArrowLeft } from "lucide-react";
 import Header from "@/components/Header";
 import { getServiceBySlug, getSubServices, type SubServiceOption } from "@/data/services";
 import { mockPros } from "@/data/pros";
 import { saveLead } from "@/lib/leads";
+import { motion, AnimatePresence } from "framer-motion";
+
+const sectionVariants = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
+};
 
 const Quote = () => {
   const { serviceSlug } = useParams();
@@ -17,8 +19,9 @@ const Quote = () => {
   const service = getServiceBySlug(serviceSlug || "");
   const subServices = getSubServices(serviceSlug || "");
   const displayPros = mockPros.slice(0, 3);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const [step, setStep] = useState(0);
+  const [revealedSections, setRevealedSections] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     zip: searchParams.get("zip") || "",
@@ -30,7 +33,7 @@ const Quote = () => {
     address: "",
     email: "",
     phone: "",
-    selectedPros: [displayPros[0].id],
+    selectedPros: [displayPros[0]?.id].filter(Boolean),
   });
 
   const selectedSubService: SubServiceOption | undefined = useMemo(
@@ -39,48 +42,79 @@ const Quote = () => {
   );
   const hasSubtypes = !!(selectedSubService?.subtypes && selectedSubService.subtypes.length > 0);
 
-  const totalSteps = hasSubtypes ? 8 : 7;
-  const adjustedCurrent = !hasSubtypes && step > 2 ? step - 1 : step;
-  const progressPct = Math.round((adjustedCurrent / (totalSteps - 1)) * 100);
+  // Determine total sections and progress
+  const totalSections = hasSubtypes ? 8 : 7;
+  const progressPct = Math.min(Math.round(((revealedSections - 1) / (totalSections - 1)) * 100), 100);
 
   const set = (key: string, value: string | string[]) =>
     setFormData((p) => ({ ...p, [key]: value }));
 
-  const validate = (): boolean => {
-    const e: Record<string, string> = {};
-    switch (step) {
-      case 0: if (!/^\d{5}$/.test(formData.zip)) e.zip = "Enter a valid 5-digit zip code"; break;
-      case 1: if (!formData.selectedService) e.selectedService = "Please select a service"; break;
-      case 2: if (hasSubtypes && !formData.subtype) e.subtype = "Please select a subtype"; break;
-      case 4: if (!formData.locationType) e.locationType = "Please select a location type"; break;
-      case 5: if (!formData.fullName.trim()) e.fullName = "Name is required"; break;
-      case 6:
-        if (!formData.address.trim()) e.address = "Address is required";
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) e.email = "Enter a valid email";
-        break;
-      case 7:
-        if (!/^[\d\s()+-]{7,}$/.test(formData.phone)) e.phone = "Enter a valid phone number";
-        break;
+  const scrollToBottom = () => {
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 100);
+  };
+
+  const revealNext = (sectionIndex: number) => {
+    if (sectionIndex >= revealedSections) {
+      setRevealedSections(sectionIndex + 1);
+      scrollToBottom();
     }
-    setErrors(e);
-    return Object.keys(e).length === 0;
   };
 
-  const goNext = () => {
-    if (!validate()) return;
-    if (step === 1 && !hasSubtypes) setStep(3);
-    else if (step === 7) handleSubmit();
-    else setStep(step + 1);
-  };
+  // Auto-reveal on valid zip
+  useEffect(() => {
+    if (/^\d{5}$/.test(formData.zip) && revealedSections === 1) {
+      setErrors((e) => ({ ...e, zip: "" }));
+      revealNext(1);
+    }
+  }, [formData.zip]);
 
-  const goBack = () => {
-    if (step === 3 && !hasSubtypes) setStep(1);
-    else if (step > 0) setStep(step - 1);
-    else navigate(-1);
+  // Auto-reveal on service selection
+  useEffect(() => {
+    if (formData.selectedService && revealedSections <= 2) {
+      const sub = subServices.find((s) => s.label === formData.selectedService);
+      if (sub?.subtypes && sub.subtypes.length > 0) {
+        revealNext(2);
+      } else {
+        // Skip subtype, go to details
+        revealNext(2); // This will be details section (index adjusted)
+      }
+    }
+  }, [formData.selectedService]);
+
+  // Auto-reveal on subtype selection
+  useEffect(() => {
+    if (formData.subtype && hasSubtypes && revealedSections <= 3) {
+      revealNext(3);
+    }
+  }, [formData.subtype]);
+
+  // Auto-reveal on location type
+  useEffect(() => {
+    if (formData.locationType) {
+      const detailsSectionIdx = hasSubtypes ? 4 : 3;
+      if (revealedSections <= detailsSectionIdx + 1) {
+        revealNext(detailsSectionIdx + 1);
+      }
+    }
+  }, [formData.locationType]);
+
+  const validate = (): Record<string, string> => {
+    const e: Record<string, string> = {};
+    if (!/^\d{5}$/.test(formData.zip)) e.zip = "Enter a valid 5-digit zip code";
+    if (!formData.selectedService) e.selectedService = "Please select a service";
+    if (hasSubtypes && !formData.subtype) e.subtype = "Please select a subtype";
+    if (!formData.locationType) e.locationType = "Please select a location type";
+    if (!formData.fullName.trim()) e.fullName = "Name is required";
+    if (!formData.address.trim()) e.address = "Address is required";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) e.email = "Enter a valid email";
+    if (!/^[\d\s()+-]{7,}$/.test(formData.phone)) e.phone = "Enter a valid phone number";
+    return e;
   };
 
   const handleSubmit = () => {
-    if (!validate()) return;
+    const e = validate();
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
     saveLead({
       serviceSlug: serviceSlug || "",
       zip: formData.zip,
@@ -102,149 +136,307 @@ const Quote = () => {
     set("selectedPros", current.includes(id) ? current.filter((p) => p !== id) : [...current, id]);
   };
 
-  const RadioList = ({ options, value, onChange, error }: { options: string[]; value: string; onChange: (v: string) => void; error?: string }) => (
-    <div className="space-y-2">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onChange(opt)}
-          className={`w-full text-left px-4 py-3 rounded-lg border text-sm transition-all ${
-            value === opt
-              ? "border-primary bg-primary/5 text-primary font-medium"
-              : "border-border hover:border-primary/30"
-          }`}
+  const ValidIcon = ({ valid }: { valid: boolean }) => (
+    <AnimatePresence>
+      {valid && (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="absolute right-4 top-1/2 -translate-y-1/2"
         >
-          {opt}
-        </button>
-      ))}
-      {error && <p className="text-destructive text-xs mt-1">{error}</p>}
-    </div>
-  );
-
-  const FieldWithCheck = ({ value, children }: { value: string; children: React.ReactNode }) => (
-    <div className="relative">
-      {children}
-      {value.trim().length > 0 && (
-        <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-600" />
+          <div className="w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center">
+            <Check className="h-3 w-3 text-green-600" />
+          </div>
+        </motion.div>
       )}
-    </div>
+    </AnimatePresence>
   );
 
-  const renderStep = () => {
-    const serviceName = service?.name || "Service";
-    switch (step) {
-      case 0:
-        return (
-          <>
-            <h2 className="text-xl font-bold mb-1">Find Reliable Local {serviceName} for Your Project</h2>
-            <p className="text-sm text-muted-foreground mb-6">What is the project location?</p>
-            <Input
-              placeholder="Zip Code"
-              value={formData.zip}
-              onChange={(e) => set("zip", e.target.value.replace(/\D/g, "").slice(0, 5))}
-              className="text-center text-lg tracking-widest"
+  if (!service) {
+    return (
+      <>
+        <Header />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Service Not Found</h1>
+            <button onClick={() => navigate("/services")} className="px-6 py-3 bg-primary text-primary-foreground rounded-full text-sm font-medium">
+              Browse All Services
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Calculate section indices dynamically
+  const sectionIdx = {
+    zip: 0,
+    service: 1,
+    subtype: hasSubtypes ? 2 : -1,
+    details: hasSubtypes ? 3 : 2,
+    location: hasSubtypes ? 4 : 3,
+    contact: hasSubtypes ? 5 : 4,
+    review: hasSubtypes ? 6 : 5,
+  };
+
+  // Helper for "proceed" buttons on optional sections
+  const handleDetailsContinue = () => {
+    const nextIdx = sectionIdx.location;
+    revealNext(nextIdx + 1);
+  };
+
+  const handleContactContinue = () => {
+    revealNext(sectionIdx.review + 1);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: "linear-gradient(160deg, hsl(209, 75%, 17%) 0%, hsl(209, 80%, 8%) 100%)" }}>
+      <Header />
+
+      {/* Progress */}
+      <div className="sticky top-[72px] z-40 bg-background/5 backdrop-blur-xl border-b border-white/10">
+        <div className="max-w-3xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-xs text-white/50 hover:text-white/80 transition-colors">
+              <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </button>
+            <span className="text-sm font-bold text-white">{progressPct}%</span>
+          </div>
+          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-white/60 to-white rounded-full"
+              initial={{ width: "0%" }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
             />
-            {errors.zip && <p className="text-destructive text-xs mt-1">{errors.zip}</p>}
-          </>
-        );
-      case 1:
-        return (
-          <>
-            <h2 className="text-xl font-bold mb-4">What type of service do you need?</h2>
-            <RadioList
-              options={subServices.map((s) => s.label)}
-              value={formData.selectedService}
-              onChange={(v) => { set("selectedService", v); set("subtype", ""); }}
-              error={errors.selectedService}
-            />
-          </>
-        );
-      case 2:
-        return (
-          <>
-            <h2 className="text-xl font-bold mb-4">What type of {formData.selectedService} service?</h2>
-            <RadioList
-              options={selectedSubService?.subtypes || []}
-              value={formData.subtype}
-              onChange={(v) => set("subtype", v)}
-              error={errors.subtype}
-            />
-          </>
-        );
-      case 3:
-        return (
-          <>
-            <h2 className="text-xl font-bold mb-2">Add details for more exact quotes</h2>
-            <Textarea
-              placeholder="Describe your project (optional)"
-              value={formData.details}
-              onChange={(e) => set("details", e.target.value)}
-              rows={4}
-            />
-          </>
-        );
-      case 4:
-        return (
-          <>
-            <h2 className="text-xl font-bold mb-4">What kind of location is this?</h2>
-            <RadioList
-              options={["Home / Residence", "Business"]}
-              value={formData.locationType}
-              onChange={(v) => set("locationType", v)}
-              error={errors.locationType}
-            />
-          </>
-        );
-      case 5:
-        return (
-          <>
-            <h2 className="text-xl font-bold mb-1">Who is the quote for?</h2>
-            <p className="text-sm text-muted-foreground mb-6">Get your free quotes now - no obligation</p>
-            <FieldWithCheck value={formData.fullName}>
-              <Input
-                placeholder="Full Name"
-                value={formData.fullName}
-                onChange={(e) => set("fullName", e.target.value)}
-              />
-            </FieldWithCheck>
-            {errors.fullName && <p className="text-destructive text-xs mt-1">{errors.fullName}</p>}
-          </>
-        );
-      case 6:
-        return (
-          <>
-            <h2 className="text-xl font-bold mb-1">Great! Your quote is almost ready</h2>
-            <div className="space-y-4 mt-6">
-              <FieldWithCheck value={formData.address}>
-                <Input placeholder="Address" value={formData.address} onChange={(e) => set("address", e.target.value)} />
-              </FieldWithCheck>
-              {errors.address && <p className="text-destructive text-xs mt-1">{errors.address}</p>}
-              <FieldWithCheck value={formData.email}>
-                <Input placeholder="Email" type="email" value={formData.email} onChange={(e) => set("email", e.target.value)} />
-              </FieldWithCheck>
-              {errors.email && <p className="text-destructive text-xs mt-1">{errors.email}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Form */}
+      <div className="flex-1 flex justify-center px-4 sm:px-6 py-10">
+        <div className="w-full max-w-[820px] space-y-6">
+
+          {/* SECTION 1 – Zip */}
+          <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <MapPin className="h-4 w-4 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight">Where is your project located?</h2>
             </div>
-          </>
-        );
-      case 7:
-        return (
-          <>
-            <h2 className="text-xl font-bold mb-1">Last step to request your free cost estimate</h2>
-            <div className="mt-4 space-y-4">
-              <Input placeholder="Phone" type="tel" value={formData.phone} onChange={(e) => set("phone", e.target.value)} />
-              {errors.phone && <p className="text-destructive text-xs mt-1">{errors.phone}</p>}
-              <div className="mt-6">
-                <p className="text-sm font-medium mb-3">Select the below pros to receive a custom estimate:</p>
-                <div className="space-y-3">
+            <div className="relative max-w-xs">
+              <input
+                className="w-full h-14 px-5 text-lg tracking-wider text-center bg-secondary/50 border border-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all duration-300"
+                placeholder="Zip Code"
+                value={formData.zip}
+                onChange={(e) => set("zip", e.target.value.replace(/\D/g, "").slice(0, 5))}
+                maxLength={5}
+              />
+              <ValidIcon valid={/^\d{5}$/.test(formData.zip)} />
+            </div>
+            {errors.zip && <p className="text-destructive text-xs mt-2">{errors.zip}</p>}
+          </motion.section>
+
+          {/* SECTION 2 – Service Type */}
+          <AnimatePresence>
+            {revealedSections > 1 && (
+              <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
+                <h2 className="text-xl font-bold tracking-tight mb-6">What type of service do you need?</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {subServices.map((opt) => (
+                    <button
+                      key={opt.label}
+                      onClick={() => { set("selectedService", opt.label); set("subtype", ""); }}
+                      className={`group relative text-left p-4 rounded-2xl border-2 transition-all duration-200 ${
+                        formData.selectedService === opt.label
+                          ? "border-primary bg-primary/5 glow-border"
+                          : "border-border/60 hover:border-primary/30 hover:bg-card"
+                      }`}
+                    >
+                      <span className="text-sm font-medium">{opt.label}</span>
+                      {formData.selectedService === opt.label && (
+                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Check className="h-4 w-4 text-primary" />
+                        </motion.div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {errors.selectedService && <p className="text-destructive text-xs mt-2">{errors.selectedService}</p>}
+              </motion.section>
+            )}
+          </AnimatePresence>
+
+          {/* SECTION 3 – Subtype (Conditional) */}
+          <AnimatePresence>
+            {hasSubtypes && revealedSections > 2 && (
+              <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
+                <h2 className="text-xl font-bold tracking-tight mb-6">What type of {formData.selectedService}?</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {selectedSubService?.subtypes?.map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => set("subtype", st)}
+                      className={`group relative text-left p-4 rounded-2xl border-2 transition-all duration-200 ${
+                        formData.subtype === st
+                          ? "border-primary bg-primary/5 glow-border"
+                          : "border-border/60 hover:border-primary/30 hover:bg-card"
+                      }`}
+                    >
+                      <span className="text-sm font-medium">{st}</span>
+                      {formData.subtype === st && (
+                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Check className="h-4 w-4 text-primary" />
+                        </motion.div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {errors.subtype && <p className="text-destructive text-xs mt-2">{errors.subtype}</p>}
+              </motion.section>
+            )}
+          </AnimatePresence>
+
+          {/* SECTION 4 – Details */}
+          <AnimatePresence>
+            {revealedSections > sectionIdx.details && (
+              <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
+                <h2 className="text-xl font-bold tracking-tight mb-2">Add details for more exact quotes</h2>
+                <p className="text-sm text-muted-foreground mb-6">Describe your project so pros can give you a better estimate.</p>
+                <div className="relative">
+                  <textarea
+                    className="w-full min-h-[120px] p-5 bg-secondary/50 border border-border rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all duration-300 resize-none"
+                    placeholder="Describe your project (optional)"
+                    value={formData.details}
+                    onChange={(e) => set("details", e.target.value)}
+                    maxLength={1000}
+                  />
+                  <span className="absolute bottom-3 right-4 text-[10px] text-muted-foreground">
+                    {formData.details.length}/1000
+                  </span>
+                </div>
+                {revealedSections <= sectionIdx.location && (
+                  <button
+                    onClick={handleDetailsContinue}
+                    className="mt-4 px-6 py-3 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 transition-all duration-200 inline-flex items-center gap-2"
+                  >
+                    Continue <ChevronRight className="h-4 w-4" />
+                  </button>
+                )}
+              </motion.section>
+            )}
+          </AnimatePresence>
+
+          {/* SECTION 5 – Location Type */}
+          <AnimatePresence>
+            {revealedSections > sectionIdx.location && (
+              <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
+                <h2 className="text-xl font-bold tracking-tight mb-6">What kind of location is this?</h2>
+                <div className="flex gap-4">
+                  {[
+                    { value: "Home / Residence", icon: Home, label: "Home" },
+                    { value: "Business", icon: Building2, label: "Business" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => set("locationType", opt.value)}
+                      className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all duration-200 ${
+                        formData.locationType === opt.value
+                          ? "border-primary bg-primary/5 glow-border"
+                          : "border-border/60 hover:border-primary/30"
+                      }`}
+                    >
+                      <opt.icon className={`h-6 w-6 ${formData.locationType === opt.value ? "text-primary" : "text-muted-foreground"} transition-colors`} strokeWidth={1.5} />
+                      <span className="text-sm font-medium">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {errors.locationType && <p className="text-destructive text-xs mt-2">{errors.locationType}</p>}
+              </motion.section>
+            )}
+          </AnimatePresence>
+
+          {/* SECTION 6 – Contact Info */}
+          <AnimatePresence>
+            {revealedSections > sectionIdx.contact && (
+              <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
+                <h2 className="text-xl font-bold tracking-tight mb-2">Contact Information</h2>
+                <p className="text-sm text-muted-foreground mb-6">Get your free quotes now — no obligation.</p>
+                <div className="space-y-4">
+                  {[
+                    { key: "fullName", label: "Full Name", type: "text", valid: formData.fullName.trim().length > 0 },
+                    { key: "address", label: "Address", type: "text", valid: formData.address.trim().length > 0 },
+                    { key: "email", label: "Email", type: "email", valid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) },
+                    { key: "phone", label: "Phone", type: "tel", valid: /^[\d\s()+-]{7,}$/.test(formData.phone) },
+                  ].map((field) => (
+                    <div key={field.key} className="floating-input">
+                      <input
+                        type={field.type}
+                        placeholder=" "
+                        value={(formData as any)[field.key]}
+                        onChange={(e) => set(field.key, e.target.value)}
+                        className="!rounded-2xl !bg-secondary/50"
+                      />
+                      <label>{field.label}</label>
+                      <ValidIcon valid={field.valid} />
+                      {errors[field.key] && <p className="text-destructive text-xs mt-1 pl-1">{errors[field.key]}</p>}
+                    </div>
+                  ))}
+                </div>
+                {revealedSections <= sectionIdx.review && (
+                  <button
+                    onClick={handleContactContinue}
+                    className="mt-6 px-6 py-3 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 transition-all duration-200 inline-flex items-center gap-2"
+                  >
+                    Continue <ChevronRight className="h-4 w-4" />
+                  </button>
+                )}
+              </motion.section>
+            )}
+          </AnimatePresence>
+
+          {/* SECTION 7 – Review & Submit */}
+          <AnimatePresence>
+            {revealedSections > sectionIdx.review && (
+              <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
+                <h2 className="text-xl font-bold tracking-tight mb-6">Review & Get Your Quotes</h2>
+
+                {/* Summary */}
+                <div className="bg-secondary/40 rounded-2xl p-5 mb-6 space-y-2.5">
+                  {[
+                    { label: "Service", value: formData.selectedService },
+                    formData.subtype ? { label: "Subtype", value: formData.subtype } : null,
+                    { label: "Zip Code", value: formData.zip },
+                    { label: "Location", value: formData.locationType },
+                    { label: "Name", value: formData.fullName },
+                    { label: "Email", value: formData.email },
+                    { label: "Phone", value: formData.phone },
+                  ].filter(Boolean).map((item) => (
+                    <div key={item!.label} className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{item!.label}</span>
+                      <span className="font-medium">{item!.value || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pros selection */}
+                <p className="text-sm font-medium mb-3">Select pros to receive your estimate:</p>
+                <div className="space-y-3 mb-6">
                   {displayPros.map((pro) => (
                     <label
                       key={pro.id}
-                      className="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:border-primary/30 transition-colors"
+                      className={`flex items-start gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
+                        formData.selectedPros.includes(pro.id)
+                          ? "border-primary/40 bg-primary/5"
+                          : "border-border/60 hover:border-primary/20"
+                      }`}
                     >
-                      <Checkbox
+                      <input
+                        type="checkbox"
                         checked={formData.selectedPros.includes(pro.id)}
-                        onCheckedChange={() => togglePro(pro.id)}
-                        className="mt-0.5"
+                        onChange={() => togglePro(pro.id)}
+                        className="mt-1 rounded border-border"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -254,9 +446,9 @@ const Quote = () => {
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground">{pro.city}, {pro.state}</p>
-                        <div className="flex gap-1.5 mt-1">
+                        <div className="flex gap-1.5 mt-1.5">
                           {pro.badges.map((b) => (
-                            <span key={b} className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-secondary rounded text-secondary-foreground">
+                            <span key={b} className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 bg-secondary rounded-full text-muted-foreground">
                               <Shield className="h-2.5 w-2.5" /> {b}
                             </span>
                           ))}
@@ -265,69 +457,24 @@ const Quote = () => {
                     </label>
                   ))}
                 </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-4 leading-relaxed">
-                By clicking "Compare Prices Now," you agree to our Terms of Service and Privacy Policy.
-                You consent to receive calls, texts and emails from service professionals at the number
-                and email provided. Message/data rates may apply.
-              </p>
-            </div>
-          </>
-        );
-    }
-  };
 
-  if (!service) {
-    return (
-      <>
-        <Header />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-2">Service Not Found</h1>
-            <Button onClick={() => navigate("/services")}>Browse All Services</Button>
-          </div>
-        </div>
-      </>
-    );
-  }
+                <p className="text-[11px] text-muted-foreground mb-6 leading-relaxed">
+                  By clicking "Get My Free Quotes," you agree to our Terms of Service and Privacy Policy.
+                  You consent to receive calls, texts and emails from service professionals at the number
+                  and email provided.
+                </p>
 
-  return (
-    <div className="min-h-screen flex flex-col bg-wizard-bg">
-      <Header />
-      {/* Progress bar */}
-      <div className="bg-card border-b border-border">
-        <div className="max-w-3xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Progress</span>
-            <span className="text-xs font-bold text-primary">{progressPct}%</span>
-          </div>
-          <div className="h-2 bg-secondary rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-500"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-        </div>
-      </div>
+                <button
+                  onClick={handleSubmit}
+                  className="w-full py-4 bg-primary text-primary-foreground text-base font-semibold rounded-2xl hover:bg-primary/90 transition-all duration-200 hover:shadow-xl active:scale-[0.99]"
+                >
+                  Get My Free Quotes
+                </button>
+              </motion.section>
+            )}
+          </AnimatePresence>
 
-      {/* Wizard card */}
-      <div className="flex-1 flex items-start justify-center px-4 py-10">
-        <div className="w-full max-w-[720px] bg-card rounded-2xl shadow-lg border border-border p-6 md:p-10">
-          {renderStep()}
-
-          <div className="flex items-center justify-between mt-8 gap-4">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={goBack}
-              className="shrink-0 h-11 w-11"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <Button className="flex-1 h-11" onClick={goNext}>
-              {step === 0 ? "Check My Prices" : step === 7 ? "Compare Prices Now" : "Next"}
-            </Button>
-          </div>
+          <div ref={bottomRef} />
         </div>
       </div>
     </div>

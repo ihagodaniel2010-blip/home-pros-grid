@@ -7,6 +7,7 @@ import { getLeads } from "@/lib/leads";
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/admin" },
   { label: "Inbox", icon: Inbox, path: "/admin/inbox" },
+  { label: "Analytics", icon: BarChart3, path: "/admin/analytics" },
   { label: "Settings", icon: Settings, path: "/admin/settings" },
 ];
 
@@ -22,12 +23,12 @@ const AdminLayout = () => {
   if (!isAdminLoggedIn()) return null;
 
   return (
-    <div className="min-h-screen flex">
+    <div className="dark min-h-screen flex bg-background">
       {/* Sidebar */}
-      <aside className="w-60 bg-sidebar text-sidebar-foreground flex flex-col shrink-0">
-        <div className="p-5 border-b border-sidebar-border">
-          <Link to="/" className="text-lg font-bold text-sidebar-primary-foreground">Networx</Link>
-          <p className="text-xs text-sidebar-foreground/60 mt-0.5">Admin Panel</p>
+      <aside className="w-64 bg-card/50 backdrop-blur-xl border-r border-border/50 flex flex-col shrink-0">
+        <div className="p-6 border-b border-border/50">
+          <Link to="/" className="text-lg font-bold text-foreground tracking-tight">Networx</Link>
+          <p className="text-xs text-muted-foreground mt-0.5">Admin Panel</p>
         </div>
         <nav className="flex-1 py-4 space-y-1 px-3">
           {navItems.map((item) => {
@@ -36,16 +37,16 @@ const AdminLayout = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all duration-200 ${
                   active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
                 }`}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className="h-4 w-4" strokeWidth={1.5} />
                 {item.label}
                 {item.label === "Inbox" && newLeads > 0 && (
-                  <span className="ml-auto bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  <span className="ml-auto bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
                     {newLeads}
                   </span>
                 )}
@@ -53,18 +54,18 @@ const AdminLayout = () => {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-sidebar-border">
+        <div className="p-3 border-t border-border/50">
           <button
             onClick={() => { adminLogout(); navigate("/"); }}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50 w-full transition-colors"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 w-full transition-all duration-200"
           >
-            <LogOut className="h-4 w-4" /> Logout
+            <LogOut className="h-4 w-4" strokeWidth={1.5} /> Logout
           </button>
         </div>
       </aside>
 
       {/* Main */}
-      <main className="flex-1 bg-secondary overflow-y-auto">
+      <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
     </div>
