@@ -1,0 +1,18 @@
+{
+  "contactEmail": "contact@barrigudo.com",
+  "businessAddress": "Boston, Massachusetts",
+  "mapsQuery": "Boston Massachusetts",
+  "directionsUrl": "",
+  "serviceAreas": [
+    "Wellesley",
+    "Newton",
+    "Burlington",
+    "Billerica",
+    "Arlington",
+    "Belmont",
+    "Lynnfield",
+    "Somerville",
+    "Peabody",
+    "Boston"
+  ]
+}

@@ -23,7 +23,7 @@ export interface Lead {
   statusHistory: StatusChange[];
 }
 
-const LEADS_KEY = "networx_leads";
+const LEADS_KEY = "barrigudo_leads";
 
 export const getLeads = (): Lead[] => {
   try {

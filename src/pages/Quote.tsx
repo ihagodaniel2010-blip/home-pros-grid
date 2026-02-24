@@ -18,7 +18,6 @@ const Quote = () => {
   const [searchParams] = useSearchParams();
   const service = getServiceBySlug(serviceSlug || "");
   const subServices = getSubServices(serviceSlug || "");
-  const displayPros = mockPros.slice(0, 3);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const [revealedSections, setRevealedSections] = useState(1);
@@ -33,7 +32,7 @@ const Quote = () => {
     address: "",
     email: "",
     phone: "",
-    selectedPros: [displayPros[0]?.id].filter(Boolean),
+    selectedPros: mockPros.map((p) => p.id),
   });
 
   const selectedSubService: SubServiceOption | undefined = useMemo(
@@ -115,6 +114,7 @@ const Quote = () => {
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length > 0) return;
+    const selectedProNames = mockPros.filter((p) => formData.selectedPros.includes(p.id)).map((p) => p.name);
     saveLead({
       serviceSlug: serviceSlug || "",
       zip: formData.zip,
@@ -126,7 +126,7 @@ const Quote = () => {
       address: formData.address,
       email: formData.email,
       phone: formData.phone,
-      selectedPros: formData.selectedPros,
+      selectedPros: selectedProNames,
     });
     navigate("/success");
   };
@@ -421,37 +421,53 @@ const Quote = () => {
                 </div>
 
                 {/* Pros selection */}
-                <p className="text-sm font-medium mb-3">Select pros to receive your estimate:</p>
+                <p className="text-sm font-medium mb-4">Select professionals to receive your estimate:</p>
                 <div className="space-y-3 mb-6">
-                  {displayPros.map((pro) => (
+                  {mockPros.map((pro) => (
                     <label
                       key={pro.id}
-                      className={`flex items-start gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
+                      className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 card-hover ${
                         formData.selectedPros.includes(pro.id)
-                          ? "border-primary/40 bg-primary/5"
-                          : "border-border/60 hover:border-primary/20"
+                          ? "border-primary bg-primary/5 glow-border"
+                          : "border-border/60 hover:border-primary/30"
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={formData.selectedPros.includes(pro.id)}
                         onChange={() => togglePro(pro.id)}
-                        className="mt-1 rounded border-border"
+                        className="mt-0.5 w-5 h-5 rounded border-border accent-primary cursor-pointer"
                       />
+                      {/* Avatar */}
+                      <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-white font-bold text-sm">
+                        {pro.initials}
+                      </div>
+                      {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{pro.company}</span>
-                          <span className="flex items-center gap-0.5 text-xs text-amber-600">
-                            <Star className="h-3 w-3 fill-current" /> {pro.rating}
-                          </span>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-semibold text-sm">{pro.name}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground">{pro.city}, {pro.state}</p>
-                        <div className="flex gap-1.5 mt-1.5">
-                          {pro.badges.map((b) => (
-                            <span key={b} className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 bg-secondary rounded-full text-muted-foreground">
-                              <Shield className="h-2.5 w-2.5" /> {b}
-                            </span>
-                          ))}
+                        <p className="text-xs text-muted-foreground mb-1.5">{pro.location}, {pro.state}</p>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <div className="flex gap-0.5">
+                              {[...Array(5)].map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className={`h-3 w-3 ${i < Math.round(pro.rating) ? "fill-amber-400 text-amber-400" : "fill-gray-300 text-gray-300"}`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs font-medium text-foreground">{pro.rating}</span>
+                            <span className="text-xs text-muted-foreground">({pro.reviews})</span>
+                          </div>
+                          <div className="flex gap-1.5">
+                            {pro.badges.map((b) => (
+                              <span key={b} className="inline-flex items-center text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-medium">
+                                {b}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </label>

@@ -1,0 +1,178 @@
+[
+  {
+    "timestamp": "2026-02-23T02:51:31.040Z",
+    "email": "adelmohugo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "success",
+    "reason": "success"
+  },
+  {
+    "timestamp": "2026-02-20T03:26:00.727Z",
+    "email": "adelmohugo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "success",
+    "reason": "success"
+  },
+  {
+    "timestamp": "2026-02-20T03:20:27.802Z",
+    "email": "adelmohugo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "success",
+    "reason": "success"
+  },
+  {
+    "timestamp": "2026-02-20T03:07:54.792Z",
+    "email": "ihagodaniel2010@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "wrong_email"
+  },
+  {
+    "timestamp": "2026-02-20T03:06:09.075Z",
+    "email": "adelmohugo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "success",
+    "reason": "success"
+  },
+  {
+    "timestamp": "2026-02-20T02:49:23.565Z",
+    "email": "adelmohugo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "success",
+    "reason": "success"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:42.410Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "rate_limited"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:42.267Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "rate_limited"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:42.137Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "rate_limited"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:41.999Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "rate_limited"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:41.550Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "rate_limited"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:41.420Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "rate_limited"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:41.376Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "rate_limited"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:41.182Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "rate_limited"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:41.060Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "wrong_email"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:40.937Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "wrong_email"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:40.716Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "wrong_email"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:33.813Z",
+    "email": "hugoadelmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "wrong_email"
+  },
+  {
+    "timestamp": "2026-02-19T21:16:23.919Z",
+    "email": "hugoadedlmo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "wrong_email"
+  },
+  {
+    "timestamp": "2026-02-19T19:59:21.862Z",
+    "email": "adelmohugo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "success",
+    "reason": "success"
+  },
+  {
+    "timestamp": "2026-02-19T19:58:07.005Z",
+    "email": "adelmohugo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "success",
+    "reason": "success"
+  },
+  {
+    "timestamp": "2026-02-19T19:58:05.702Z",
+    "email": "adelmohugo@gmail.com",
+    "ip": "::1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+    "outcome": "fail",
+    "reason": "wrong_password"
+  }
+]

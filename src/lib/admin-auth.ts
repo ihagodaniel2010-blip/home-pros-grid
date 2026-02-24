@@ -1,17 +1,64 @@
-const ADMIN_EMAIL = "admin@networx.com";
-const ADMIN_PASSWORD = "admin123";
-const AUTH_KEY = "networx_admin_auth";
-
-export const adminLogin = (email: string, password: string): boolean => {
-  if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-    localStorage.setItem(AUTH_KEY, "true");
-    return true;
-  }
-  return false;
+export type AdminSession = {
+  email: string;
 };
 
-export const isAdminLoggedIn = (): boolean => localStorage.getItem(AUTH_KEY) === "true";
+export type AdminLoginResult = {
+  ok: boolean;
+  status: number;
+  error?: string;
+};
 
-export const adminLogout = () => localStorage.removeItem(AUTH_KEY);
+export type LoginAttempt = {
+  timestamp: string;
+  email: string;
+  ip: string;
+  userAgent: string;
+  outcome: "success" | "fail";
+  reason: "wrong_email" | "wrong_password" | "rate_limited" | "success";
+};
 
-export const ADMIN_DISPLAY_EMAIL = ADMIN_EMAIL;
+export const adminLogin = async (email: string, password: string): Promise<AdminLoginResult> => {
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (response.ok) {
+      return { ok: true, status: response.status };
+    }
+
+    let error = "Acesso restrito";
+    try {
+      const payload = await response.json();
+      if (payload?.error) error = payload.error;
+    } catch {
+      // Keep default message.
+    }
+
+    return { ok: false, status: response.status, error };
+  } catch {
+    return { ok: false, status: 0, error: "Backend offline" };
+  }
+};
+
+export const fetchAdminSession = async (): Promise<AdminSession | null> => {
+  const response = await fetch("/api/auth/me", { credentials: "include" });
+  if (!response.ok) return null;
+  return response.json();
+};
+
+export const adminLogout = async (): Promise<void> => {
+  await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+};
+
+export const fetchLoginAttempts = async (status?: "success" | "fail"): Promise<LoginAttempt[]> => {
+  const query = status ? `?status=${status}` : "";
+  const response = await fetch(`/api/admin/login-attempts${query}`, {
+    credentials: "include",
+  });
+  if (!response.ok) return [];
+  return response.json();
+};
