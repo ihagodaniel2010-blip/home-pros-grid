@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api-url";
+
 export type SiteSettings = {
   contactEmail: string;
   businessAddress: string;
@@ -34,17 +36,17 @@ const parseResponse = async (response: Response) => {
 };
 
 export const fetchSiteSettingsPublic = async (): Promise<SiteSettings> => {
-  const response = await fetch("/api/site-settings");
+  const response = await fetch(apiUrl("/api/site-settings"));
   return parseResponse(response);
 };
 
 export const fetchSiteSettingsAdmin = async (): Promise<SiteSettings> => {
-  const response = await fetch("/api/admin/site-settings", { credentials: "include" });
+  const response = await fetch(apiUrl("/api/admin/site-settings"), { credentials: "include" });
   return parseResponse(response);
 };
 
 export const saveSiteSettingsAdmin = async (payload: SiteSettings): Promise<SiteSettings> => {
-  const response = await fetch("/api/admin/site-settings", {
+  const response = await fetch(apiUrl("/api/admin/site-settings"), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",

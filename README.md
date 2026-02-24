@@ -118,6 +118,43 @@ This project is built with:
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
+## Vercel + External API
+
+When deploying only the frontend on Vercel, set `VITE_API_URL` to your backend base URL.
+
+Example:
+
+```sh
+VITE_API_URL="https://your-api-domain.com"
+```
+
+If `VITE_API_URL` is empty, the app uses relative paths (for local dev with Vite proxy, e.g. `/api/...`).
+
+For admin session cookies to work across different domains, configure backend envs in production:
+
+```sh
+FRONTEND_ORIGIN="https://home-pros-grid.vercel.app"
+SESSION_COOKIE_SAME_SITE="none"
+SESSION_COOKIE_SECURE="true"
+NODE_ENV="production"
+```
+
+## Vercel Single Project (Frontend + /api)
+
+This repository now supports Vercel Serverless API at `/api` via `api/index.js`.
+
+For same-domain setup (`https://home-pros-grid.vercel.app` serving frontend and API):
+
+```sh
+VITE_API_URL=""
+FRONTEND_ORIGIN="https://home-pros-grid.vercel.app"
+SESSION_COOKIE_SAME_SITE="lax"
+SESSION_COOKIE_SECURE="true"
+NODE_ENV="production"
+```
+
+Note: file-based writes run in `/tmp` on Vercel and are ephemeral between cold starts/redeploys.
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
