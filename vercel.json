@@ -1,4 +1,14 @@
 {
+  "rewrites": [
+    {
+      "source": "/api",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index?path=:path*"
+    }
+  ],
   "functions": {
     "api/index.js": {
       "maxDuration": 10
