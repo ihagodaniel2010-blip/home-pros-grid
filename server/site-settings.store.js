@@ -1,7 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 
-const settingsPath = path.resolve(process.cwd(), "data", "site-settings.json");
+const dataDir = process.env.VERCEL ? path.resolve("/tmp", "home-pros-grid-data") : path.resolve(process.cwd(), "data");
+const settingsPath = path.resolve(dataDir, "site-settings.json");
 
 const defaultSettings = {
   contactEmail: "contact@barrigudo.com",

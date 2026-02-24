@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api-url";
+
 export type AdminSession = {
   email: string;
 };
@@ -19,7 +21,7 @@ export type LoginAttempt = {
 
 export const adminLogin = async (email: string, password: string): Promise<AdminLoginResult> => {
   try {
-    const response = await fetch("/api/auth/login", {
+    const response = await fetch(apiUrl("/api/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -45,18 +47,18 @@ export const adminLogin = async (email: string, password: string): Promise<Admin
 };
 
 export const fetchAdminSession = async (): Promise<AdminSession | null> => {
-  const response = await fetch("/api/auth/me", { credentials: "include" });
+  const response = await fetch(apiUrl("/api/auth/me"), { credentials: "include" });
   if (!response.ok) return null;
   return response.json();
 };
 
 export const adminLogout = async (): Promise<void> => {
-  await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+  await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" });
 };
 
 export const fetchLoginAttempts = async (status?: "success" | "fail"): Promise<LoginAttempt[]> => {
   const query = status ? `?status=${status}` : "";
-  const response = await fetch(`/api/admin/login-attempts${query}`, {
+  const response = await fetch(apiUrl(`/api/admin/login-attempts${query}`), {
     credentials: "include",
   });
   if (!response.ok) return [];

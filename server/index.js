@@ -13,6 +13,13 @@ const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const NODE_ENV = process.env.NODE_ENV || "development";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:8080";
+const SESSION_COOKIE_SAME_SITE = process.env.SESSION_COOKIE_SAME_SITE || (NODE_ENV === "production" ? "none" : "lax");
+const SESSION_COOKIE_SECURE =
+  typeof process.env.SESSION_COOKIE_SECURE === "string"
+    ? process.env.SESSION_COOKIE_SECURE === "true"
+    : NODE_ENV === "production";
+const isVercelRuntime = process.env.VERCEL === "1";
+const dataDir = isVercelRuntime ? path.resolve("/tmp", "home-pros-grid-data") : path.resolve(process.cwd(), "data");
 
 if (!ADMIN_EMAIL || !ADMIN_PASSWORD_HASH || !SESSION_SECRET) {
   console.error("Missing ADMIN_EMAIL, ADMIN_PASSWORD_HASH, or SESSION_SECRET in environment.");
@@ -39,15 +46,15 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "lax",
-      secure: NODE_ENV === "production",
+      sameSite: SESSION_COOKIE_SAME_SITE,
+      secure: SESSION_COOKIE_SECURE,
       maxAge: 1000 * 60 * 60 * 8,
     },
   })
 );
 
-const dataPath = path.resolve(process.cwd(), "data", "portfolio.json");
-const loginAttemptsPath = path.resolve(process.cwd(), "data", "login-attempts.json");
+const dataPath = path.resolve(dataDir, "portfolio.json");
+const loginAttemptsPath = path.resolve(dataDir, "login-attempts.json");
 
 const defaultPortfolio = {
   version: 1,
@@ -332,6 +339,10 @@ if (NODE_ENV === "production") {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Admin server running on http://localhost:${PORT}`);
-});
+if (!isVercelRuntime) {
+  app.listen(PORT, () => {
+    console.log(`Admin server running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;

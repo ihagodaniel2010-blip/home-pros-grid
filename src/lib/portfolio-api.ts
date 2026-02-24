@@ -1,4 +1,5 @@
 import type { PortfolioData } from "@/lib/portfolio-types";
+import { apiUrl } from "@/lib/api-url";
 
 const parseResponse = async (response: Response) => {
   if (!response.ok) {
@@ -10,7 +11,7 @@ const parseResponse = async (response: Response) => {
 
 export const fetchPortfolioPublic = async (): Promise<PortfolioData | null> => {
   try {
-    const response = await fetch("/api/portfolio");
+    const response = await fetch(apiUrl("/api/portfolio"));
     return await parseResponse(response);
   } catch (error) {
     console.warn("Failed to load portfolio data", error);
@@ -19,12 +20,12 @@ export const fetchPortfolioPublic = async (): Promise<PortfolioData | null> => {
 };
 
 export const fetchPortfolioAdmin = async (): Promise<PortfolioData> => {
-  const response = await fetch("/api/admin/portfolio", { credentials: "include" });
+  const response = await fetch(apiUrl("/api/admin/portfolio"), { credentials: "include" });
   return parseResponse(response);
 };
 
 export const savePortfolioAdmin = async (payload: PortfolioData): Promise<PortfolioData> => {
-  const response = await fetch("/api/admin/portfolio", {
+  const response = await fetch(apiUrl("/api/admin/portfolio"), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
