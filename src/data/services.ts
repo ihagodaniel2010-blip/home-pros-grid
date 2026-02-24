@@ -1,9 +1,9 @@
 import {
-  Hammer, TreePine, Droplets, Home, Wind,
+  Hammer, Droplets, Home,
   Snowflake, Sparkles, Layers, Zap, Wrench,
-  Warehouse, Flame, Paintbrush, Bug, Square,
-  Building, Package, Plug, Lightbulb, Truck,
-  Fan, type LucideIcon,
+  Warehouse, Flame, Paintbrush, Square,
+  Building, Plug, Lightbulb,
+  type LucideIcon,
 } from "lucide-react";
 
 export interface Service {
@@ -24,15 +24,12 @@ const slugify = (name: string) =>
 export const allServices: Service[] = [
   // Top
   { name: "Carpentry", slug: "carpentry", icon: Hammer, category: "top" },
-  { name: "Landscaping", slug: "landscaping", icon: TreePine, category: "top" },
   { name: "Plumbing", slug: "plumbing", icon: Droplets, category: "top" },
   { name: "Remodeling", slug: "remodeling", icon: Home, category: "top" },
   { name: "Roofing", slug: "roofing", icon: Building, category: "top" },
-  { name: "HVAC Contractors", slug: "hvac-contractors", icon: Wind, category: "top" },
+  { name: "Cleaning", slug: "cleaning", icon: Sparkles, category: "top" },
   // Core
   { name: "Air Conditioning", slug: "air-conditioning", icon: Snowflake, category: "core" },
-  { name: "Cleaning", slug: "cleaning", icon: Sparkles, category: "core" },
-  { name: "Concrete", slug: "concrete", icon: Square, category: "core" },
   { name: "Drywall", slug: "drywall", icon: Layers, category: "core" },
   { name: "Electrician", slug: "electrician", icon: Zap, category: "core" },
   { name: "Fencing", slug: "fencing", icon: Warehouse, category: "core" },
@@ -40,9 +37,7 @@ export const allServices: Service[] = [
   { name: "Garage Door Installation", slug: "garage-door-installation", icon: Warehouse, category: "core" },
   { name: "Garage Door Repair", slug: "garage-door-repair", icon: Wrench, category: "core" },
   { name: "Handyman", slug: "handyman", icon: Wrench, category: "core" },
-  { name: "Heating & Furnace", slug: "heating-furnace", icon: Flame, category: "core" },
   { name: "Painting", slug: "painting", icon: Paintbrush, category: "core" },
-  { name: "Pest Control", slug: "pest-control", icon: Bug, category: "core" },
   { name: "Tile", slug: "tile", icon: Square, category: "core" },
   // Extended
   { name: "Windows & Doors", slug: "windows-doors", icon: Home, category: "extended" },
@@ -50,9 +45,6 @@ export const allServices: Service[] = [
   { name: "Bathroom Remodel", slug: "bathroom-remodel", icon: Droplets, category: "extended" },
   { name: "Basement Remodel", slug: "basement-remodel", icon: Home, category: "extended" },
   { name: "Siding", slug: "siding", icon: Building, category: "extended" },
-  { name: "Gutters", slug: "gutters", icon: Building, category: "extended" },
-  { name: "Pressure Washing", slug: "pressure-washing", icon: Droplets, category: "extended" },
-  { name: "Junk Removal", slug: "junk-removal", icon: Truck, category: "extended" },
   { name: "Appliance Repair", slug: "appliance-repair", icon: Wrench, category: "extended" },
   { name: "Water Heater", slug: "water-heater", icon: Flame, category: "extended" },
   { name: "Drain Cleaning", slug: "drain-cleaning", icon: Droplets, category: "extended" },
@@ -60,8 +52,6 @@ export const allServices: Service[] = [
   { name: "Lighting Installation", slug: "lighting-installation", icon: Lightbulb, category: "extended" },
   { name: "EV Charger Installation", slug: "ev-charger-installation", icon: Plug, category: "extended" },
   { name: "Deck / Porch", slug: "deck-porch", icon: Hammer, category: "extended" },
-  { name: "Tree Service", slug: "tree-service", icon: TreePine, category: "extended" },
-  { name: "Moving", slug: "moving", icon: Package, category: "extended" },
 ];
 
 export const topServices = allServices.filter((s) => s.category === "top");
@@ -105,18 +95,7 @@ export const subServiceMap: Record<string, SubServiceOption[]> = {
     { label: "Leak Inspection" },
     { label: "Shingle Roofing" },
     { label: "Flat Roofing" },
-    { label: "Gutter Related", subtypes: ["Gutters - Install", "Gutters - Repair/Clean"] },
     { label: "Skylight Install/Repair" },
-    { label: "Other" },
-  ],
-  "hvac-contractors": [
-    { label: "AC Repair" },
-    { label: "AC Installation" },
-    { label: "Heating Repair" },
-    { label: "Furnace Installation" },
-    { label: "Thermostat" },
-    { label: "Ductwork" },
-    { label: "Maintenance Tune-up" },
     { label: "Other" },
   ],
   remodeling: [
@@ -136,15 +115,6 @@ export const subServiceMap: Record<string, SubServiceOption[]> = {
     { label: "Move-in / Move-out" },
     { label: "Post Construction Cleaning" },
     { label: "Office Cleaning" },
-    { label: "Other" },
-  ],
-  concrete: [
-    { label: "Driveway" },
-    { label: "Patio / Walkway" },
-    { label: "Foundation" },
-    { label: "Slab" },
-    { label: "Stairs" },
-    { label: "Repair / Resurfacing" },
     { label: "Other" },
   ],
   electrician: [
@@ -185,27 +155,11 @@ export const subServiceMap: Record<string, SubServiceOption[]> = {
     { label: "Door/Lock" },
     { label: "Other" },
   ],
-  "pest-control": [
-    { label: "Ants" },
-    { label: "Rodents" },
-    { label: "Termites" },
-    { label: "Bed Bugs" },
-    { label: "Wasps/Bees" },
-    { label: "Other" },
-  ],
   tile: [
     { label: "Shower Tile" },
     { label: "Floor Tile" },
     { label: "Backsplash" },
     { label: "Repair / Regrout" },
-    { label: "Other" },
-  ],
-  landscaping: [
-    { label: "Lawn Care" },
-    { label: "Yard Cleanup" },
-    { label: "Mulch / Planting" },
-    { label: "Sod" },
-    { label: "Sprinklers" },
     { label: "Other" },
   ],
   painting: [
@@ -229,14 +183,6 @@ export const subServiceMap: Record<string, SubServiceOption[]> = {
     { label: "Repair / Patch" },
     { label: "Ceiling Repair" },
     { label: "Texture / Finish" },
-    { label: "Other" },
-  ],
-  "heating-furnace": [
-    { label: "Furnace Repair" },
-    { label: "Furnace Install" },
-    { label: "Boiler Repair" },
-    { label: "Thermostat" },
-    { label: "Maintenance" },
     { label: "Other" },
   ],
 };

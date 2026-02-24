@@ -1,0 +1,334 @@
+{
+  "version": 1,
+  "updatedAt": "2026-02-20T02:50:50.608Z",
+  "categories": [
+    "Kitchens",
+    "Bathrooms",
+    "Bedrooms",
+    "Flooring",
+    "Painting",
+    "Roofing",
+    "Remodeling",
+    "Decks",
+    "Outdoor"
+  ],
+  "items": [
+    {
+      "id": "modern-kitchen-upgrade",
+      "title": "Modern Kitchen Upgrade",
+      "category": "Kitchens",
+      "coverImage": "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg",
+      "images": [
+        "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg"
+      ],
+      "tags": [
+        "Kitchen",
+        "Remodeling"
+      ],
+      "description": "A bright, open kitchen transformation with refined cabinetry and upgraded finishes.",
+      "highlights": [
+        "Custom cabinetry",
+        "Quartz counters",
+        "Lighting redesign"
+      ],
+      "materials": [
+        "Quartz",
+        "Matte brass fixtures",
+        "Solid oak"
+      ],
+      "timeline": [
+        "Demo",
+        "Prep",
+        "Install",
+        "Finish"
+      ],
+      "scope": "Layout refresh • Custom cabinetry",
+      "featured": true,
+      "beforeAfter": {
+        "before": "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
+        "after": "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg"
+      }
+    },
+    {
+      "id": "spa-bathroom-renewal",
+      "title": "Spa Bathroom Renewal",
+      "category": "Bathrooms",
+      "coverImage": "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
+      "images": [
+        "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/fSS86TPTtzR5.png"
+      ],
+      "tags": [
+        "Bathroom",
+        "Remodeling"
+      ],
+      "description": "A calming, spa-inspired bathroom refresh with clean lines and premium materials.",
+      "highlights": [
+        "New tile",
+        "Glass shower",
+        "Brushed fixtures"
+      ],
+      "materials": [
+        "Porcelain",
+        "Glass",
+        "Brushed nickel"
+      ],
+      "timeline": [
+        "Demo",
+        "Prep",
+        "Install",
+        "Finish"
+      ],
+      "scope": "Tile refresh • Fixture upgrade",
+      "featured": true
+    },
+    {
+      "id": "flooring-transformation",
+      "title": "Flooring Transformation",
+      "category": "Flooring",
+      "coverImage": "/aEomQEx4Q2sZ.com/media/250x165/AOX0l9K8erbq.png",
+      "images": [
+        "/aEomQEx4Q2sZ.com/media/250x165/AOX0l9K8erbq.png",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg"
+      ],
+      "tags": [
+        "Flooring",
+        "Renovation"
+      ],
+      "description": "Durable flooring layers paired with a polished finish for an elegant upgrade.",
+      "highlights": [
+        "Luxury vinyl",
+        "Acoustic padding",
+        "Seamless transitions"
+      ],
+      "materials": [
+        "LVP",
+        "Acoustic foam",
+        "Oak trim"
+      ],
+      "timeline": [
+        "Demo",
+        "Prep",
+        "Install",
+        "Finish"
+      ],
+      "scope": "Luxury vinyl • Acoustic underlay",
+      "featured": true
+    },
+    {
+      "id": "exterior-paint-reveal",
+      "title": "Exterior Paint Reveal",
+      "category": "Painting",
+      "coverImage": "/aEomQEx4Q2sZ.com/resources/images/networx/v2/fSS86TPTtzR5.png",
+      "images": [
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/fSS86TPTtzR5.png",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg"
+      ],
+      "tags": [
+        "Painting",
+        "Exterior"
+      ],
+      "description": "A crisp exterior repaint with premium coatings and trim detailing.",
+      "highlights": [
+        "Surface prep",
+        "Trim refresh",
+        "Weatherproof seal"
+      ],
+      "materials": [
+        "Premium primer",
+        "Exterior enamel",
+        "Sealants"
+      ],
+      "timeline": [
+        "Prep",
+        "Paint",
+        "Finish"
+      ],
+      "scope": "Prep • Prime • Finish",
+      "featured": false
+    },
+    {
+      "id": "roofing-refresh",
+      "title": "Roofing Refresh",
+      "category": "Roofing",
+      "coverImage": "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UZP1Emv43ZoL.png",
+      "images": [
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UZP1Emv43ZoL.png",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg"
+      ],
+      "tags": [
+        "Roofing",
+        "Exterior"
+      ],
+      "description": "Precision roofing update with upgraded shingles and ventilation improvements.",
+      "highlights": [
+        "New shingles",
+        "Ridge vent",
+        "Underlayment"
+      ],
+      "materials": [
+        "Architectural shingles",
+        "Ventilation kit",
+        "Flashing"
+      ],
+      "timeline": [
+        "Demo",
+        "Install",
+        "Finish"
+      ],
+      "scope": "Shingles • Ventilation",
+      "featured": false
+    },
+    {
+      "id": "remodel-living",
+      "title": "Living Room Remodel",
+      "category": "Remodeling",
+      "coverImage": "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
+      "images": [
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
+        "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg"
+      ],
+      "tags": [
+        "Remodeling",
+        "Interiors"
+      ],
+      "description": "An open, airy living space upgraded with tailored finishes and lighting.",
+      "highlights": [
+        "Built-ins",
+        "Lighting plan",
+        "Premium trim"
+      ],
+      "materials": [
+        "Custom millwork",
+        "LED lighting",
+        "Paint finish"
+      ],
+      "timeline": [
+        "Demo",
+        "Prep",
+        "Install",
+        "Finish"
+      ],
+      "scope": "Open-plan refresh",
+      "featured": false,
+      "beforeAfter": {
+        "before": "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
+        "after": "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg"
+      }
+    },
+    {
+      "id": "deck-outdoor-upgrade",
+      "title": "Deck & Outdoor Upgrade",
+      "category": "Decks",
+      "coverImage": "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
+      "images": [
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
+        "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg"
+      ],
+      "tags": [
+        "Decks",
+        "Outdoor"
+      ],
+      "description": "Outdoor entertaining space refreshed with resilient materials and clean lines.",
+      "highlights": [
+        "Composite deck",
+        "Railing update",
+        "Outdoor lighting"
+      ],
+      "materials": [
+        "Composite boards",
+        "Stainless fixtures",
+        "Outdoor lights"
+      ],
+      "timeline": [
+        "Demo",
+        "Install",
+        "Finish"
+      ],
+      "scope": "Composite deck refresh",
+      "featured": false
+    },
+    {
+      "id": "outdoor-living",
+      "title": "Outdoor Living Retreat",
+      "category": "Outdoor",
+      "coverImage": "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
+      "images": [
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
+        "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
+        "/aEomQEx4Q2sZ.com/media/250x165/k0jKHZgh5ySn.png"
+      ],
+      "tags": [
+        "Outdoor",
+        "Lifestyle"
+      ],
+      "description": "A serene outdoor lounge with warm textures and functional amenities.",
+      "highlights": [
+        "Pergola",
+        "Lounge seating",
+        "Ambient lighting"
+      ],
+      "materials": [
+        "Treated wood",
+        "Outdoor fabrics",
+        "Lighting"
+      ],
+      "timeline": [
+        "Plan",
+        "Install",
+        "Finish"
+      ],
+      "scope": "Lounge design",
+      "featured": false
+    },
+    {
+      "id": "before-after-signature",
+      "title": "Signature Before & After",
+      "category": "Before & After",
+      "coverImage": "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
+      "images": [
+        "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
+        "/aEomQEx4Q2sZ.com/media/250x165/AOX0l9K8erbq.png",
+        "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg"
+      ],
+      "tags": [
+        "Before & After",
+        "Remodeling"
+      ],
+      "description": "See the transformation side-by-side with a refined before & after comparison.",
+      "highlights": [
+        "Full repaint",
+        "New flooring",
+        "Lighting refresh"
+      ],
+      "materials": [
+        "Premium paint",
+        "Flooring",
+        "Lighting"
+      ],
+      "timeline": [
+        "Demo",
+        "Prep",
+        "Install",
+        "Finish"
+      ],
+      "scope": "Full transformation",
+      "featured": false,
+      "beforeAfter": {
+        "before": "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
+        "after": "/aEomQEx4Q2sZ.com/media/250x165/AOX0l9K8erbq.png"
+      }
+    }
+  ]
+}

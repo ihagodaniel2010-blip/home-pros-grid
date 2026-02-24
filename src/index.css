@@ -2,26 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "ServiceIcons";
+  src: url('/resources/fonts/service_icons/Flaticon.woff') format('woff'),
+       url('/resources/fonts/service_icons/Flaticon.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 210 50% 15%;
+    --foreground: 11 54% 16%;
     --card: 0 0% 100%;
-    --card-foreground: 210 50% 15%;
+    --card-foreground: 11 54% 16%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 50% 15%;
+    --popover-foreground: 11 54% 16%;
     --primary: 209 75% 17%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
+    --secondary: 225 14% 94%;
     --secondary-foreground: 209 75% 17%;
-    --muted: 210 33% 96%;
-    --muted-foreground: 210 15% 45%;
-    --accent: 210 40% 95%;
+    --muted: 225 6% 94%;
+    --muted-foreground: 225 10% 55%;
+    --accent: 225 14% 93%;
     --accent-foreground: 209 75% 17%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 210 20% 90%;
-    --input: 210 20% 90%;
+    --border: 225 13% 90%;
+    --input: 225 13% 90%;
     --ring: 209 75% 17%;
     --radius: 0.875rem;
 
@@ -92,6 +100,16 @@
 }
 
 @layer components {
+  .service-icon-glyph {
+    font-family: "ServiceIcons";
+    font-style: normal;
+    font-weight: normal;
+    display: inline-block;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+  }
+
   .glass-card {
     background: hsl(var(--glass));
     backdrop-filter: blur(20px);
@@ -149,5 +167,150 @@
 
   .navy-gradient-hero {
     background: linear-gradient(160deg, hsl(209, 75%, 17%) 0%, hsl(209, 80%, 8%) 100%);
+  }
+
+  /* Premium animations */
+  @keyframes slideReveal {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes cardHover {
+    from {
+      transform: translateY(0px);
+      box-shadow: 0 4px 24px hsl(209 75% 17% / 0.06), 0 1px 4px hsl(209 75% 17% / 0.04);
+    }
+    to {
+      transform: translateY(-8px);
+      box-shadow: 0 12px 48px hsl(209 75% 17% / 0.1), 0 4px 12px hsl(209 75% 17% / 0.06);
+    }
+  }
+
+  @keyframes progressSlide {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes countUp {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .animate-slide-reveal {
+    animation: slideReveal 0.3s ease;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease;
+  }
+
+  /* Enhanced shadow system for premium feel */
+  .shadow-premium {
+    box-shadow: 0 4px 24px rgba(11, 42, 74, 0.06), 0 1px 4px rgba(11, 42, 74, 0.04);
+  }
+
+  .shadow-premium-lg {
+    box-shadow: 0 20px 50px rgba(11, 42, 74, 0.12), 0 8px 16px rgba(11, 42, 74, 0.08);
+  }
+
+  .shadow-premium-xl {
+    box-shadow: 0 20px 60px rgba(11, 42, 74, 0.15), 0 8px 24px rgba(11, 42, 74, 0.1);
+  }
+
+  /* Smooth transitions for all interactive elements */
+  button,
+  a,
+  input,
+  [role="button"] {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Hero section polish */
+  .hero-search {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Card hover effect */
+  .card-premium {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-premium:hover {
+    transform: translateY(-6px);
+  }
+
+  /* Premium dropdown styles */
+  .dropdown-trigger-active {
+    background: hsl(var(--primary) / 0.05);
+    color: hsl(var(--primary));
+  }
+
+  .dropdown-panel {
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
+
+  /* Smooth scroll in dropdowns */
+  .dropdown-panel div {
+    scroll-behavior: smooth;
+  }
+
+  /* Pointer arrow smooth animation */
+  @keyframes pointerArrowEnter {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .pointer-arrow {
+    animation: pointerArrowEnter 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .animate-progress-slide {
+    animation: progressSlide 0.6s ease;
+  }
+
+  /* Hover effects */
+  .card-hover {
+    transition: all 0.3s ease;
+  }
+
+  .card-hover:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 48px hsl(209 75% 17% / 0.1), 0 4px 12px hsl(209 75% 17% / 0.06);
+  }
+
+  /* Input focus glow */
+  .glow-focus:focus {
+    box-shadow: 0 0 0 3px hsl(209 75% 17% / 0.1), 0 0 0 2px hsl(209 75% 17% / 0.5);
   }
 }

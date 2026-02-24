@@ -1,5 +1,59 @@
 # Welcome to your Lovable project
 
+## Supabase Setup
+
+To connect Google login and reviews storage:
+
+1. Copy `.env.example` to `.env`.
+2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` with values from your Supabase project.
+3. In Supabase Auth, enable **Google** provider and set redirect URL to `http://localhost:8080/experiences` (and your production URL if needed).
+4. Create the `reviews` table and RLS policies from `REVIEWS_SYSTEM.md`.
+5. Run the app with `npm run dev`.
+
+If Supabase variables are missing, the app falls back to local storage for reviews and uses dev login simulation.
+
+### Supabase Cloud (No Docker)
+
+Use this path if you cannot install Docker.
+
+1. In Supabase Dashboard, create or open your project.
+2. Get these values from **Project Settings > API**:
+	- `Project URL` -> `VITE_SUPABASE_URL`
+	- `anon public` key -> `VITE_SUPABASE_ANON_KEY`
+3. Put both values in `.env`.
+4. Open **SQL Editor** in Supabase and run [supabase/remote_setup.sql](supabase/remote_setup.sql).
+5. In **Authentication > Providers > Google**, enable Google and add redirect URLs:
+	- `http://localhost:8080`
+	- `http://localhost:8080/experiences`
+6. Run frontend with:
+
+```sh
+npm run dev
+```
+
+With this flow, the app uses remote Supabase directly and does not require `supabase start`.
+
+### Local Supabase (VS Code Extension)
+
+1. Install and open Docker Desktop.
+2. In project root, run:
+
+```sh
+npx supabase login
+npx supabase start
+npx supabase db reset
+```
+
+3. Start frontend:
+
+```sh
+npm run dev
+```
+
+4. In VS Code Supabase extension, click **Connect** (local instance).
+
+If `supabase start` fails with `//./pipe/docker_engine`, Docker is not running (or VS Code needs admin privileges on Windows).
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID

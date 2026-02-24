@@ -6,7 +6,7 @@ const Join = () => (
   <Layout>
     <div className="max-w-md mx-auto px-4 py-20">
       <h1 className="text-2xl font-bold mb-2 text-center">Join As a Pro</h1>
-      <p className="text-muted-foreground text-center mb-6 text-sm">Grow your business with Networx</p>
+      <p className="text-muted-foreground text-center mb-6 text-sm">Grow your business with Barrigudo</p>
       <div className="space-y-4">
         <Input placeholder="Business Name" />
         <Input placeholder="Email" type="email" />

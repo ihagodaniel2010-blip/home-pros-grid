@@ -1,0 +1,3 @@
+-- Optional seed data for local Supabase.
+-- Keep empty for now because reviews.user_id references auth.users.
+-- Add inserts after creating local users if needed.
