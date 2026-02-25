@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { adminLogin, fetchAdminSession } from "@/lib/admin-auth";
+import { fetchAdminSession } from "@/lib/admin-auth";
+import { apiUrl } from "@/lib/api-url";
 import { Lock } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -34,12 +35,7 @@ const AdminLogin = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    const result = await adminLogin();
-    if (result.ok) {
-      navigate("/admin");
-    } else {
-      setError(result.error || "Acesso restrito");
-    }
+    window.location.assign(apiUrl("/api/auth/login"));
   };
 
   return (
