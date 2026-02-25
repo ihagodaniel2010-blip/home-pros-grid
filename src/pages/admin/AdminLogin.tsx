@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { adminLogin } from "@/lib/admin-auth";
+import { adminLogin, fetchAdminSession } from "@/lib/admin-auth";
 import { Lock } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -9,6 +9,29 @@ const AdminLogin = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    fetchAdminSession()
+      .then((session) => {
+        if (!active) return;
+        if (session?.email) {
+          navigate("/admin", { replace: true });
+          return;
+        }
+        setCheckingSession(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCheckingSession(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,9 +82,10 @@ const AdminLogin = () => {
             {error && <p className="text-red-600 text-sm font-medium">{error}</p>}
             <button 
               type="submit" 
+              disabled={checkingSession}
               className="w-full py-3 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-all duration-200 hover:shadow-lg active:scale-[0.99]"
             >
-              Sign In
+              {checkingSession ? "Checking..." : "Sign In"}
             </button>
           </form>
           <p className="text-[11px] text-gray-500 text-center mt-6 leading-relaxed">
