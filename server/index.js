@@ -8,15 +8,24 @@ import { readSiteSettings, writeSiteSettings } from "./site-settings.store.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8787);
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
-const SESSION_SECRET = process.env.SESSION_SECRET;
-const NODE_ENV = process.env.NODE_ENV || "development";
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:8080";
-const SESSION_COOKIE_SAME_SITE = process.env.SESSION_COOKIE_SAME_SITE || (NODE_ENV === "production" ? "none" : "lax");
+
+const normalizeEnv = (value, fallback = "") => {
+  const text = String(value ?? fallback).trim();
+  return text.replace(/^['"]+|['"]+$/g, "");
+};
+
+const ADMIN_EMAIL = normalizeEnv(process.env.ADMIN_EMAIL).toLowerCase();
+const ADMIN_PASSWORD_HASH = normalizeEnv(process.env.ADMIN_PASSWORD_HASH);
+const SESSION_SECRET = normalizeEnv(process.env.SESSION_SECRET);
+const NODE_ENV = normalizeEnv(process.env.NODE_ENV, "development");
+const FRONTEND_ORIGIN = normalizeEnv(process.env.FRONTEND_ORIGIN, "http://localhost:8080");
+const SESSION_COOKIE_SAME_SITE = normalizeEnv(
+  process.env.SESSION_COOKIE_SAME_SITE,
+  NODE_ENV === "production" ? "none" : "lax"
+);
 const SESSION_COOKIE_SECURE =
   typeof process.env.SESSION_COOKIE_SECURE === "string"
-    ? process.env.SESSION_COOKIE_SECURE === "true"
+    ? normalizeEnv(process.env.SESSION_COOKIE_SECURE).toLowerCase() === "true"
     : NODE_ENV === "production";
 const isVercelRuntime = process.env.VERCEL === "1";
 const dataDir = isVercelRuntime ? path.resolve("/tmp", "home-pros-grid-data") : path.resolve(process.cwd(), "data");
@@ -227,7 +236,7 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(401).json({ error: "Acesso restrito" });
   }
 
-  if (String(email) !== ADMIN_EMAIL) {
+  if (String(email).trim().toLowerCase() !== ADMIN_EMAIL) {
     await recordLoginAttempt({
       email: String(email),
       ip,
