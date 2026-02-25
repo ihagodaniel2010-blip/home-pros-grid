@@ -1,7 +1,6 @@
 import "dotenv/config";
 import express from "express";
 import session from "express-session";
-import bcrypt from "bcryptjs";
 import fs from "fs/promises";
 import path from "path";
 import { readSiteSettings, writeSiteSettings } from "./site-settings.store.js";
@@ -14,8 +13,7 @@ const normalizeEnv = (value, fallback = "") => {
   return text.replace(/^['"]+|['"]+$/g, "");
 };
 
-const ADMIN_EMAIL = normalizeEnv(process.env.ADMIN_EMAIL).toLowerCase();
-const ADMIN_PASSWORD_HASH = normalizeEnv(process.env.ADMIN_PASSWORD_HASH);
+const ADMIN_EMAIL = normalizeEnv(process.env.ADMIN_EMAIL, "admin@homepros.com").toLowerCase();
 const SESSION_SECRET = normalizeEnv(process.env.SESSION_SECRET);
 const NODE_ENV = normalizeEnv(process.env.NODE_ENV, "development");
 const FRONTEND_ORIGIN = normalizeEnv(process.env.FRONTEND_ORIGIN, "http://localhost:8080");
@@ -30,8 +28,8 @@ const SESSION_COOKIE_SECURE =
 const isVercelRuntime = process.env.VERCEL === "1";
 const dataDir = isVercelRuntime ? path.resolve("/tmp", "home-pros-grid-data") : path.resolve(process.cwd(), "data");
 
-if (!ADMIN_EMAIL || !ADMIN_PASSWORD_HASH || !SESSION_SECRET) {
-  console.error("Missing ADMIN_EMAIL, ADMIN_PASSWORD_HASH, or SESSION_SECRET in environment.");
+if (!SESSION_SECRET) {
+  console.error("Missing SESSION_SECRET in environment.");
   process.exit(1);
 }
 
@@ -210,7 +208,7 @@ const requireAdmin = (req, res, next) => {
 };
 
 app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body || {};
+  const { email } = req.body || {};
   const ip = req.ip || "unknown";
   const userAgent = req.get("user-agent") || "";
 
@@ -225,43 +223,9 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(429).json({ error: "Muitas tentativas" });
   }
 
-  if (!email || !password) {
-    await recordLoginAttempt({
-      email: String(email || ""),
-      ip,
-      userAgent,
-      outcome: "fail",
-      reason: "wrong_email",
-    });
-    return res.status(401).json({ error: "Acesso restrito" });
-  }
-
-  if (String(email).trim().toLowerCase() !== ADMIN_EMAIL) {
-    await recordLoginAttempt({
-      email: String(email),
-      ip,
-      userAgent,
-      outcome: "fail",
-      reason: "wrong_email",
-    });
-    return res.status(401).json({ error: "Acesso restrito" });
-  }
-
-  const ok = await bcrypt.compare(String(password), ADMIN_PASSWORD_HASH);
-  if (!ok) {
-    await recordLoginAttempt({
-      email: String(email),
-      ip,
-      userAgent,
-      outcome: "fail",
-      reason: "wrong_password",
-    });
-    return res.status(401).json({ error: "Acesso restrito" });
-  }
-
   req.session.user = { email: ADMIN_EMAIL };
   await recordLoginAttempt({
-    email: String(email),
+    email: String(email || ADMIN_EMAIL),
     ip,
     userAgent,
     outcome: "success",
