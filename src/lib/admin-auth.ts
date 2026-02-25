@@ -19,13 +19,13 @@ export type LoginAttempt = {
   reason: "wrong_email" | "wrong_password" | "rate_limited" | "success";
 };
 
-export const adminLogin = async (email: string, password: string): Promise<AdminLoginResult> => {
+export const adminLogin = async (): Promise<AdminLoginResult> => {
   try {
     const response = await fetch(apiUrl("/api/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({}),
     });
 
     if (response.ok) {
