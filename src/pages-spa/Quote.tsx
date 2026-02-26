@@ -67,6 +67,18 @@ const Quote = () => {
     }
   }, [revealedSections, scrollToBottom]);
 
+  // Calculate section indices dynamically
+  const sectionIdx = {
+    zip: 0,
+    service: 1,
+    subtype: hasSubtypes ? 2 : -1,
+    details: hasSubtypes ? 3 : 2,
+    media: hasSubtypes ? 4 : 3,
+    location: hasSubtypes ? 5 : 4,
+    contact: hasSubtypes ? 6 : 5,
+    review: hasSubtypes ? 7 : 6,
+  };
+
   // Auto-reveal on valid zip
   useEffect(() => {
     if (/^\d{5}$/.test(formData.zip) && revealedSections === 1) {
@@ -265,17 +277,6 @@ const Quote = () => {
     );
   }
 
-  // Calculate section indices dynamically
-  const sectionIdx = {
-    zip: 0,
-    service: 1,
-    subtype: hasSubtypes ? 2 : -1,
-    details: hasSubtypes ? 3 : 2,
-    media: hasSubtypes ? 4 : 3,
-    location: hasSubtypes ? 5 : 4,
-    contact: hasSubtypes ? 6 : 5,
-    review: hasSubtypes ? 7 : 6,
-  };
 
   // Helper for "proceed" buttons on optional sections
   const handleDetailsContinue = () => {
