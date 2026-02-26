@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Link, Outlet, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe } from "lucide-react";
 import { adminLogout, fetchAdminSession } from "@/lib/admin-auth";
 import { getLeads } from "@/lib/leads";
@@ -48,7 +48,7 @@ const AdminLayout = () => {
         if (!active) return;
         if (!session) {
           setIsAuthed(false);
-          navigate("/login");
+          navigate("/admin/login");
           return;
         }
         setIsAuthed(true);

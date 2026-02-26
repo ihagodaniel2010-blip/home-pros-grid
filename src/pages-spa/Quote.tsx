@@ -28,6 +28,8 @@ const Quote = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     zip: searchParams.get("zip") || "",
+    city: "",
+    state: "",
     selectedService: "",
     subtype: "",
     details: "",
@@ -40,6 +42,7 @@ const Quote = () => {
     // Honeypot
     websiteUrl: "",
   });
+  const [isLookupLoading, setIsLookupLoading] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<{ file: File; preview: string; type: 'image' | 'video' }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -83,7 +86,29 @@ const Quote = () => {
   useEffect(() => {
     if (/^\d{5}$/.test(formData.zip) && revealedSections === 1) {
       setErrors((e) => ({ ...e, zip: "" }));
-      revealNext(1);
+
+      // Perform Zip Lookup
+      setIsLookupLoading(true);
+      fetch(`https://api.zippopotam.us/us/${formData.zip}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.places && data.places[0]) {
+            const place = data.places[0];
+            setFormData(prev => ({
+              ...prev,
+              city: place['place name'],
+              state: place['state abbreviation'],
+              address: prev.address || `${place['place name']}, ${place['state abbreviation']}`
+            }));
+          }
+          revealNext(1);
+        })
+        .catch(() => {
+          revealNext(1);
+        })
+        .finally(() => {
+          setIsLookupLoading(false);
+        });
     }
   }, [formData.zip, revealedSections, revealNext]);
 
@@ -147,6 +172,10 @@ const Quote = () => {
 
     setIsSubmitting(true);
     try {
+      if (!supabase) {
+        throw new Error("Supabase connection not initialized. Please check your environment variables.");
+      }
+
       // 2. Upload Media
       const uploadedUrls: string[] = [];
       if (selectedMedia.length > 0) {
@@ -193,7 +222,7 @@ const Quote = () => {
         details: formData.details || undefined,
         locationType: formData.locationType,
         fullName: formData.fullName,
-        address: formData.address,
+        address: formData.address || `${formData.city}, ${formData.state}`,
         email: formData.email,
         phone: formData.phone,
         selectedPros: selectedProNames,
