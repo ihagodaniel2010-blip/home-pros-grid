@@ -1,9 +1,4 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { UserProvider } from "@/context/UserContext";
 import DevLoginSimulator from "@/components/DevLoginSimulator";
 import Index from "./pages/Index";
 import Services from "./pages/Services";
@@ -25,45 +20,42 @@ import LeadDetail from "./pages/admin/LeadDetail";
 import AdminSettings from "./pages/admin/Settings";
 import AdminPortfolio from "./pages/admin/Portfolio";
 import AdminReviews from "./pages/admin/Reviews";
+import EstimatesList from "./pages/admin/EstimatesList";
+import EstimateEditor from "./pages/admin/EstimateEditor";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
-
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <UserProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <DevLoginSimulator />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/services" element={<Services />} />
-            <Route path="/quote/:serviceSlug" element={<Quote />} />
-            <Route path="/success" element={<Success />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/join" element={<Join />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/blog" element={<Blog />} />
-            <Route path="/cost-guide" element={<CostGuide />} />
-            <Route path="/experiences" element={<Experiences />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin" element={<ErrorBoundary><AdminLayout /></ErrorBoundary>}>
-              <Route index element={<Dashboard />} />
-              <Route path="portfolio" element={<AdminPortfolio />} />
-              <Route path="reviews" element={<AdminReviews />} />
-              <Route path="inbox" element={<AdminInbox />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="leads/:id" element={<LeadDetail />} />
-              <Route path="settings" element={<AdminSettings />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </UserProvider>
-  </QueryClientProvider>
+  <>
+    <DevLoginSimulator />
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/services" element={<Services />} />
+        <Route path="/quote/:serviceSlug" element={<Quote />} />
+        <Route path="/success" element={<Success />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/join" element={<Join />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/blog" element={<Blog />} />
+        <Route path="/cost-guide" element={<CostGuide />} />
+        <Route path="/experiences" element={<Experiences />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<ErrorBoundary><AdminLayout /></ErrorBoundary>}>
+          <Route index element={<Dashboard />} />
+          <Route path="portfolio" element={<AdminPortfolio />} />
+          <Route path="reviews" element={<AdminReviews />} />
+          <Route path="inbox" element={<AdminInbox />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="leads/:id" element={<LeadDetail />} />
+          <Route path="estimates" element={<EstimatesList />} />
+          <Route path="estimates/new" element={<EstimateEditor />} />
+          <Route path="estimates/:id" element={<EstimateEditor />} />
+          <Route path="settings" element={<AdminSettings />} />
+        </Route>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
+  </>
 );
 
 export default App;

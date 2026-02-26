@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/navigation-compat";
 import { Search, MapPin } from "lucide-react";
 import { allServices } from "@/data/services";
 import { motion } from "framer-motion";
@@ -38,7 +38,7 @@ const HeroSection = () => {
   };
 
   return (
-    <section 
+    <section
       className="relative flex items-center justify-center overflow-hidden -mt-[72px] pt-[72px]"
       style={{
         height: '500px',

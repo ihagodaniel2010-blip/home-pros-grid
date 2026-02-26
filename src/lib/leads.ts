@@ -7,6 +7,7 @@ export interface StatusChange {
 
 export interface Lead {
   id: string;
+  organization_id?: string;
   createdAt: string;
   serviceSlug: string;
   zip: string;
@@ -19,10 +20,16 @@ export interface Lead {
   email: string;
   phone: string;
   selectedPros: string[];
-  status: "New" | "Contacted" | "Won" | "Lost";
+  status: "New" | "Contacted" | "Estimate Sent" | "Approved" | "Closed";
   ownerNotes: string;
   updatedAt: string;
   statusHistory: StatusChange[];
+  // Novos campos profissionais
+  description?: string;
+  preferred_contact_method?: "email" | "phone" | "text";
+  spam_score?: number;
+  is_spam?: boolean;
+  media_urls?: string[];
 }
 
 // ─── LOCAL STORAGE FALLBACK ──────────────────────────────
@@ -69,12 +76,18 @@ const updateLeadLocal = (id: string, updates: Partial<Lead>): Lead | null => {
 };
 
 // ─── SUPABASE ────────────────────────────────────────────
-const getLeadsSupabase = async (): Promise<Lead[]> => {
+const getLeadsSupabase = async (organizationId?: string): Promise<Lead[]> => {
   if (!supabase) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from("leads")
     .select("*")
     .order("createdAt", { ascending: false });
+
+  if (organizationId) {
+    query = query.eq("organization_id", organizationId);
+  }
+
+  const { data, error } = await query;
   if (error) {
     console.error("Supabase getLeads error:", error.message);
     return [];
@@ -83,12 +96,15 @@ const getLeadsSupabase = async (): Promise<Lead[]> => {
 };
 
 const saveLeadSupabase = async (
-  lead: Omit<Lead, "id" | "createdAt" | "status" | "ownerNotes" | "updatedAt" | "statusHistory">
+  lead: Omit<Lead, "id" | "createdAt" | "status" | "ownerNotes" | "updatedAt" | "statusHistory"> & { organization_id?: string }
 ): Promise<Lead> => {
   if (!supabase) throw new Error("Supabase not configured");
   const now = new Date().toISOString();
+  const defaultOrgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID;
+
   const payload = {
     ...lead,
+    organization_id: lead.organization_id || defaultOrgId,
     status: "New",
     ownerNotes: "",
     updatedAt: now,
@@ -124,13 +140,13 @@ const updateLeadSupabase = async (id: string, updates: Partial<Lead>): Promise<L
 };
 
 // ─── EXPORTS PÚBLICOS ─────────────────────────────────────
-export const getLeads = async (): Promise<Lead[]> => {
-  if (isSupabaseConfigured && supabase) return getLeadsSupabase();
+export const getLeads = async (organizationId?: string): Promise<Lead[]> => {
+  if (isSupabaseConfigured && supabase) return getLeadsSupabase(organizationId);
   return getLeadsLocal();
 };
 
 export const saveLead = async (
-  lead: Omit<Lead, "id" | "createdAt" | "status" | "ownerNotes" | "updatedAt" | "statusHistory">
+  lead: Omit<Lead, "id" | "createdAt" | "status" | "ownerNotes" | "updatedAt" | "statusHistory"> & { organization_id?: string }
 ): Promise<Lead> => {
   if (isSupabaseConfigured && supabase) return saveLeadSupabase(lead);
   return saveLeadLocal(lead);

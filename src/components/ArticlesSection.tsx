@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/navigation-compat";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import ServicesShowcase from "./ServicesShowcase";

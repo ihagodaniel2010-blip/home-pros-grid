@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/navigation-compat";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,12 +34,12 @@ const Login = () => {
 
     toast({
       title: "Supabase not configured",
-      description: "Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable real Google login.",
+      description: "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable real Google login.",
       duration: 3000,
     });
 
     // For now, simulate Google login in development
-    if (import.meta.env.DEV) {
+    if (process.env.NODE_ENV === "development") {
       await login({
         id: `google-${Date.now()}`,
         name: "Test User",
