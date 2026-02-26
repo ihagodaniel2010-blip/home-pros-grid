@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/navigation-compat";
 import { coreServices } from "@/data/services";
 import { motion } from "framer-motion";
 

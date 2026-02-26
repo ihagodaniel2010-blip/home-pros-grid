@@ -29,7 +29,7 @@ export const fetchAdminSession = async (): Promise<AdminSession | null> => {
   if (!session?.user) return null;
 
   return {
-    email: session.user.email || "Unknown"
+    email: session.user.email || "Unknown",
   };
 };
 
@@ -38,7 +38,16 @@ export const adminLogout = async (): Promise<void> => {
   await supabase.auth.signOut();
 };
 
-export const fetchLoginAttempts = async (): Promise<any[]> => {
+export type LoginAttempt = {
+  timestamp: string;
+  email: string;
+  ip: string;
+  outcome: "success" | "fail";
+  reason?: string;
+};
+
+export const fetchLoginAttempts = async (status?: string): Promise<LoginAttempt[]> => {
   // Login attempts tracking should be moved to a Supabase table if needed
+  // For now returning empty to satisfy the UI
   return [];
 };

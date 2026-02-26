@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Check, MapPin, Home, Building2, ChevronRight, Star, Shield, ArrowLeft } from "lucide-react";
 import Header from "@/components/Header";
@@ -7,6 +7,9 @@ import { mockPros } from "@/data/pros";
 import { saveLead } from "@/lib/leads";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import imageCompression from "browser-image-compression";
+import { Upload, X, Image as ImageIcon, Video as VideoIcon, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 24 },
@@ -34,7 +37,11 @@ const Quote = () => {
     email: "",
     phone: "",
     selectedPros: mockPros.map((p) => p.id),
+    // Honeypot
+    websiteUrl: "",
   });
+  const [selectedMedia, setSelectedMedia] = useState<{ file: File; preview: string; type: 'image' | 'video' }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const selectedSubService: SubServiceOption | undefined = useMemo(
     () => subServices.find((s) => s.label === formData.selectedService),
@@ -43,22 +50,22 @@ const Quote = () => {
   const hasSubtypes = !!(selectedSubService?.subtypes && selectedSubService.subtypes.length > 0);
 
   // Determine total sections and progress
-  const totalSections = hasSubtypes ? 8 : 7;
+  const totalSections = hasSubtypes ? 9 : 8;
   const progressPct = Math.min(Math.round(((revealedSections - 1) / (totalSections - 1)) * 100), 100);
 
   const set = (key: string, value: string | string[]) =>
     setFormData((p) => ({ ...p, [key]: value }));
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 100);
-  };
+  }, []);
 
-  const revealNext = (sectionIndex: number) => {
+  const revealNext = useCallback((sectionIndex: number) => {
     if (sectionIndex >= revealedSections) {
       setRevealedSections(sectionIndex + 1);
       scrollToBottom();
     }
-  };
+  }, [revealedSections, scrollToBottom]);
 
   // Auto-reveal on valid zip
   useEffect(() => {
@@ -66,7 +73,7 @@ const Quote = () => {
       setErrors((e) => ({ ...e, zip: "" }));
       revealNext(1);
     }
-  }, [formData.zip]);
+  }, [formData.zip, revealedSections, revealNext]);
 
   // Auto-reveal on service selection
   useEffect(() => {
@@ -79,24 +86,21 @@ const Quote = () => {
         revealNext(2); // This will be details section (index adjusted)
       }
     }
-  }, [formData.selectedService]);
+  }, [formData.selectedService, revealedSections, revealNext, subServices]);
 
   // Auto-reveal on subtype selection
   useEffect(() => {
     if (formData.subtype && hasSubtypes && revealedSections <= 3) {
       revealNext(3);
     }
-  }, [formData.subtype]);
+  }, [formData.subtype, hasSubtypes, revealedSections, revealNext]);
 
   // Auto-reveal on location type
   useEffect(() => {
     if (formData.locationType) {
-      const detailsSectionIdx = hasSubtypes ? 4 : 3;
-      if (revealedSections <= detailsSectionIdx + 1) {
-        revealNext(detailsSectionIdx + 1);
-      }
+      revealNext(sectionIdx.contact);
     }
-  }, [formData.locationType]);
+  }, [formData.locationType, revealNext, sectionIdx.contact]);
 
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {};
@@ -114,6 +118,14 @@ const Quote = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
+    // 1. Honeypot check
+    if (formData.websiteUrl) {
+      console.warn("Spam filter triggered: Honeypot filled.");
+      toast.success("Request sent successfully!"); // Lie to bots
+      navigate("/success");
+      return;
+    }
+
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length > 0) {
@@ -123,6 +135,43 @@ const Quote = () => {
 
     setIsSubmitting(true);
     try {
+      // 2. Upload Media
+      const uploadedUrls: string[] = [];
+      if (selectedMedia.length > 0) {
+        setIsUploading(true);
+        for (const item of selectedMedia) {
+          let fileToUpload = item.file;
+
+          // Compress if image
+          if (item.type === 'image') {
+            const options = {
+              maxSizeMB: 1,
+              maxWidthOrHeight: 1920,
+              useWebWorker: true
+            };
+            try {
+              fileToUpload = await imageCompression(item.file, options);
+            } catch (err) {
+              console.error("Compression error:", err);
+            }
+          }
+
+          const fileExt = item.file.name.split('.').pop();
+          const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+          const orgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID;
+          const filePath = `${orgId}/${fileName}`;
+
+          const { error: uploadError } = await supabase!.storage
+            .from('organization-private')
+            .upload(filePath, fileToUpload);
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase!.storage.from('organization-private').getPublicUrl(filePath);
+          uploadedUrls.push(publicUrl);
+        }
+      }
+
       const selectedProNames = mockPros.filter((p) => formData.selectedPros.includes(p.id)).map((p) => p.name);
       await saveLead({
         serviceSlug: serviceSlug || "",
@@ -136,6 +185,7 @@ const Quote = () => {
         email: formData.email,
         phone: formData.phone,
         selectedPros: selectedProNames,
+        media_urls: uploadedUrls
       });
       toast.success("Request sent successfully!");
       navigate("/success");
@@ -144,7 +194,38 @@ const Quote = () => {
       toast.error(error instanceof Error ? error.message : "Failed to send request. Please try again.");
     } finally {
       setIsSubmitting(false);
+      setIsUploading(false);
     }
+  };
+
+  const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const newMedia = files.map(file => {
+      const type = file.type.startsWith('image/') ? 'image' : 'video';
+
+      // Video limit check (50MB)
+      if (type === 'video' && file.size > 50 * 1024 * 1024) {
+        toast.error(`Video ${file.name} is too large. Max limit is 50MB.`);
+        return null;
+      }
+
+      return {
+        file,
+        preview: URL.createObjectURL(file),
+        type: type as 'image' | 'video'
+      };
+    }).filter(Boolean) as { file: File; preview: string; type: 'image' | 'video' }[];
+
+    setSelectedMedia(prev => [...prev, ...newMedia]);
+  };
+
+  const removeMedia = (index: number) => {
+    setSelectedMedia(prev => {
+      const updated = [...prev];
+      URL.revokeObjectURL(updated[index].preview);
+      updated.splice(index, 1);
+      return updated;
+    });
   };
 
   const togglePro = (id: string) => {
@@ -190,19 +271,23 @@ const Quote = () => {
     service: 1,
     subtype: hasSubtypes ? 2 : -1,
     details: hasSubtypes ? 3 : 2,
-    location: hasSubtypes ? 4 : 3,
-    contact: hasSubtypes ? 5 : 4,
-    review: hasSubtypes ? 6 : 5,
+    media: hasSubtypes ? 4 : 3,
+    location: hasSubtypes ? 5 : 4,
+    contact: hasSubtypes ? 6 : 5,
+    review: hasSubtypes ? 7 : 6,
   };
 
   // Helper for "proceed" buttons on optional sections
   const handleDetailsContinue = () => {
-    const nextIdx = sectionIdx.location;
-    revealNext(nextIdx + 1);
+    revealNext(sectionIdx.media);
+  };
+
+  const handleMediaContinue = () => {
+    revealNext(sectionIdx.location);
   };
 
   const handleContactContinue = () => {
-    revealNext(sectionIdx.review + 1);
+    revealNext(sectionIdx.review);
   };
 
   return (
@@ -232,6 +317,17 @@ const Quote = () => {
       {/* Form */}
       <div className="flex-1 flex justify-center px-4 sm:px-6 py-10">
         <div className="w-full max-w-[820px] space-y-6">
+          {/* Honeypot - Hidden from humans */}
+          <div className="hidden" aria-hidden="true">
+            <input
+              type="text"
+              name="websiteUrl"
+              tabIndex={-1}
+              autoComplete="off"
+              value={formData.websiteUrl}
+              onChange={(e) => set("websiteUrl", e.target.value)}
+            />
+          </div>
 
           {/* SECTION 1 – Zip */}
           <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
@@ -330,10 +426,82 @@ const Quote = () => {
                     {formData.details.length}/1000
                   </span>
                 </div>
-                {revealedSections <= sectionIdx.location && (
+                {revealedSections <= sectionIdx.media && (
                   <button
                     onClick={handleDetailsContinue}
                     className="mt-4 px-6 py-3 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 transition-all duration-200 inline-flex items-center gap-2"
+                  >
+                    Continue <ChevronRight className="h-4 w-4" />
+                  </button>
+                )}
+              </motion.section>
+            )}
+          </AnimatePresence>
+
+          {/* SECTION 4.5 – Media Upload */}
+          <AnimatePresence>
+            {revealedSections > sectionIdx.media && (
+              <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight mb-2">Add Photos or Videos</h2>
+                    <p className="text-sm text-muted-foreground">Show pros what needs to be done for a more accurate estimate.</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <ImageIcon className="h-5 w-5 text-primary" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                  {selectedMedia.map((item, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 group">
+                      {item.type === 'image' ? (
+                        <img src={item.preview} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-secondary/50 flex items-center justify-center">
+                          <VideoIcon className="h-8 w-8 text-white/40" />
+                        </div>
+                      )}
+                      <button
+                        onClick={() => removeMedia(idx)}
+                        className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {selectedMedia.length < 10 && (
+                    <label className="aspect-square rounded-2xl border-2 border-dashed border-white/10 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer flex flex-col items-center justify-center gap-2">
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*,video/*"
+                        className="hidden"
+                        onChange={handleMediaChange}
+                        disabled={isUploading}
+                      />
+                      {isUploading ? (
+                        <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                      ) : (
+                        <>
+                          <Upload className="h-6 w-6 text-white/40" />
+                          <span className="text-[10px] font-medium text-white/40 uppercase tracking-wider">Add Media</span>
+                        </>
+                      )}
+                    </label>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-6">
+                  <Shield className="h-3.5 w-3.5" />
+                  Your files are secure and only shared with selected professionals. Max 50MB per video.
+                </div>
+
+                {revealedSections <= sectionIdx.location && (
+                  <button
+                    onClick={handleMediaContinue}
+                    className="px-6 py-3 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 transition-all duration-200 inline-flex items-center gap-2"
                   >
                     Continue <ChevronRight className="h-4 w-4" />
                   </button>
@@ -387,7 +555,7 @@ const Quote = () => {
                       <input
                         type={field.type}
                         placeholder=" "
-                        value={(formData as any)[field.key]}
+                        value={formData[field.key as keyof typeof formData]}
                         onChange={(e) => set(field.key, e.target.value)}
                         className="!rounded-2xl !bg-secondary/50"
                       />
@@ -412,8 +580,13 @@ const Quote = () => {
           {/* SECTION 7 – Review & Submit */}
           <AnimatePresence>
             {revealedSections > sectionIdx.review && (
-              <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
-                <h2 className="text-xl font-bold tracking-tight mb-6">Review & Get Your Quotes</h2>
+              <motion.section
+                variants={sectionVariants}
+                initial="hidden"
+                animate="visible"
+                className="glass-card-strong p-8 md:p-10"
+              >
+                <h2 className="text-xl font-bold tracking-tight mb-6">Review & Request Estimate</h2>
 
                 {/* Summary */}
                 <div className="bg-secondary/40 rounded-2xl p-5 mb-6 space-y-2.5">
@@ -433,61 +606,8 @@ const Quote = () => {
                   ))}
                 </div>
 
-                {/* Pros selection */}
-                <p className="text-sm font-medium mb-4">Select professionals to receive your estimate:</p>
-                <div className="space-y-3 mb-6">
-                  {mockPros.map((pro) => (
-                    <label
-                      key={pro.id}
-                      className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 card-hover ${formData.selectedPros.includes(pro.id)
-                        ? "border-primary bg-primary/5 glow-border"
-                        : "border-border/60 hover:border-primary/30"
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.selectedPros.includes(pro.id)}
-                        onChange={() => togglePro(pro.id)}
-                        className="mt-0.5 w-5 h-5 rounded border-border accent-primary cursor-pointer"
-                      />
-                      {/* Avatar */}
-                      <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-white font-bold text-sm">
-                        {pro.initials}
-                      </div>
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-semibold text-sm">{pro.name}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mb-1.5">{pro.location}, {pro.state}</p>
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <div className="flex items-center gap-1">
-                            <div className="flex gap-0.5">
-                              {[...Array(5)].map((_, i) => (
-                                <Star
-                                  key={i}
-                                  className={`h-3 w-3 ${i < Math.round(pro.rating) ? "fill-amber-400 text-amber-400" : "fill-gray-300 text-gray-300"}`}
-                                />
-                              ))}
-                            </div>
-                            <span className="text-xs font-medium text-foreground">{pro.rating}</span>
-                            <span className="text-xs text-muted-foreground">({pro.reviews})</span>
-                          </div>
-                          <div className="flex gap-1.5">
-                            {pro.badges.map((b) => (
-                              <span key={b} className="inline-flex items-center text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-medium">
-                                {b}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-
                 <p className="text-[11px] text-muted-foreground mb-6 leading-relaxed">
-                  By clicking "Get My Free Quotes," you agree to our Terms of Service and Privacy Policy.
+                  By clicking "Request Estimate," you agree to our Terms of Service and Privacy Policy.
                   You consent to receive calls, texts and emails from service professionals at the number
                   and email provided.
                 </p>
@@ -497,7 +617,7 @@ const Quote = () => {
                   disabled={isSubmitting}
                   className="w-full py-4 bg-primary text-primary-foreground text-base font-semibold rounded-2xl hover:bg-primary/90 transition-all duration-200 hover:shadow-xl active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? "Sending Request..." : "Get My Free Quotes"}
+                  {isSubmitting ? "Processing..." : "Request My Free Estimate"}
                 </button>
               </motion.section>
             )}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "@/lib/navigation-compat";
 import { Menu, X, ChevronDown, LogIn, Home, User, LogOut, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { topServices } from "@/data/services";
@@ -309,7 +309,9 @@ const Header = () => {
                       {user ? (
                         <>
                           <div className="px-4 py-2 border-b border-slate-100 mb-1">
-                            <p className="text-xs font-semibold text-primary/70 uppercase tracking-wider">Account</p>
+                            <p className="text-xs font-semibold text-primary/70 uppercase tracking-wider">
+                              {user.organization ? user.organization.name : "Account"}
+                            </p>
                             <p className="text-sm font-medium truncate">{user.email}</p>
                           </div>
 
@@ -323,10 +325,10 @@ const Header = () => {
 
                           <button
                             onClick={() => handleNavigate("/admin")}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150 text-left"
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 transition-all duration-150 text-left"
                           >
-                            <Home className="h-4 w-4 flex-shrink-0" />
-                            <span>Admin Portal</span>
+                            <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
+                            <span>Admin Panel</span>
                           </button>
 
                           <div className="border-t border-slate-100 mt-1 pt-1">

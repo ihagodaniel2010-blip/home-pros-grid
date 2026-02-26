@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/navigation-compat";
 import { topServices } from "@/data/services";
 import { motion } from "framer-motion";
 
@@ -39,7 +39,7 @@ const TopProjects = () => (
           Our Top Projects
         </h2>
       </motion.div>
-      
+
       <div style={{
         display: 'flex',
         justifyContent: 'center',

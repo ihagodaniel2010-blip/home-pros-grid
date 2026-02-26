@@ -14,7 +14,7 @@ interface ServiceCardProps {
 
 const ServiceCard = ({ category, items }: ServiceCardProps) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  
+
   // Get all images for this category (from all projects)
   const allImages = useMemo(() => {
     const images: string[] = [];
@@ -33,7 +33,7 @@ const ServiceCard = ({ category, items }: ServiceCardProps) => {
   // Auto-rotate images
   useEffect(() => {
     if (allImages.length <= 1) return;
-    
+
     const timer = setInterval(() => {
       setCurrentImageIndex((prev) => (prev + 1) % allImages.length);
     }, AUTO_ROTATE_INTERVAL);
@@ -42,7 +42,9 @@ const ServiceCard = ({ category, items }: ServiceCardProps) => {
   }, [allImages.length]);
 
   // Respect prefers-reduced-motion
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const prefersReducedMotion = typeof window !== "undefined"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    : false;
 
   return (
     <motion.div
@@ -83,9 +85,8 @@ const ServiceCard = ({ category, items }: ServiceCardProps) => {
               <motion.button
                 key={i}
                 onClick={() => setCurrentImageIndex(i)}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  i === currentImageIndex ? "w-6 bg-white" : "w-2 bg-white/50 hover:bg-white/75"
-                }`}
+                className={`h-2 rounded-full transition-all duration-300 ${i === currentImageIndex ? "w-6 bg-white" : "w-2 bg-white/50 hover:bg-white/75"
+                  }`}
                 aria-label={`View image ${i + 1}`}
                 tabIndex={0}
               />
@@ -109,7 +110,7 @@ const ServiceCard = ({ category, items }: ServiceCardProps) => {
         <p className="text-sm text-slate-600 mb-4">
           {items.length} project{items.length !== 1 ? "s" : ""} completed
         </p>
-        
+
         {/* Image counter */}
         {allImages.length > 1 && (
           <div className="flex items-center gap-2 text-xs text-slate-500">

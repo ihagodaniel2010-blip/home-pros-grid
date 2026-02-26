@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Mail, ExternalLink, ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/navigation-compat";
 import {
   defaultSiteSettings,
   fetchSiteSettingsPublic,
@@ -9,8 +9,8 @@ import {
 } from "@/lib/site-settings";
 
 const ServiceAreas = () => {
-  const prefersReducedMotion = typeof window !== "undefined" 
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches 
+  const prefersReducedMotion = typeof window !== "undefined"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
     : false;
 
   const [settings, setSettings] = useState<SiteSettings>(defaultSiteSettings);
@@ -63,8 +63,8 @@ const ServiceAreas = () => {
     visible: {
       opacity: 1,
       y: 0,
-      transition: prefersReducedMotion 
-        ? { duration: 0 } 
+      transition: prefersReducedMotion
+        ? { duration: 0 }
         : { duration: 0.6 },
     },
   } as const;
@@ -84,7 +84,7 @@ const ServiceAreas = () => {
     <section className="py-24 px-6 bg-gradient-to-b from-white via-slate-50 to-white relative overflow-hidden">
       {/* Decorative background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div 
+        <div
           className="absolute top-20 right-[10%] w-96 h-96 rounded-full opacity-5 blur-3xl"
           style={{ background: "var(--primary, #0b6dbf)" }}
         />
@@ -99,7 +99,7 @@ const ServiceAreas = () => {
           transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.6 }}
           className="text-center mb-16"
         >
-          <h2 
+          <h2
             className="text-4xl md:text-5xl font-bold text-slate-900 mb-3 tracking-tight"
             style={{ letterSpacing: "-0.02em" }}
           >
@@ -232,7 +232,7 @@ const ServiceAreas = () => {
               className="relative p-8 rounded-2xl border border-slate-200/50 bg-gradient-to-br from-white/80 via-white/60 to-slate-50/40 backdrop-blur-md shadow-lg overflow-hidden group hover:shadow-xl transition-shadow duration-300"
             >
               {/* Decorative gradient background */}
-              <div 
+              <div
                 className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300"
                 style={{ background: "linear-gradient(135deg, var(--primary, #0b6dbf) 0%, transparent 100%)" }}
               />

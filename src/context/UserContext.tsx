@@ -2,12 +2,21 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  role: 'owner' | 'admin' | 'staff';
+}
+
 export interface UserSession {
   id: string;
   name: string;
   email: string;
   avatarUrl?: string;
   provider?: string;
+  organization?: Organization;
+  organizations?: Organization[];
   completedJobId?: string; // Mock field for review eligibility
 }
 
@@ -17,6 +26,7 @@ interface UserContextType {
   login: (userData: UserSession) => Promise<void>;
   logout: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  switchOrganization: (orgId: string) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -27,24 +37,54 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const mapSupabaseUser = (authUser: User): UserSession => ({
-    id: authUser.id,
-    name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email || "User",
-    email: authUser.email || "",
-    avatarUrl: authUser.user_metadata?.avatar_url,
-    provider: "google",
-  });
+  const fetchUserOrganizations = async (userId: string): Promise<Organization[]> => {
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from('organization_users')
+      .select(`
+        role,
+        organization:organizations (
+          id,
+          name,
+          slug
+        )
+      `)
+      .eq('user_id', userId);
+
+    if (error || !data) return [];
+
+    return data.map((item: any) => ({
+      id: item.organization.id,
+      name: item.organization.name,
+      slug: item.organization.slug,
+      role: item.role
+    }));
+  };
+
+  const mapSupabaseUser = async (authUser: User): Promise<UserSession> => {
+    const orgs = await fetchUserOrganizations(authUser.id);
+    return {
+      id: authUser.id,
+      name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email || "User",
+      email: authUser.email || "",
+      avatarUrl: authUser.user_metadata?.avatar_url,
+      provider: "google",
+      organizations: orgs,
+      organization: orgs.length > 0 ? orgs[0] : undefined
+    };
+  };
 
   useEffect(() => {
     if (isSupabaseConfigured && supabase) {
       let isMounted = true;
 
-      supabase.auth.getSession().then(({ data }) => {
+      supabase.auth.getSession().then(async ({ data }) => {
         if (!isMounted) return;
         if (data.session?.user) {
-          setUser(mapSupabaseUser(data.session.user));
+          const mappedUser = await mapSupabaseUser(data.session.user);
+          setUser(mappedUser);
         } else {
-          // Check for manual dev session if no supabase session
           const stored = localStorage.getItem(USER_STORAGE_KEY);
           if (stored) {
             setUser(JSON.parse(stored));
@@ -57,12 +97,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, session) => {
+      } = supabase.auth.onAuthStateChange(async (_event, session) => {
         if (session?.user) {
-          setUser(mapSupabaseUser(session.user));
-          localStorage.removeItem(USER_STORAGE_KEY); // Real session takes precedence
+          const mappedUser = await mapSupabaseUser(session.user);
+          setUser(mappedUser);
+          localStorage.removeItem(USER_STORAGE_KEY);
         } else {
-          // If logged out from Supabase, also clear local session
           setUser(null);
           localStorage.removeItem(USER_STORAGE_KEY);
         }
@@ -73,7 +113,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscription.unsubscribe();
       };
     } else {
-      // Fallback for when Supabase is not configured
       try {
         const stored = localStorage.getItem(USER_STORAGE_KEY);
         if (stored) {
@@ -100,9 +139,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem(USER_STORAGE_KEY);
   };
 
+  const switchOrganization = (orgId: string) => {
+    if (!user || !user.organizations) return;
+    const org = user.organizations.find(o => o.id === orgId);
+    if (org) {
+      setUser({ ...user, organization: org });
+    }
+  };
+
   const signInWithGoogle = async () => {
     if (!isSupabaseConfigured || !supabase) {
-      throw new Error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
     }
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -118,7 +165,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <UserContext.Provider value={{ user, isLoading, login, logout, signInWithGoogle }}>
+    <UserContext.Provider value={{ user, isLoading, login, logout, signInWithGoogle, switchOrganization }}>
       {children}
     </UserContext.Provider>
   );
