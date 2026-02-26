@@ -6,6 +6,7 @@ import { getServiceBySlug, getSubServices, type SubServiceOption } from "@/data/
 import { mockPros } from "@/data/pros";
 import { saveLead } from "@/lib/leads";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 24 },
@@ -110,25 +111,39 @@ const Quote = () => {
     return e;
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async () => {
     const e = validate();
     setErrors(e);
-    if (Object.keys(e).length > 0) return;
-    const selectedProNames = mockPros.filter((p) => formData.selectedPros.includes(p.id)).map((p) => p.name);
-    await saveLead({
-      serviceSlug: serviceSlug || "",
-      zip: formData.zip,
-      selectedServiceOption: formData.selectedService,
-      subtype: formData.subtype || undefined,
-      details: formData.details || undefined,
-      locationType: formData.locationType,
-      fullName: formData.fullName,
-      address: formData.address,
-      email: formData.email,
-      phone: formData.phone,
-      selectedPros: selectedProNames,
-    });
-    navigate("/success");
+    if (Object.keys(e).length > 0) {
+      toast.error("Please fill in all required fields correctly.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const selectedProNames = mockPros.filter((p) => formData.selectedPros.includes(p.id)).map((p) => p.name);
+      await saveLead({
+        serviceSlug: serviceSlug || "",
+        zip: formData.zip,
+        selectedServiceOption: formData.selectedService,
+        subtype: formData.subtype || undefined,
+        details: formData.details || undefined,
+        locationType: formData.locationType,
+        fullName: formData.fullName,
+        address: formData.address,
+        email: formData.email,
+        phone: formData.phone,
+        selectedPros: selectedProNames,
+      });
+      navigate("/success");
+    } catch (error) {
+      console.error("Submission error:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to send request. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const togglePro = (id: string) => {
@@ -249,8 +264,8 @@ const Quote = () => {
                       key={opt.label}
                       onClick={() => { set("selectedService", opt.label); set("subtype", ""); }}
                       className={`group relative text-left p-4 rounded-2xl border-2 transition-all duration-200 ${formData.selectedService === opt.label
-                          ? "border-primary bg-primary/5 glow-border"
-                          : "border-border/60 hover:border-primary/30 hover:bg-card"
+                        ? "border-primary bg-primary/5 glow-border"
+                        : "border-border/60 hover:border-primary/30 hover:bg-card"
                         }`}
                     >
                       <span className="text-sm font-medium">{opt.label}</span>
@@ -278,8 +293,8 @@ const Quote = () => {
                       key={st}
                       onClick={() => set("subtype", st)}
                       className={`group relative text-left p-4 rounded-2xl border-2 transition-all duration-200 ${formData.subtype === st
-                          ? "border-primary bg-primary/5 glow-border"
-                          : "border-border/60 hover:border-primary/30 hover:bg-card"
+                        ? "border-primary bg-primary/5 glow-border"
+                        : "border-border/60 hover:border-primary/30 hover:bg-card"
                         }`}
                     >
                       <span className="text-sm font-medium">{st}</span>
@@ -340,8 +355,8 @@ const Quote = () => {
                       key={opt.value}
                       onClick={() => set("locationType", opt.value)}
                       className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all duration-200 ${formData.locationType === opt.value
-                          ? "border-primary bg-primary/5 glow-border"
-                          : "border-border/60 hover:border-primary/30"
+                        ? "border-primary bg-primary/5 glow-border"
+                        : "border-border/60 hover:border-primary/30"
                         }`}
                     >
                       <opt.icon className={`h-6 w-6 ${formData.locationType === opt.value ? "text-primary" : "text-muted-foreground"} transition-colors`} strokeWidth={1.5} />
@@ -424,8 +439,8 @@ const Quote = () => {
                     <label
                       key={pro.id}
                       className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 card-hover ${formData.selectedPros.includes(pro.id)
-                          ? "border-primary bg-primary/5 glow-border"
-                          : "border-border/60 hover:border-primary/30"
+                        ? "border-primary bg-primary/5 glow-border"
+                        : "border-border/60 hover:border-primary/30"
                         }`}
                     >
                       <input
@@ -478,9 +493,10 @@ const Quote = () => {
 
                 <button
                   onClick={handleSubmit}
-                  className="w-full py-4 bg-primary text-primary-foreground text-base font-semibold rounded-2xl hover:bg-primary/90 transition-all duration-200 hover:shadow-xl active:scale-[0.99]"
+                  disabled={isSubmitting}
+                  className="w-full py-4 bg-primary text-primary-foreground text-base font-semibold rounded-2xl hover:bg-primary/90 transition-all duration-200 hover:shadow-xl active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Get My Free Quotes
+                  {isSubmitting ? "Sending Request..." : "Get My Free Quotes"}
                 </button>
               </motion.section>
             )}

@@ -95,7 +95,10 @@ const saveLeadSupabase = async (
     statusHistory: [{ status: "New", timestamp: now }],
   };
   const { data, error } = await supabase.from("leads").insert(payload).select().single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("Supabase saveLead error:", error);
+    throw new Error(error.message);
+  }
   return data as Lead;
 };
 
