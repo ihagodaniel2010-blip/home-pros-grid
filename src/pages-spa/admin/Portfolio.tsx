@@ -55,7 +55,7 @@ const AdminPortfolio = () => {
     };
   }, []);
 
-  const items = data?.items || [];
+  const items = useMemo(() => data?.items || [], [data]);
   const activeItem = useMemo(
     () => items.find((item) => item.id === activeId) || null,
     [items, activeId]
@@ -146,11 +146,10 @@ const AdminPortfolio = () => {
                 <button
                   key={item.id}
                   onClick={() => setActiveId(item.id)}
-                  className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition-all ${
-                    activeId === item.id
+                  className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition-all ${activeId === item.id
                       ? "border-blue-600 bg-blue-50 text-blue-900"
                       : "border-gray-200 text-gray-700 hover:border-gray-300"
-                  }`}
+                    }`}
                 >
                   <div className="font-semibold text-gray-900">{item.title || "Untitled"}</div>
                   <div className="text-xs text-gray-500">{item.category || "Uncategorized"}</div>

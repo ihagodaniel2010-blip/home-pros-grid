@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
-type StatusFilter = "All" | "New" | "Contacted" | "Won" | "Lost";
+type StatusFilter = "All" | "New" | "Contacted" | "Estimate Sent" | "Approved" | "Closed";
 type DateFilter = "All" | "Today" | "7d" | "30d";
 
 const AdminInbox = () => {
@@ -48,11 +48,15 @@ const AdminInbox = () => {
       }
       return true;
     });
-  }, [leads, search, statusFilter, dateFilter, locFilter]);
+  }, [leads, search, statusFilter, dateFilter, locFilter, now]);
 
   const toggleSelect = (id: string) => {
     const next = new Set(selected);
-    next.has(id) ? next.delete(id) : next.add(id);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
     setSelected(next);
   };
 
@@ -84,8 +88,8 @@ const AdminInbox = () => {
     switch (status) {
       case "New": return "bg-blue-50 text-blue-700 border-blue-100 ring-4 ring-blue-500/5";
       case "Contacted": return "bg-orange-50 text-orange-700 border-orange-100 ring-4 ring-orange-500/5";
-      case "Won": return "bg-emerald-50 text-emerald-700 border-emerald-100 ring-4 ring-emerald-500/5";
-      case "Lost": return "bg-slate-50 text-slate-700 border-slate-100 ring-4 ring-slate-500/5";
+      case "Approved": return "bg-emerald-50 text-emerald-700 border-emerald-100 ring-4 ring-emerald-500/5";
+      case "Closed": return "bg-slate-50 text-slate-700 border-slate-100 ring-4 ring-slate-500/5";
       default: return "bg-gray-50 text-gray-700 border-gray-100";
     }
   };
@@ -128,10 +132,10 @@ const AdminInbox = () => {
 
           <div className="flex items-center gap-2.5 overflow-x-auto pb-1 md:pb-0">
             <div className="flex bg-gray-100 p-0.5 rounded-xl border border-gray-200">
-              {["All", "New", "Contacted", "Won"].map((s) => (
+              {["All", "New", "Contacted", "Approved"].map((s) => (
                 <button
                   key={s}
-                  onClick={() => setStatusFilter(s as any)}
+                  onClick={() => setStatusFilter(s as StatusFilter)}
                   className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${statusFilter === s
                     ? "bg-white text-[#0b2a4a] shadow-sm"
                     : "text-gray-500 hover:text-gray-800"}`}
@@ -145,7 +149,7 @@ const AdminInbox = () => {
               {["All", "7d", "30d"].map((d) => (
                 <button
                   key={d}
-                  onClick={() => setDateFilter(d as any)}
+                  onClick={() => setDateFilter(d as DateFilter)}
                   className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${dateFilter === d
                     ? "bg-white text-[#0b2a4a] shadow-sm"
                     : "text-gray-500 hover:text-gray-800"}`}
@@ -173,7 +177,7 @@ const AdminInbox = () => {
             </div>
             <div className="flex items-center gap-2">
               <Button onClick={() => bulkUpdate("Contacted")} variant="ghost" className="text-white hover:bg-white/10 text-xs font-bold">Mark Contacted</Button>
-              <Button onClick={() => bulkUpdate("Won")} variant="ghost" className="text-white hover:bg-white/10 text-xs font-bold">Mark Won</Button>
+              <Button onClick={() => bulkUpdate("Approved")} variant="ghost" className="text-white hover:bg-white/10 text-xs font-bold">Mark Approved</Button>
               <div className="w-px h-6 bg-white/10 mx-2" />
               <Button onClick={() => setSelected(new Set())} variant="ghost" className="text-white/60 hover:text-white text-xs">Clear</Button>
             </div>

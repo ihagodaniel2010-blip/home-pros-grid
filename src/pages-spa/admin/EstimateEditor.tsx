@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Save, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,13 +37,7 @@ const EstimateEditor = () => {
 
     const [items, setItems] = useState<EstimateLineItem[]>([]);
 
-    useEffect(() => {
-        if (user?.organization?.id) {
-            loadData();
-        }
-    }, [id, leadId, user]);
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setIsLoading(true);
         try {
             if (id) {
@@ -74,7 +68,13 @@ const EstimateEditor = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [id, leadId]);
+
+    useEffect(() => {
+        if (user?.organization?.id) {
+            loadData();
+        }
+    }, [user, loadData]); // loadData is now stable via useCallback
 
     const calculateTotals = (currentItems: EstimateLineItem[], tax: number, discount: number) => {
         const subtotal = currentItems.reduce((acc, item) => acc + (item.total_price || 0), 0);

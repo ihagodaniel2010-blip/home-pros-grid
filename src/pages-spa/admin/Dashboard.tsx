@@ -30,6 +30,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useUser();
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [loginAttempts, setLoginAttempts] = useState<LoginAttempt[]>([]);
+  const [attemptFilter, setAttemptFilter] = useState<"all" | "success" | "fail">("all");
 
   useEffect(() => {
     if (user?.organization?.id) {
@@ -38,18 +40,22 @@ const Dashboard = () => {
       getLeads().then(setLeads);
     }
   }, [user]);
-  const [loginAttempts, setLoginAttempts] = useState<LoginAttempt[]>([]);
-  const [attemptFilter, setAttemptFilter] = useState<"all" | "success" | "fail">("all");
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
-  const monthAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
 
-  const leadsToday = leads.filter((l) => l.createdAt.slice(0, 10) === today).length;
-  const leadsWeek = leads.filter((l) => l.createdAt >= weekAgo).length;
-  const leadsMonth = leads.filter((l) => l.createdAt >= monthAgo).length;
+  // Stable date boundaries for KPIs
+  const dateBoundaries = useMemo(() => {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
+    const monthAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
+    return { today, weekAgo, monthAgo, now };
+  }, []);
+
+  const leadsToday = leads.filter((l) => l.createdAt.slice(0, 10) === dateBoundaries.today).length;
+  const leadsWeek = leads.filter((l) => l.createdAt >= dateBoundaries.weekAgo).length;
+  const leadsMonth = leads.filter((l) => l.createdAt >= dateBoundaries.monthAgo).length;
 
   const dailyData = useMemo(() => {
+    const now = dateBoundaries.now;
     const days: Record<string, number> = {};
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 86400000).toISOString().slice(0, 10);
@@ -60,7 +66,7 @@ const Dashboard = () => {
       if (d && days[d] !== undefined) days[d]++;
     });
     return Object.entries(days).map(([date, count]) => ({ date: date.slice(5), count }));
-  }, [leads]);
+  }, [leads, dateBoundaries]);
 
   const serviceData = useMemo(() => {
     const map: Record<string, number> = {};
@@ -255,7 +261,7 @@ const Dashboard = () => {
                   <td className="px-6 py-4">
                     <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${l.status === "New" ? "bg-blue-100 text-blue-700" :
                       l.status === "Contacted" ? "bg-orange-100 text-orange-700" :
-                        l.status === "Won" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                        l.status === "Approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                       }`}>{l.status}</span>
                   </td>
                 </tr>
