@@ -137,6 +137,7 @@ const Quote = () => {
         phone: formData.phone,
         selectedPros: selectedProNames,
       });
+      toast.success("Request sent successfully!");
       navigate("/success");
     } catch (error) {
       console.error("Submission error:", error);
