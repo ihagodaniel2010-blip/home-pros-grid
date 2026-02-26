@@ -94,12 +94,12 @@ const saveLeadSupabase = async (
     updatedAt: now,
     statusHistory: [{ status: "New", timestamp: now }],
   };
-  const { data, error } = await supabase.from("leads").insert(payload).select().single();
+  const { error } = await supabase.from("leads").insert(payload);
   if (error) {
     console.error("Supabase saveLead error:", error);
     throw new Error(error.message);
   }
-  return data as Lead;
+  return { ...payload, id: "temp", createdAt: now } as Lead;
 };
 
 const updateLeadSupabase = async (id: string, updates: Partial<Lead>): Promise<Lead | null> => {
