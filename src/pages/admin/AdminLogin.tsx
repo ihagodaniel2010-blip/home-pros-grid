@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAdminSession } from "@/lib/admin-auth";
-import { apiUrl } from "@/lib/api-url";
+import { fetchAdminSession, adminLogin } from "@/lib/admin-auth";
 import { Lock } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -35,7 +34,16 @@ const AdminLogin = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    window.location.assign(apiUrl("/api/auth/login"));
+    const result = await fetchAdminSession();
+    if (sessionStorage.getItem("admin_session") || result?.email) {
+      navigate("/admin", { replace: true });
+      return;
+    }
+
+    const loginResult = await adminLogin();
+    if (!loginResult.ok) {
+      setError(loginResult.error || "Login failed");
+    }
   };
 
   return (
@@ -54,8 +62,8 @@ const AdminLogin = () => {
           <p className="text-center text-sm text-gray-600 mb-8">Click to access the admin panel</p>
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && <p className="text-red-600 text-sm font-medium">{error}</p>}
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={checkingSession}
               className="w-full py-3 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-all duration-200 hover:shadow-lg active:scale-[0.99]"
             >
