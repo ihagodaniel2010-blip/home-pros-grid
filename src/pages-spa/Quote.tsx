@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Check, MapPin, Home, Building2, ChevronRight, Star, Shield, ArrowLeft } from "lucide-react";
 import Header from "@/components/Header";
@@ -56,16 +56,16 @@ const Quote = () => {
   const set = (key: string, value: string | string[]) =>
     setFormData((p) => ({ ...p, [key]: value }));
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 100);
-  };
+  }, []);
 
-  const revealNext = (sectionIndex: number) => {
+  const revealNext = useCallback((sectionIndex: number) => {
     if (sectionIndex >= revealedSections) {
       setRevealedSections(sectionIndex + 1);
       scrollToBottom();
     }
-  };
+  }, [revealedSections, scrollToBottom]);
 
   // Auto-reveal on valid zip
   useEffect(() => {
@@ -73,7 +73,7 @@ const Quote = () => {
       setErrors((e) => ({ ...e, zip: "" }));
       revealNext(1);
     }
-  }, [formData.zip]);
+  }, [formData.zip, revealedSections, revealNext]);
 
   // Auto-reveal on service selection
   useEffect(() => {
@@ -86,21 +86,21 @@ const Quote = () => {
         revealNext(2); // This will be details section (index adjusted)
       }
     }
-  }, [formData.selectedService]);
+  }, [formData.selectedService, revealedSections, revealNext, subServices]);
 
   // Auto-reveal on subtype selection
   useEffect(() => {
     if (formData.subtype && hasSubtypes && revealedSections <= 3) {
       revealNext(3);
     }
-  }, [formData.subtype]);
+  }, [formData.subtype, hasSubtypes, revealedSections, revealNext]);
 
   // Auto-reveal on location type
   useEffect(() => {
     if (formData.locationType) {
       revealNext(sectionIdx.contact);
     }
-  }, [formData.locationType]);
+  }, [formData.locationType, revealNext, sectionIdx.contact]);
 
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {};
@@ -555,7 +555,7 @@ const Quote = () => {
                       <input
                         type={field.type}
                         placeholder=" "
-                        value={(formData as any)[field.key]}
+                        value={formData[field.key as keyof typeof formData]}
                         onChange={(e) => set(field.key, e.target.value)}
                         className="!rounded-2xl !bg-secondary/50"
                       />

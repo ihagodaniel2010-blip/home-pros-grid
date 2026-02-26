@@ -30,7 +30,7 @@ const AdminInbox = () => {
   const [locFilter, setLocFilter] = useState<string>("All");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
 
   const filtered = useMemo(() => {
     return leads.filter((l) => {
