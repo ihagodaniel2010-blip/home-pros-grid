@@ -48,7 +48,7 @@ const AdminLayout = () => {
         if (!active) return;
         if (!session) {
           setIsAuthed(false);
-          navigate("/login");
+          navigate("/admin/login");
           return;
         }
         setIsAuthed(true);

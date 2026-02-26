@@ -1,18 +1,16 @@
 "use client";
 
-import NextLink from "next/link";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Link as RouterLink, useNavigate as useRouterNavigate, useLocation as useRouterLocation, useSearchParams as useRouterSearchParams } from "react-router-dom";
 import React from "react";
 
 /**
  * Compatibility component for Link from react-router-dom
  */
 export const Link = ({ to, children, ...props }: any) => {
-    const href = to === "/" ? "/" : to;
     return (
-        <NextLink href={href} {...props}>
+        <RouterLink to={to} {...props}>
             {children}
-        </NextLink>
+        </RouterLink>
     );
 };
 
@@ -20,20 +18,15 @@ export const Link = ({ to, children, ...props }: any) => {
  * Compatibility hook for useNavigate from react-router-dom
  */
 export const useNavigate = () => {
-    const router = useRouter();
+    const navigate = useRouterNavigate();
 
     return (to: string | number, options?: { replace?: boolean; state?: any }) => {
         if (typeof to === "number") {
-            if (to === -1) router.back();
-            else if (to === 1) router.forward();
+            navigate(to);
             return;
         }
 
-        if (options?.replace) {
-            router.replace(to);
-        } else {
-            router.push(to);
-        }
+        navigate(to, options);
     };
 };
 
@@ -41,16 +34,14 @@ export const useNavigate = () => {
  * Compatibility hook for useLocation from react-router-dom
  */
 export const useLocation = () => {
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
+    return useRouterLocation();
+};
 
-    return {
-        pathname: pathname || "/",
-        search: searchParams ? `?${searchParams.toString()}` : "",
-        hash: "",
-        state: null,
-        key: "default",
-    };
+/**
+ * Compatibility hook for useSearchParams from react-router-dom
+ */
+export const useSearchParams = () => {
+    return useRouterSearchParams();
 };
 
 /**
