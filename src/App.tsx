@@ -22,7 +22,7 @@ import AdminPortfolio from "./pages-spa/admin/Portfolio";
 import AdminReviews from "./pages-spa/admin/Reviews";
 import EstimatesList from "./pages-spa/admin/EstimatesList";
 import EstimateEditor from "./pages-spa/admin/EstimateEditor";
-import NotFound from "./pages-spa/admin/NotFound";
+import NotFound from "./pages-spa/NotFound";
 
 const App = () => (
   <>
