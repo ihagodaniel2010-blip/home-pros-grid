@@ -7,15 +7,22 @@ import { getLeads } from "@/lib/leads";
 const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const newLeads = getLeads().filter((l) => l.status === "New").length;
+  const [newLeads, setNewLeads] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthed, setIsAuthed] = useState(false);
+
+  useEffect(() => {
+    getLeads().then(leads => {
+      setNewLeads(leads.filter(l => l.status === "New").length);
+    });
+  }, [location.pathname]); // Update badge when path changes
 
   const navItems = useMemo(
     () => [
       { label: "Dashboard", icon: LayoutDashboard, path: "/admin" },
       { label: "Portfolio", icon: Images, path: "/admin/portfolio" },
       { label: "Inbox", icon: Inbox, path: "/admin/inbox" },
+      { label: "Reviews", icon: BarChart3, path: "/admin/reviews" },
       { label: "Analytics", icon: BarChart3, path: "/admin/analytics" },
       { label: "Locations", icon: MapPin, path: "/admin/settings?tab=maps" },
       { label: "Settings", icon: Settings, path: "/admin/settings" },
@@ -71,11 +78,10 @@ const AdminLayout = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 ${
-                  active
-                    ? "bg-white/15 text-white font-medium"
-                    : "text-white/70 hover:text-white hover:bg-white/10"
-                }`}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 ${active
+                  ? "bg-white/15 text-white font-medium"
+                  : "text-white/70 hover:text-white hover:bg-white/10"
+                  }`}
               >
                 <item.icon className="h-4 w-4" strokeWidth={1.5} />
                 {item.label}

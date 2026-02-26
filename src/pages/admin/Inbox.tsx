@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Download } from "lucide-react";
 import { getLeads, updateLead, type Lead } from "@/lib/leads";
@@ -8,7 +8,8 @@ type DateFilter = "All" | "Today" | "7d" | "30d";
 
 const AdminInbox = () => {
   const navigate = useNavigate();
-  const [leads, setLeads] = useState<Lead[]>(getLeads());
+  const [leads, setLeads] = useState<Lead[]>([]);
+  useEffect(() => { getLeads().then(setLeads); }, []);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [dateFilter, setDateFilter] = useState<DateFilter>("All");
@@ -41,9 +42,10 @@ const AdminInbox = () => {
     setSelected(next);
   };
 
-  const bulkUpdate = (status: Lead["status"]) => {
-    selected.forEach((id) => updateLead(id, { status }));
-    setLeads(getLeads());
+  const bulkUpdate = async (status: Lead["status"]) => {
+    await Promise.all(Array.from(selected).map((id) => updateLead(id, { status })));
+    const refreshed = await getLeads();
+    setLeads(refreshed);
     setSelected(new Set());
   };
 
@@ -68,11 +70,10 @@ const AdminInbox = () => {
         <button
           key={item}
           onClick={() => onChange(item)}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-            active === item
-              ? "bg-blue-600 text-white"
-              : "bg-gray-200 text-gray-700 hover:text-gray-900 hover:bg-gray-300"
-          }`}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${active === item
+            ? "bg-blue-600 text-white"
+            : "bg-gray-200 text-gray-700 hover:text-gray-900 hover:bg-gray-300"
+            }`}
         >
           {item}
         </button>
@@ -154,11 +155,10 @@ const AdminInbox = () => {
                   <td className="px-6 py-4 text-gray-600" onClick={() => navigate(`/admin/leads/${l.id}`)}>{l.email}</td>
                   <td className="px-6 py-4 text-gray-600" onClick={() => navigate(`/admin/leads/${l.id}`)}>{l.phone}</td>
                   <td className="px-6 py-4" onClick={() => navigate(`/admin/leads/${l.id}`)}>
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-                      l.status === "New" ? "bg-blue-100 text-blue-700" :
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${l.status === "New" ? "bg-blue-100 text-blue-700" :
                       l.status === "Contacted" ? "bg-orange-100 text-orange-700" :
-                      l.status === "Won" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    }`}>{l.status}</span>
+                        l.status === "Won" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                      }`}>{l.status}</span>
                   </td>
                 </tr>
               ))}

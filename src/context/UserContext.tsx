@@ -44,7 +44,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.session?.user) {
           setUser(mapSupabaseUser(data.session.user));
         } else {
-          setUser(null);
+          // Check for manual dev session if no supabase session
+          const stored = localStorage.getItem(USER_STORAGE_KEY);
+          if (stored) {
+            setUser(JSON.parse(stored));
+          } else {
+            setUser(null);
+          }
         }
         setIsLoading(false);
       });
@@ -54,8 +60,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
           setUser(mapSupabaseUser(session.user));
+          localStorage.removeItem(USER_STORAGE_KEY); // Real session takes precedence
         } else {
+          // If logged out from Supabase, also clear local session
           setUser(null);
+          localStorage.removeItem(USER_STORAGE_KEY);
         }
       });
 
@@ -63,17 +72,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isMounted = false;
         subscription.unsubscribe();
       };
-    }
-
-    try {
-      const stored = localStorage.getItem(USER_STORAGE_KEY);
-      if (stored) {
-        setUser(JSON.parse(stored));
+    } else {
+      // Fallback for when Supabase is not configured
+      try {
+        const stored = localStorage.getItem(USER_STORAGE_KEY);
+        if (stored) {
+          setUser(JSON.parse(stored));
+        }
+      } catch {
+        // ignore
+      } finally {
+        setIsLoading(false);
       }
-    } catch {
-      // ignore
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 

@@ -110,12 +110,12 @@ const Quote = () => {
     return e;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length > 0) return;
     const selectedProNames = mockPros.filter((p) => formData.selectedPros.includes(p.id)).map((p) => p.name);
-    saveLead({
+    await saveLead({
       serviceSlug: serviceSlug || "",
       zip: formData.zip,
       selectedServiceOption: formData.selectedService,
@@ -248,11 +248,10 @@ const Quote = () => {
                     <button
                       key={opt.label}
                       onClick={() => { set("selectedService", opt.label); set("subtype", ""); }}
-                      className={`group relative text-left p-4 rounded-2xl border-2 transition-all duration-200 ${
-                        formData.selectedService === opt.label
+                      className={`group relative text-left p-4 rounded-2xl border-2 transition-all duration-200 ${formData.selectedService === opt.label
                           ? "border-primary bg-primary/5 glow-border"
                           : "border-border/60 hover:border-primary/30 hover:bg-card"
-                      }`}
+                        }`}
                     >
                       <span className="text-sm font-medium">{opt.label}</span>
                       {formData.selectedService === opt.label && (
@@ -278,11 +277,10 @@ const Quote = () => {
                     <button
                       key={st}
                       onClick={() => set("subtype", st)}
-                      className={`group relative text-left p-4 rounded-2xl border-2 transition-all duration-200 ${
-                        formData.subtype === st
+                      className={`group relative text-left p-4 rounded-2xl border-2 transition-all duration-200 ${formData.subtype === st
                           ? "border-primary bg-primary/5 glow-border"
                           : "border-border/60 hover:border-primary/30 hover:bg-card"
-                      }`}
+                        }`}
                     >
                       <span className="text-sm font-medium">{st}</span>
                       {formData.subtype === st && (
@@ -341,11 +339,10 @@ const Quote = () => {
                     <button
                       key={opt.value}
                       onClick={() => set("locationType", opt.value)}
-                      className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all duration-200 ${
-                        formData.locationType === opt.value
+                      className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all duration-200 ${formData.locationType === opt.value
                           ? "border-primary bg-primary/5 glow-border"
                           : "border-border/60 hover:border-primary/30"
-                      }`}
+                        }`}
                     >
                       <opt.icon className={`h-6 w-6 ${formData.locationType === opt.value ? "text-primary" : "text-muted-foreground"} transition-colors`} strokeWidth={1.5} />
                       <span className="text-sm font-medium">{opt.label}</span>
@@ -426,11 +423,10 @@ const Quote = () => {
                   {mockPros.map((pro) => (
                     <label
                       key={pro.id}
-                      className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 card-hover ${
-                        formData.selectedPros.includes(pro.id)
+                      className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 card-hover ${formData.selectedPros.includes(pro.id)
                           ? "border-primary bg-primary/5 glow-border"
                           : "border-border/60 hover:border-primary/30"
-                      }`}
+                        }`}
                     >
                       <input
                         type="checkbox"

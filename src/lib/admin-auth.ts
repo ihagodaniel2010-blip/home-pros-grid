@@ -1,4 +1,4 @@
-import { apiUrl } from "@/lib/api-url";
+import { supabase } from "@/lib/supabase";
 
 export type AdminSession = {
   email: string;
@@ -6,61 +6,39 @@ export type AdminSession = {
 
 export type AdminLoginResult = {
   ok: boolean;
-  status: number;
   error?: string;
 };
 
-export type LoginAttempt = {
-  timestamp: string;
-  email: string;
-  ip: string;
-  userAgent: string;
-  outcome: "success" | "fail";
-  reason: "wrong_email" | "wrong_password" | "rate_limited" | "success";
-};
-
 export const adminLogin = async (): Promise<AdminLoginResult> => {
-  try {
-    const response = await fetch(apiUrl("/api/auth/login"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({}),
-    });
+  if (!supabase) return { ok: false, error: "Supabase not configured" };
 
-    if (response.ok) {
-      return { ok: true, status: response.status };
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/admin`
     }
+  });
 
-    let error = "Acesso restrito";
-    try {
-      const payload = await response.json();
-      if (payload?.error) error = payload.error;
-    } catch {
-      // Keep default message.
-    }
-
-    return { ok: false, status: response.status, error };
-  } catch {
-    return { ok: false, status: 0, error: "Backend offline" };
-  }
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 };
 
 export const fetchAdminSession = async (): Promise<AdminSession | null> => {
-  const response = await fetch(apiUrl("/api/auth/me"), { credentials: "include" });
-  if (!response.ok) return null;
-  return response.json();
+  if (!supabase) return null;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return null;
+
+  return {
+    email: session.user.email || "Unknown"
+  };
 };
 
 export const adminLogout = async (): Promise<void> => {
-  await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" });
+  if (!supabase) return;
+  await supabase.auth.signOut();
 };
 
-export const fetchLoginAttempts = async (status?: "success" | "fail"): Promise<LoginAttempt[]> => {
-  const query = status ? `?status=${status}` : "";
-  const response = await fetch(apiUrl(`/api/admin/login-attempts${query}`), {
-    credentials: "include",
-  });
-  if (!response.ok) return [];
-  return response.json();
+export const fetchLoginAttempts = async (): Promise<any[]> => {
+  // Login attempts tracking should be moved to a Supabase table if needed
+  return [];
 };
