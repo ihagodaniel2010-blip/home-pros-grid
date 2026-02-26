@@ -10,7 +10,7 @@ const PORT = Number(process.env.PORT || 8787);
 
 const normalizeEnv = (value, fallback = "") => {
   const text = String(value ?? fallback).trim();
-  return text.replace(/^['"]+|['"]+$/g, "");
+  return text.replace(/^['\"]+|['\"]+$/g, "");
 };
 
 const ADMIN_EMAIL = normalizeEnv(process.env.ADMIN_EMAIL, "admin@homepros.com").toLowerCase();
@@ -109,9 +109,9 @@ const sanitizeItem = (value) => {
     featured: Boolean(value.featured),
     beforeAfter: value.beforeAfter
       ? {
-          before: toText(value.beforeAfter.before),
-          after: toText(value.beforeAfter.after),
-        }
+        before: toText(value.beforeAfter.before),
+        after: toText(value.beforeAfter.after),
+      }
       : undefined,
   };
 };

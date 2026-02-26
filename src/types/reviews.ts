@@ -5,6 +5,7 @@ export interface Review {
   rating: number; // 1-5
   body: string;
   createdAt: Date;
+  isHidden?: boolean;
 }
 
 export interface ReviewsStats {
@@ -27,11 +28,13 @@ export interface ReviewsFilter {
   sort?: "newest" | "highest"; // sort order
   limit?: number;
   offset?: number;
+  includeHidden?: boolean;
 }
 
 export interface ReviewsServiceInterface {
   getReviews(filter?: ReviewsFilter): Promise<Review[]>;
   addReview(review: AddReviewInput): Promise<Review>;
   deleteReview(id: string): Promise<void>;
+  toggleReviewVisibility(id: string, isHidden: boolean): Promise<void>;
   getStats(): Promise<ReviewsStats>;
 }

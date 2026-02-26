@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getLeads } from "@/lib/leads";
+import { getLeads, type Lead } from "@/lib/leads";
 import { Users, TrendingUp, Calendar, Clock } from "lucide-react";
 import { fetchLoginAttempts, type LoginAttempt } from "@/lib/admin-auth";
 import {
@@ -27,7 +27,8 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const leads = useMemo(() => getLeads(), []);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  useEffect(() => { getLeads().then(setLeads); }, []);
   const [loginAttempts, setLoginAttempts] = useState<LoginAttempt[]>([]);
   const [attemptFilter, setAttemptFilter] = useState<"all" | "success" | "fail">("all");
   const now = new Date();
@@ -199,9 +200,8 @@ const Dashboard = () => {
                   <td className="px-6 py-4 text-gray-900 font-medium">{attempt.email}</td>
                   <td className="px-6 py-4 text-gray-600">{attempt.ip}</td>
                   <td className="px-6 py-4">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-                      attempt.outcome === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    }`}>{attempt.outcome}</span>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${attempt.outcome === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                      }`}>{attempt.outcome}</span>
                   </td>
                   <td className="px-6 py-4 text-gray-600">{attempt.reason}</td>
                 </tr>
@@ -244,11 +244,10 @@ const Dashboard = () => {
                   <td className="px-6 py-4 text-gray-900 font-semibold">{l.fullName}</td>
                   <td className="px-6 py-4 text-gray-600">{l.email}</td>
                   <td className="px-6 py-4">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-                      l.status === "New" ? "bg-blue-100 text-blue-700" :
-                      l.status === "Contacted" ? "bg-orange-100 text-orange-700" :
-                      l.status === "Won" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    }`}>{l.status}</span>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${l.status === "New" ? "bg-blue-100 text-blue-700" :
+                        l.status === "Contacted" ? "bg-orange-100 text-orange-700" :
+                          l.status === "Won" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                      }`}>{l.status}</span>
                   </td>
                 </tr>
               ))}

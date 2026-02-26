@@ -59,6 +59,7 @@ export class LocalReviewsService implements ReviewsServiceInterface {
       rating: Math.max(1, Math.min(5, input.rating)),
       body: input.body,
       createdAt: new Date(),
+      isHidden: false,
     };
     reviews.push(newReview);
     this.saveAll(reviews);
@@ -68,6 +69,15 @@ export class LocalReviewsService implements ReviewsServiceInterface {
   async deleteReview(id: string): Promise<void> {
     const reviews = this.getAll().filter((r) => r.id !== id);
     this.saveAll(reviews);
+  }
+
+  async toggleReviewVisibility(id: string, isHidden: boolean): Promise<void> {
+    const reviews = this.getAll();
+    const idx = reviews.findIndex((r) => r.id === id);
+    if (idx !== -1) {
+      reviews[idx].isHidden = isHidden;
+      this.saveAll(reviews);
+    }
   }
 
   async getStats(): Promise<ReviewsStats> {
@@ -105,6 +115,7 @@ type SupabaseReviewRow = {
   rating: number;
   body: string;
   created_at: string;
+  is_hidden: boolean;
 };
 
 export class SupabaseReviewsService implements ReviewsServiceInterface {
@@ -116,6 +127,7 @@ export class SupabaseReviewsService implements ReviewsServiceInterface {
       rating: row.rating,
       body: row.body,
       createdAt: new Date(row.created_at),
+      isHidden: row.is_hidden,
     };
   }
 
@@ -126,7 +138,11 @@ export class SupabaseReviewsService implements ReviewsServiceInterface {
 
     let query = supabase
       .from("reviews")
-      .select("id, user_name, user_avatar_url, rating, body, created_at");
+      .select("id, user_name, user_avatar_url, rating, body, created_at, is_hidden");
+
+    if (!filter?.includeHidden) {
+      query = query.eq("is_hidden", false);
+    }
 
     if (filter?.rating) {
       query = query.eq("rating", filter.rating);
@@ -194,6 +210,17 @@ export class SupabaseReviewsService implements ReviewsServiceInterface {
     if (error) {
       throw new Error(error.message);
     }
+  }
+
+  async toggleReviewVisibility(id: string, isHidden: boolean): Promise<void> {
+    if (!supabase) return;
+
+    const { error } = await supabase
+      .from("reviews")
+      .update({ is_hidden: isHidden })
+      .eq("id", id);
+
+    if (error) throw new Error(error.message);
   }
 
   async getStats(): Promise<ReviewsStats> {

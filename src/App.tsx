@@ -24,6 +24,7 @@ import Analytics from "./pages/admin/Analytics";
 import LeadDetail from "./pages/admin/LeadDetail";
 import AdminSettings from "./pages/admin/Settings";
 import AdminPortfolio from "./pages/admin/Portfolio";
+import AdminReviews from "./pages/admin/Reviews";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
             <Route path="/admin" element={<ErrorBoundary><AdminLayout /></ErrorBoundary>}>
               <Route index element={<Dashboard />} />
               <Route path="portfolio" element={<AdminPortfolio />} />
+              <Route path="reviews" element={<AdminReviews />} />
               <Route path="inbox" element={<AdminInbox />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="leads/:id" element={<LeadDetail />} />

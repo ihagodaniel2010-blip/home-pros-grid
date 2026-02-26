@@ -12,8 +12,9 @@ const LeadDetail = () => {
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    const l = getLeadById(id || "");
-    if (l) { setLead(l); setNotes(l.ownerNotes); }
+    getLeadById(id || "").then((l) => {
+      if (l) { setLead(l); setNotes(l.ownerNotes); }
+    });
   }, [id]);
 
   if (!lead) return (
@@ -23,13 +24,13 @@ const LeadDetail = () => {
     </div>
   );
 
-  const changeStatus = (status: Lead["status"]) => {
-    const updated = updateLead(lead.id, { status });
+  const changeStatus = async (status: Lead["status"]) => {
+    const updated = await updateLead(lead.id, { status });
     if (updated) setLead(updated);
   };
 
-  const saveNotes = () => {
-    const updated = updateLead(lead.id, { ownerNotes: notes });
+  const saveNotes = async () => {
+    const updated = await updateLead(lead.id, { ownerNotes: notes });
     if (updated) setLead(updated);
   };
 
@@ -50,13 +51,12 @@ const LeadDetail = () => {
               <button
                 key={s}
                 onClick={() => changeStatus(s)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                  lead.status === s
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${lead.status === s
                     ? s === "New" ? "bg-blue-600 text-white" :
                       s === "Contacted" ? "bg-orange-600 text-white" :
-                      s === "Won" ? "bg-green-600 text-white" : "bg-red-600 text-white"
+                        s === "Won" ? "bg-green-600 text-white" : "bg-red-600 text-white"
                     : "bg-gray-200 text-gray-700 hover:text-gray-900 hover:bg-gray-300"
-                }`}
+                  }`}
               >{s}</button>
             ))}
           </div>
