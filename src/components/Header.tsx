@@ -1,24 +1,26 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Menu, X, ChevronDown, LogIn, Home } from "lucide-react";
+import { Menu, X, ChevronDown, LogIn, Home, User, LogOut, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { topServices } from "@/data/services";
 import { motion, AnimatePresence } from "framer-motion";
+import { useUser } from "@/context/UserContext";
 
 const Header = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [findProOpen, setFindProOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
-  
+
   const findProRef = useRef<HTMLDivElement>(null);
-  const findProTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
+  const findProTimerRef = useRef<any>(null);
+
   const loginRef = useRef<HTMLDivElement>(null);
-  const loginTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
+  const loginTimerRef = useRef<any>(null);
+
   const navigate = useNavigate();
   const location = useLocation();
-  
+  const { user, logout } = useUser();
+
   // Detect if on hero page (homepage)
   const isHeroPage = location.pathname === "/";
   const isNavLinkActive = (path: string) => location.pathname === path || (path === "/" && location.pathname === "/");
@@ -93,40 +95,37 @@ const Header = () => {
   }, []);
 
   return (
-    <header className={`relative z-50 transition-all duration-300 ${
-      isHeroPage 
-        ? "bg-transparent" 
-        : "bg-white shadow-sm border-b border-slate-100/30"
-    }`} style={
-      isHeroPage ? {} : {
-        boxShadow: '0 2px 8px rgba(11,42,74,0.04)'
-      }
-    }>
+    <header className={`relative z-50 transition-all duration-300 ${isHeroPage
+      ? "bg-transparent"
+      : "bg-white shadow-sm border-b border-slate-100/30"
+      }`} style={
+        isHeroPage ? {} : {
+          boxShadow: '0 2px 8px rgba(11,42,74,0.04)'
+        }
+      }>
       <div className="max-w-7xl mx-auto px-6 h-[72px] flex items-center justify-between">
-        <Link to="/" className={`text-xl font-bold tracking-tight ${
-          isHeroPage ? "text-white" : "text-primary"
-        }`}>
+        <Link to="/" className={`text-xl font-bold tracking-tight ${isHeroPage ? "text-white" : "text-primary"
+          }`}>
           Barrigudo
         </Link>
 
         <nav className={`hidden lg:flex items-center gap-8 ml-auto mr-8 ${isHeroPage ? "text-white" : ""}`}>
           {/* Find a Pro Dropdown */}
-          <div 
+          <div
             ref={findProRef}
             className="relative"
             onPointerEnter={handleFindProEnter}
             onPointerLeave={handleFindProLeave}
           >
             <button
-              className={`flex items-center gap-1.5 text-base font-semibold transition-all duration-200 ${
-                findProOpen 
-                  ? isHeroPage 
-                    ? "text-white/90" 
-                    : "text-primary bg-primary/5 px-3 py-1.5 rounded-lg"
-                  : isHeroPage
-                    ? "text-white/80 hover:text-white"
-                    : "text-foreground/80 hover:text-primary"
-              }`}
+              className={`flex items-center gap-1.5 text-base font-semibold transition-all duration-200 ${findProOpen
+                ? isHeroPage
+                  ? "text-white/90"
+                  : "text-primary bg-primary/5 px-3 py-1.5 rounded-lg"
+                : isHeroPage
+                  ? "text-white/80 hover:text-white"
+                  : "text-foreground/80 hover:text-primary"
+                }`}
             >
               Find a Pro <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${findProOpen ? "rotate-180" : ""}`} />
             </button>
@@ -150,7 +149,7 @@ const Header = () => {
                     className="absolute left-1/2 -translate-x-1/2 z-50 pointer-events-none"
                     style={{ top: '48px' }}
                   >
-                    <div 
+                    <div
                       className="w-0 h-0"
                       style={{
                         borderLeft: '7px solid transparent',
@@ -208,23 +207,21 @@ const Header = () => {
             <Link
               key={link.to}
               to={link.to}
-              className={`text-base font-semibold transition-colors duration-200 relative ${
-                isNavLinkActive(link.to)
-                  ? isHeroPage
-                    ? "text-white"
-                    : "text-primary"
-                  : isHeroPage
-                    ? "text-white/80 hover:text-white"
-                    : "text-foreground/80 hover:text-primary"
-              }`}
+              className={`text-base font-semibold transition-colors duration-200 relative ${isNavLinkActive(link.to)
+                ? isHeroPage
+                  ? "text-white"
+                  : "text-primary"
+                : isHeroPage
+                  ? "text-white/80 hover:text-white"
+                  : "text-foreground/80 hover:text-primary"
+                }`}
             >
               {link.label}
               {isNavLinkActive(link.to) && (
                 <motion.div
                   layoutId="activeIndicator"
-                  className={`absolute -bottom-1 left-0 right-0 h-1 rounded-full ${
-                    isHeroPage ? "bg-white" : "bg-primary"
-                  }`}
+                  className={`absolute -bottom-1 left-0 right-0 h-1 rounded-full ${isHeroPage ? "bg-white" : "bg-primary"
+                    }`}
                 />
               )}
             </Link>
@@ -241,15 +238,28 @@ const Header = () => {
           >
             <Button
               size="sm"
-              className={`rounded-full px-5 transition-all duration-200 cursor-pointer ${
-                isHeroPage
-                  ? "bg-white text-[#0b2a4a] border border-white hover:bg-slate-100"
-                  : `border border-border/60 text-foreground ${loginOpen ? "bg-primary/5 border-primary/40 text-primary" : "hover:border-primary/40"}`
-              }`}
+              className={`rounded-full px-5 transition-all duration-200 cursor-pointer ${isHeroPage
+                ? "bg-white text-[#0b2a4a] border border-white hover:bg-slate-100"
+                : `border border-border/60 text-foreground ${loginOpen ? "bg-primary/5 border-primary/40 text-primary" : "hover:border-primary/40"}`
+                }`}
               onClick={() => setLoginOpen(!loginOpen)}
               variant={isHeroPage ? undefined : "outline"}
             >
-              Login <ChevronDown className={`h-3.5 w-3.5 ml-1 transition-transform duration-200 ${loginOpen ? "rotate-180" : ""}`} />
+              {user ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="h-3 w-3 text-primary" />
+                    )}
+                  </div>
+                  <span className="max-w-[80px] truncate">{user.name.split(' ')[0]}</span>
+                </div>
+              ) : (
+                "Login"
+              )}
+              <ChevronDown className={`h-3.5 w-3.5 ml-1 transition-transform duration-200 ${loginOpen ? "rotate-180" : ""}`} />
             </Button>
 
             {/* Invisible bridge */}
@@ -271,7 +281,7 @@ const Header = () => {
                     className="absolute right-8 z-50 pointer-events-none"
                     style={{ top: '48px' }}
                   >
-                    <div 
+                    <div
                       className="w-0 h-0"
                       style={{
                         borderLeft: '7px solid transparent',
@@ -295,26 +305,65 @@ const Header = () => {
                     onPointerEnter={handleLoginEnter}
                     onPointerLeave={handleLoginLeave}
                   >
-                    <button
-                      onClick={() => handleNavigate("/login")}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150 text-left"
-                    >
-                      <LogIn className="h-4 w-4 flex-shrink-0" />
-                      <div>
-                        <div className="font-medium">Pros Login</div>
-                        <div className="text-xs text-foreground/50">Personal account</div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => handleNavigate("/admin/login")}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150 text-left"
-                    >
-                      <Home className="h-4 w-4 flex-shrink-0" />
-                      <div>
-                        <div className="font-medium">Homeowner Login</div>
-                        <div className="text-xs text-foreground/50">Admin portal</div>
-                      </div>
-                    </button>
+                    <div className="py-1">
+                      {user ? (
+                        <>
+                          <div className="px-4 py-2 border-b border-slate-100 mb-1">
+                            <p className="text-xs font-semibold text-primary/70 uppercase tracking-wider">Account</p>
+                            <p className="text-sm font-medium truncate">{user.email}</p>
+                          </div>
+
+                          <button
+                            onClick={() => handleNavigate("/experiences")}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150 text-left"
+                          >
+                            <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
+                            <span>My Projects</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleNavigate("/admin")}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150 text-left"
+                          >
+                            <Home className="h-4 w-4 flex-shrink-0" />
+                            <span>Admin Portal</span>
+                          </button>
+
+                          <div className="border-t border-slate-100 mt-1 pt-1">
+                            <button
+                              onClick={() => { logout(); setLoginOpen(false); }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-all duration-150 text-left"
+                            >
+                              <LogOut className="h-4 w-4 flex-shrink-0" />
+                              <span>Sign Out</span>
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleNavigate("/login")}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150 text-left"
+                          >
+                            <LogIn className="h-4 w-4 flex-shrink-0" />
+                            <div>
+                              <div className="font-medium">Sign In</div>
+                              <div className="text-xs text-foreground/50">Customer portal</div>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => handleNavigate("/admin/login")}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150 text-left"
+                          >
+                            <Home className="h-4 w-4 flex-shrink-0" />
+                            <div>
+                              <div className="font-medium">Admin Login</div>
+                              <div className="text-xs text-foreground/50">Management portal</div>
+                            </div>
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </motion.div>
                 </>
               )}
@@ -324,21 +373,19 @@ const Header = () => {
           <Button
             size="sm"
             onClick={() => navigate("/join")}
-            className={`rounded-full px-5 transition-all duration-200 font-semibold ${
-              isHeroPage
-                ? "bg-[#0b2a4a] text-white hover:bg-[#0a1f35] border border-[#0b2a4a]"
-                : "bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg"
-            }`}
+            className={`rounded-full px-5 transition-all duration-200 font-semibold ${isHeroPage
+              ? "bg-[#0b2a4a] text-white hover:bg-[#0a1f35] border border-[#0b2a4a]"
+              : "bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg"
+              }`}
           >
             Join As a Pro
           </Button>
         </div>
 
-        <button className={`lg:hidden p-2 rounded-lg transition-colors ${
-          isHeroPage
-            ? "text-white hover:bg-white/10"
-            : "text-foreground hover:bg-accent"
-        }`} onClick={() => setMobileOpen(!mobileOpen)}>
+        <button className={`lg:hidden p-2 rounded-lg transition-colors ${isHeroPage
+          ? "text-white hover:bg-white/10"
+          : "text-foreground hover:bg-accent"
+          }`} onClick={() => setMobileOpen(!mobileOpen)}>
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
@@ -351,43 +398,35 @@ const Header = () => {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.25 }}
-            className={`lg:hidden border-t transition-colors ${
-              isHeroPage
-                ? "border-white/10 bg-black/10 backdrop-blur-xl"
-                : "border-border/50 bg-background/95 backdrop-blur-xl"
-            } px-6 py-5 space-y-1 overflow-hidden`}
+            className={`lg:hidden border-t transition-colors ${isHeroPage
+              ? "border-white/10 bg-black/10 backdrop-blur-xl"
+              : "border-border/50 bg-background/95 backdrop-blur-xl"
+              } px-6 py-5 space-y-1 overflow-hidden`}
           >
-            <Link to="/services" className={`block py-3 text-sm font-medium transition-colors ${
-              isHeroPage
-                ? "text-white/80 hover:text-white"
-                : "text-foreground/80 hover:text-primary"
-            }`} onClick={() => setMobileOpen(false)}>Find a Pro</Link>
-            <Link to="/about" className={`block py-3 text-sm font-medium transition-colors ${
-              isHeroPage
-                ? "text-white/80 hover:text-white"
-                : "text-foreground/80 hover:text-primary"
-            }`} onClick={() => setMobileOpen(false)}>About</Link>
-            <Link to="/cost-guide" className={`block py-3 text-sm font-medium transition-colors ${
-              isHeroPage
-                ? "text-white/80 hover:text-white"
-                : "text-foreground/80 hover:text-primary"
-            }`} onClick={() => setMobileOpen(false)}>Portfolio</Link>
-            <Link to="/experiences" className={`block py-3 text-sm font-medium transition-colors ${
-              isHeroPage
-                ? "text-white/80 hover:text-white"
-                : "text-foreground/80 hover:text-primary"
-            }`} onClick={() => setMobileOpen(false)}>Experiences</Link>
+            <Link to="/services" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
+              ? "text-white/80 hover:text-white"
+              : "text-foreground/80 hover:text-primary"
+              }`} onClick={() => setMobileOpen(false)}>Find a Pro</Link>
+            <Link to="/about" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
+              ? "text-white/80 hover:text-white"
+              : "text-foreground/80 hover:text-primary"
+              }`} onClick={() => setMobileOpen(false)}>About</Link>
+            <Link to="/cost-guide" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
+              ? "text-white/80 hover:text-white"
+              : "text-foreground/80 hover:text-primary"
+              }`} onClick={() => setMobileOpen(false)}>Portfolio</Link>
+            <Link to="/experiences" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
+              ? "text-white/80 hover:text-white"
+              : "text-foreground/80 hover:text-primary"
+              }`} onClick={() => setMobileOpen(false)}>Experiences</Link>
             <div className="flex gap-3 pt-4">
-              <Button variant="outline" size="sm" className={`flex-1 rounded-full ${
-                isHeroPage ? "border-white text-white hover:bg-white/10" : ""
-              }`} onClick={() => { navigate("/admin/login"); setMobileOpen(false); }}>Pros Login</Button>
-              <Button variant="outline" size="sm" className={`flex-1 rounded-full ${
-                isHeroPage ? "border-white text-white hover:bg-white/10" : ""
-              }`} onClick={() => { navigate("/login"); setMobileOpen(false); }}>Login</Button>
+              <Button variant="outline" size="sm" className={`flex-1 rounded-full ${isHeroPage ? "border-white text-white hover:bg-white/10" : ""
+                }`} onClick={() => { navigate("/admin/login"); setMobileOpen(false); }}>Pros Login</Button>
+              <Button variant="outline" size="sm" className={`flex-1 rounded-full ${isHeroPage ? "border-white text-white hover:bg-white/10" : ""
+                }`} onClick={() => { navigate("/login"); setMobileOpen(false); }}>Login</Button>
             </div>
-            <Button size="sm" className={`w-full rounded-full ${
-              isHeroPage ? "" : ""
-            }`} onClick={() => { navigate("/join"); setMobileOpen(false); }}>Join As a Pro</Button>
+            <Button size="sm" className={`w-full rounded-full ${isHeroPage ? "" : ""
+              }`} onClick={() => { navigate("/join"); setMobileOpen(false); }}>Join As a Pro</Button>
           </motion.div>
         )}
       </AnimatePresence>
