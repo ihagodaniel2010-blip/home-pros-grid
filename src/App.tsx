@@ -23,9 +23,12 @@ import AdminReviews from "./pages-spa/admin/Reviews";
 import EstimatesList from "./pages-spa/admin/EstimatesList";
 import EstimateEditor from "./pages-spa/admin/EstimateEditor";
 import NotFound from "./pages-spa/NotFound";
+import { LanguageProvider } from "./context/LanguageContext";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
+import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 
 const App = () => (
-  <>
+  <LanguageProvider>
     <DevLoginSimulator />
     <BrowserRouter>
       <Routes>
@@ -55,7 +58,9 @@ const App = () => (
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
-  </>
+    <SonnerToaster position="top-right" />
+    <ShadcnToaster />
+  </LanguageProvider>
 );
 
 export default App;

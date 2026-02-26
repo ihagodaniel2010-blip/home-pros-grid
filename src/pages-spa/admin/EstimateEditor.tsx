@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Save, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
+import { useLanguage } from "@/context/LanguageContext";
 import {
     getEstimateById,
     createEstimate,
@@ -10,7 +11,7 @@ import {
     Estimate,
     EstimateLineItem
 } from "@/lib/estimates";
-import { getLeads } from "@/lib/leads"; // To fetch lead data if converting
+import { getLeads } from "@/lib/leads";
 import EstimateForm from "@/components/admin/estimates/EstimateForm";
 import EstimateItemsTable from "@/components/admin/estimates/EstimateItemsTable";
 import TotalsSummary from "@/components/admin/estimates/TotalsSummary";
@@ -22,6 +23,7 @@ const EstimateEditor = () => {
     const leadId = searchParams.get("leadId");
     const navigate = useNavigate();
     const { user } = useUser();
+    const { t } = useLanguage();
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -41,24 +43,26 @@ const EstimateEditor = () => {
         setIsLoading(true);
         try {
             if (id) {
-                // Edit mode
                 const estimate = await getEstimateById(id);
                 if (estimate) {
                     setFormData(estimate);
                     setItems(estimate.items || []);
                 }
             } else if (leadId) {
-                // Create from Lead mode
                 const leads = await getLeads();
                 const lead = leads.find(l => l.id === leadId);
                 if (lead) {
+                    const serviceInfo = lead.subtype
+                        ? `${lead.selectedServiceOption} (${lead.subtype})`
+                        : lead.selectedServiceOption;
+
                     setFormData(prev => ({
                         ...prev,
                         client_name: lead.fullName,
                         client_email: lead.email,
                         client_phone: lead.phone,
                         lead_id: lead.id,
-                        notes: `Converted from Lead: ${lead.details || 'No details provided.'}`
+                        notes: `${t("estimate.converted_from")} [${serviceInfo}]: ${lead.details || 'No details provided.'}`
                     }));
                 }
             }
@@ -68,13 +72,13 @@ const EstimateEditor = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [id, leadId]);
+    }, [id, leadId, t]);
 
     useEffect(() => {
         if (user?.organization?.id) {
             loadData();
         }
-    }, [user, loadData]); // loadData is now stable via useCallback
+    }, [user, loadData]);
 
     const calculateTotals = (currentItems: EstimateLineItem[], tax: number, discount: number) => {
         const subtotal = currentItems.reduce((acc, item) => acc + (item.total_price || 0), 0);
@@ -150,31 +154,31 @@ const EstimateEditor = () => {
                     </Button>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">
-                            {id ? "Edit Estimate" : "Create New Estimate"}
+                            {id ? t("estimate.edit_title") : t("estimate.create_title")}
                         </h1>
                         <p className="text-gray-500 text-sm">
-                            {id ? `ID: ${id.split('-')[0].toUpperCase()}` : "Fill out the details below to generate a new quote."}
+                            {id ? `ID: ${id.split('-')[0].toUpperCase()}` : t("estimate.create_desc")}
                         </p>
                     </div>
                 </div>
                 <div className="flex gap-3">
                     <Button variant="outline" onClick={() => navigate("/admin/estimates")}>
-                        Cancel
+                        {t("estimate.cancel")}
                     </Button>
                     <Button
-                        className="bg-[#0b2a4a] hover:bg-[#081e35] text-white"
+                        className="bg-[#0b2a4a] hover:bg-[#081e35] text-white shadow-lg"
                         onClick={handleSave}
                         disabled={isSaving}
                     >
                         {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                        Save Estimate
+                        {t("estimate.save")}
                     </Button>
                 </div>
             </div>
 
-            <div className="space-y-8 pb-20">
+            <div className="space-y-8 pb-32">
                 {/* Main Form Section */}
-                <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
                     <EstimateForm
                         formData={formData}
                         onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
@@ -182,13 +186,13 @@ const EstimateEditor = () => {
                 </section>
 
                 {/* Items Section */}
-                <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
                     <EstimateItemsTable
                         items={items}
                         onChange={handleItemsChange}
                     />
 
-                    <div className="mt-8 border-t border-gray-100 -mx-6">
+                    <div className="mt-8 border-t border-gray-100 -mx-8">
                         <TotalsSummary
                             subtotal={formData.subtotal || 0}
                             tax_amount={formData.tax_amount || 0}
@@ -199,6 +203,19 @@ const EstimateEditor = () => {
                         />
                     </div>
                 </section>
+
+                {/* Bottom Action Bar */}
+                <div className="flex justify-end pt-4">
+                    <Button
+                        size="lg"
+                        className="bg-[#0b2a4a] hover:bg-[#081e35] text-white px-8 h-12 rounded-xl shadow-xl shadow-blue-900/10 flex items-center gap-2"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                    >
+                        {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                        {t("estimate.save")}
+                    </Button>
+                </div>
             </div>
         </div>
     );

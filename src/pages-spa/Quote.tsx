@@ -10,6 +10,9 @@ import { toast } from "sonner";
 import imageCompression from "browser-image-compression";
 import { Upload, X, Image as ImageIcon, Video as VideoIcon, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/context/LanguageContext";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 24 },
@@ -19,6 +22,7 @@ const sectionVariants = {
 const Quote = () => {
   const { serviceSlug } = useParams();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const service = getServiceBySlug(serviceSlug || "");
   const subServices = getSubServices(serviceSlug || "");
@@ -222,7 +226,7 @@ const Quote = () => {
         details: formData.details || undefined,
         locationType: formData.locationType,
         fullName: formData.fullName,
-        address: formData.address || `${formData.city}, ${formData.state}`,
+        address: `${formData.address}, ${formData.city}, ${formData.state}`,
         email: formData.email,
         phone: formData.phone,
         selectedPros: selectedProNames,
@@ -365,17 +369,59 @@ const Quote = () => {
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                 <MapPin className="h-4 w-4 text-primary" />
               </div>
-              <h2 className="text-xl font-bold tracking-tight">Where is your project located?</h2>
+              <h2 className="text-xl font-bold tracking-tight">{t("quote.where_project")}</h2>
             </div>
-            <div className="relative max-w-xs">
-              <input
-                className="w-full h-14 px-5 text-lg tracking-wider text-center bg-secondary/50 border border-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all duration-300"
-                placeholder="Zip Code"
-                value={formData.zip}
-                onChange={(e) => set("zip", e.target.value.replace(/\D/g, "").slice(0, 5))}
-                maxLength={5}
-              />
-              <ValidIcon valid={/^\d{5}$/.test(formData.zip)} />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="space-y-2">
+                <Label htmlFor="zip" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("quote.zip_code")}</Label>
+                <div className="relative">
+                  <Input
+                    id="zip"
+                    className="h-14 text-lg tracking-wider text-center bg-secondary/50 border-border rounded-2xl focus:ring-2 focus:ring-primary/30"
+                    placeholder="00000"
+                    value={formData.zip}
+                    onChange={(e) => set("zip", e.target.value.replace(/\D/g, "").slice(0, 5))}
+                    onBlur={() => {
+                      // Trigger lookup on blur if 5 digits
+                      if (/^\d{5}$/.test(formData.zip)) {
+                        // Re-trigger the useEffect logic by resetting zip or similar if needed, 
+                        // but actually useEffect already handles zip change.
+                      }
+                    }}
+                    maxLength={5}
+                  />
+                  {isLookupLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    </div>
+                  )}
+                  <ValidIcon valid={/^\d{5}$/.test(formData.zip)} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="city" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("quote.city")}</Label>
+                <Input
+                  id="city"
+                  className="h-14 bg-secondary/50 border-border rounded-2xl"
+                  placeholder={t("quote.city")}
+                  value={formData.city}
+                  onChange={(e) => set("city", e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="state" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("quote.state")}</Label>
+                <Input
+                  id="state"
+                  className="h-14 bg-secondary/50 border-border rounded-2xl"
+                  placeholder={t("quote.state")}
+                  value={formData.state}
+                  onChange={(e) => set("state", e.target.value.toUpperCase())}
+                  maxLength={2}
+                />
+              </div>
             </div>
             {errors.zip && <p className="text-destructive text-xs mt-2">{errors.zip}</p>}
           </motion.section>
@@ -384,7 +430,7 @@ const Quote = () => {
           <AnimatePresence>
             {revealedSections > 1 && (
               <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
-                <h2 className="text-xl font-bold tracking-tight mb-6">What type of service do you need?</h2>
+                <h2 className="text-xl font-bold tracking-tight mb-6">{t("quote.service_type")}</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {subServices.map((opt) => (
                     <button
@@ -395,7 +441,7 @@ const Quote = () => {
                         : "border-border/60 hover:border-primary/30 hover:bg-card"
                         }`}
                     >
-                      <span className="text-sm font-medium">{opt.label}</span>
+                      <span className="text-sm font-medium">{t(opt.label)}</span>
                       {formData.selectedService === opt.label && (
                         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute right-3 top-1/2 -translate-y-1/2">
                           <Check className="h-4 w-4 text-primary" />
@@ -442,12 +488,12 @@ const Quote = () => {
           <AnimatePresence>
             {revealedSections > sectionIdx.details && (
               <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
-                <h2 className="text-xl font-bold tracking-tight mb-2">Add details for more exact quotes</h2>
-                <p className="text-sm text-muted-foreground mb-6">Describe your project so pros can give you a better estimate.</p>
+                <h2 className="text-xl font-bold tracking-tight mb-2">{t("quote.details_title")}</h2>
+                <p className="text-sm text-muted-foreground mb-6">{t("quote.details_desc")}</p>
                 <div className="relative">
                   <textarea
                     className="w-full min-h-[120px] p-5 bg-secondary/50 border border-border rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all duration-300 resize-none"
-                    placeholder="Describe your project (optional)"
+                    placeholder={t("quote.details_desc")}
                     value={formData.details}
                     onChange={(e) => set("details", e.target.value)}
                     maxLength={1000}
@@ -461,7 +507,7 @@ const Quote = () => {
                     onClick={handleDetailsContinue}
                     className="mt-4 px-6 py-3 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 transition-all duration-200 inline-flex items-center gap-2"
                   >
-                    Continue <ChevronRight className="h-4 w-4" />
+                    {t("quote.continue")} <ChevronRight className="h-4 w-4" />
                   </button>
                 )}
               </motion.section>
@@ -572,19 +618,19 @@ const Quote = () => {
           <AnimatePresence>
             {revealedSections > sectionIdx.contact && (
               <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
-                <h2 className="text-xl font-bold tracking-tight mb-2">Contact Information</h2>
-                <p className="text-sm text-muted-foreground mb-6">Get your free quotes now — no obligation.</p>
+                <h2 className="text-xl font-bold tracking-tight mb-2">{t("quote.contact_title")}</h2>
+                <p className="text-sm text-muted-foreground mb-6">{t("quote.contact_desc")}</p>
                 <div className="space-y-4">
                   {[
-                    { key: "fullName", label: "Full Name", type: "text", valid: formData.fullName.trim().length > 0 },
-                    { key: "address", label: "Address", type: "text", valid: formData.address.trim().length > 0 },
-                    { key: "email", label: "Email", type: "email", valid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) },
-                    { key: "phone", label: "Phone", type: "tel", valid: /^[\d\s()+-]{7,}$/.test(formData.phone) },
+                    { key: "fullName", label: t("quote.full_name"), type: "text", valid: formData.fullName.trim().length > 0 },
+                    { key: "address", label: t("quote.address"), type: "text", placeholder: "Street Name, Number, Apt", valid: formData.address.trim().length > 0 },
+                    { key: "email", label: t("quote.email"), type: "email", valid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) },
+                    { key: "phone", label: t("quote.phone"), type: "tel", valid: /^[\d\s()+-]{7,}$/.test(formData.phone) },
                   ].map((field) => (
                     <div key={field.key} className="floating-input">
                       <input
                         type={field.type}
-                        placeholder=" "
+                        placeholder={field.placeholder || " "}
                         value={formData[field.key as keyof typeof formData]}
                         onChange={(e) => set(field.key, e.target.value)}
                         className="!rounded-2xl !bg-secondary/50"
@@ -598,15 +644,14 @@ const Quote = () => {
                 {revealedSections <= sectionIdx.review && (
                   <button
                     onClick={handleContactContinue}
-                    className="mt-6 px-6 py-3 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 transition-all duration-200 inline-flex items-center gap-2"
+                    className="mt-8 px-8 py-4 bg-primary text-primary-foreground font-bold rounded-2xl hover:bg-primary/90 transition-all duration-300 shadow-lg shadow-primary/20 flex items-center gap-2"
                   >
-                    Continue <ChevronRight className="h-4 w-4" />
+                    {t("quote.continue")} <ChevronRight className="h-5 w-5" />
                   </button>
                 )}
               </motion.section>
             )}
           </AnimatePresence>
-
           {/* SECTION 7 – Review & Submit */}
           <AnimatePresence>
             {revealedSections > sectionIdx.review && (
@@ -621,13 +666,13 @@ const Quote = () => {
                 {/* Summary */}
                 <div className="bg-secondary/40 rounded-2xl p-5 mb-6 space-y-2.5">
                   {[
-                    { label: "Service", value: formData.selectedService },
+                    { label: t("quote.service_type"), value: t(formData.selectedService) },
                     formData.subtype ? { label: "Subtype", value: formData.subtype } : null,
-                    { label: "Zip Code", value: formData.zip },
+                    { label: t("quote.zip_code"), value: formData.zip },
                     { label: "Location", value: formData.locationType },
-                    { label: "Name", value: formData.fullName },
-                    { label: "Email", value: formData.email },
-                    { label: "Phone", value: formData.phone },
+                    { label: t("quote.full_name"), value: formData.fullName },
+                    { label: t("quote.email"), value: formData.email },
+                    { label: t("quote.phone"), value: formData.phone },
                   ].filter(Boolean).map((item) => (
                     <div key={item!.label} className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{item!.label}</span>
@@ -637,7 +682,7 @@ const Quote = () => {
                 </div>
 
                 <p className="text-[11px] text-muted-foreground mb-6 leading-relaxed">
-                  By clicking "Request Estimate," you agree to our Terms of Service and Privacy Policy.
+                  By clicking "{t("quote.submit")}", you agree to our Terms of Service and Privacy Policy.
                   You consent to receive calls, texts and emails from service professionals at the number
                   and email provided.
                 </p>
@@ -647,7 +692,7 @@ const Quote = () => {
                   disabled={isSubmitting}
                   className="w-full py-4 bg-primary text-primary-foreground text-base font-semibold rounded-2xl hover:bg-primary/90 transition-all duration-200 hover:shadow-xl active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? "Processing..." : "Request My Free Estimate"}
+                  {isSubmitting ? t("admin.saving") : t("quote.submit")}
                 </button>
               </motion.section>
             )}

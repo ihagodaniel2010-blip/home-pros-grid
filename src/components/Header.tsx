@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "@/lib/navigation-compat";
-import { Menu, X, ChevronDown, LogIn, Home, User, LogOut, LayoutDashboard } from "lucide-react";
+import { Menu, X, ChevronDown, LogIn, Home, User, LogOut, LayoutDashboard, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { topServices } from "@/data/services";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "@/context/UserContext";
+import { useLanguage } from "@/context/LanguageContext";
+import { Globe, Languages } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const Header = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -20,6 +23,7 @@ const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useUser();
+  const { language, setLanguage, t } = useLanguage();
 
   // Detect if on hero page (homepage)
   const isHeroPage = location.pathname === "/";
@@ -127,7 +131,7 @@ const Header = () => {
                   : "text-foreground/80 hover:text-primary"
                 }`}
             >
-              Find a Pro <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${findProOpen ? "rotate-180" : ""}`} />
+              {t("nav.find_pro")} <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${findProOpen ? "rotate-180" : ""}`} />
             </button>
 
             {/* Invisible bridge to prevent hover gap */}
@@ -190,7 +194,7 @@ const Header = () => {
                         className="block px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors cursor-pointer"
                         onClick={() => setTimeout(() => setFindProOpen(false), 50)}
                       >
-                        View All Services →
+                        {t("nav.view_all_services")}
                       </Link>
                     </div>
                   </motion.div>
@@ -200,9 +204,9 @@ const Header = () => {
           </div>
 
           {[
-            { to: "/about", label: "About" },
-            { to: "/cost-guide", label: "Portfolio" },
-            { to: "/experiences", label: "Experiences" },
+            { to: "/about", label: t("nav.about") },
+            { to: "/cost-guide", label: t("nav.portfolio") },
+            { to: "/experiences", label: t("nav.experiences") },
           ].map((link) => (
             <Link
               key={link.to}
@@ -229,6 +233,34 @@ const Header = () => {
         </nav>
 
         <div className={`hidden lg:flex items-center gap-3 ${isHeroPage ? "text-white" : ""}`}>
+          {/* Language Selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`flex items-center gap-2 rounded-full px-3 hover:bg-white/10 ${isHeroPage ? "text-white hover:text-white/80 hover:bg-white/10" : "text-foreground/70"}`}
+              >
+                <Languages className="h-4 w-4" />
+                <span className="text-[10px] font-bold uppercase">{language}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40 rounded-xl overflow-hidden shadow-xl border-slate-200/50">
+              <DropdownMenuItem
+                onClick={() => setLanguage("en")}
+                className={`flex items-center justify-between cursor-pointer px-4 py-2.5 ${language === "en" ? "bg-primary/5 text-primary font-medium" : ""}`}
+              >
+                English {language === "en" && <Check className="h-4 w-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setLanguage("pt")}
+                className={`flex items-center justify-between cursor-pointer px-4 py-2.5 ${language === "pt" ? "bg-primary/5 text-primary font-medium" : ""}`}
+              >
+                Português {language === "pt" && <Check className="h-4 w-4" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Login Dropdown */}
           <div
             ref={loginRef}
@@ -320,7 +352,7 @@ const Header = () => {
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150 text-left"
                           >
                             <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
-                            <span>My Projects</span>
+                            <span>{t("nav.my_projects")}</span>
                           </button>
 
                           <button
@@ -328,7 +360,7 @@ const Header = () => {
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 transition-all duration-150 text-left"
                           >
                             <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
-                            <span>Admin Panel</span>
+                            <span>{t("nav.admin_panel")}</span>
                           </button>
 
                           <div className="border-t border-slate-100 mt-1 pt-1">
@@ -337,7 +369,7 @@ const Header = () => {
                               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-all duration-150 text-left"
                             >
                               <LogOut className="h-4 w-4 flex-shrink-0" />
-                              <span>Sign Out</span>
+                              <span>{t("nav.sign_out")}</span>
                             </button>
                           </div>
                         </>
@@ -349,8 +381,8 @@ const Header = () => {
                           >
                             <LogIn className="h-4 w-4 flex-shrink-0" />
                             <div>
-                              <div className="font-medium">Sign In</div>
-                              <div className="text-xs text-foreground/50">Customer portal</div>
+                              <div className="font-medium">{t("nav.sign_in")}</div>
+                              <div className="text-xs text-foreground/50">{t("nav.customer_portal")}</div>
                             </div>
                           </button>
                           <button
@@ -359,8 +391,8 @@ const Header = () => {
                           >
                             <Home className="h-4 w-4 flex-shrink-0" />
                             <div>
-                              <div className="font-medium">Admin Login</div>
-                              <div className="text-xs text-foreground/50">Management portal</div>
+                              <div className="font-medium">{t("nav.admin_login")}</div>
+                              <div className="text-xs text-foreground/50">{t("nav.management_portal")}</div>
                             </div>
                           </button>
                         </>
@@ -380,7 +412,7 @@ const Header = () => {
               : "bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg"
               }`}
           >
-            Join As a Pro
+            {t("nav.join_pro")}
           </Button>
         </div>
 
@@ -408,27 +440,43 @@ const Header = () => {
             <Link to="/services" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
               ? "text-white/80 hover:text-white"
               : "text-foreground/80 hover:text-primary"
-              }`} onClick={() => setMobileOpen(false)}>Find a Pro</Link>
+              }`} onClick={() => setMobileOpen(false)}>{t("nav.find_pro")}</Link>
             <Link to="/about" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
               ? "text-white/80 hover:text-white"
               : "text-foreground/80 hover:text-primary"
-              }`} onClick={() => setMobileOpen(false)}>About</Link>
+              }`} onClick={() => setMobileOpen(false)}>{t("nav.about")}</Link>
             <Link to="/cost-guide" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
               ? "text-white/80 hover:text-white"
               : "text-foreground/80 hover:text-primary"
-              }`} onClick={() => setMobileOpen(false)}>Portfolio</Link>
+              }`} onClick={() => setMobileOpen(false)}>{t("nav.portfolio")}</Link>
             <Link to="/experiences" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
               ? "text-white/80 hover:text-white"
               : "text-foreground/80 hover:text-primary"
-              }`} onClick={() => setMobileOpen(false)}>Experiences</Link>
+              }`} onClick={() => setMobileOpen(false)}>{t("nav.experiences")}</Link>
             <div className="flex gap-3 pt-4">
               <Button variant="outline" size="sm" className={`flex-1 rounded-full ${isHeroPage ? "border-white text-white hover:bg-white/10" : ""
-                }`} onClick={() => { navigate("/admin/login"); setMobileOpen(false); }}>Pros Login</Button>
+                }`} onClick={() => { navigate("/admin/login"); setMobileOpen(false); }}>{t("nav.pros_login")}</Button>
               <Button variant="outline" size="sm" className={`flex-1 rounded-full ${isHeroPage ? "border-white text-white hover:bg-white/10" : ""
-                }`} onClick={() => { navigate("/login"); setMobileOpen(false); }}>Login</Button>
+                }`} onClick={() => { navigate("/login"); setMobileOpen(false); }}>{t("nav.login")}</Button>
             </div>
             <Button size="sm" className={`w-full rounded-full ${isHeroPage ? "" : ""
-              }`} onClick={() => { navigate("/join"); setMobileOpen(false); }}>Join As a Pro</Button>
+              }`} onClick={() => { navigate("/join"); setMobileOpen(false); }}>{t("nav.join_pro")}</Button>
+
+            {/* Mobile Language Toggle */}
+            <div className="flex justify-center gap-4 pt-6 border-t border-white/10 mt-6">
+              <button
+                onClick={() => setLanguage("en")}
+                className={`text-xs font-bold px-3 py-1.5 rounded-full ${language === 'en' ? 'bg-primary text-white' : 'text-white/60 border border-white/20'}`}
+              >
+                ENGLISH
+              </button>
+              <button
+                onClick={() => setLanguage("pt")}
+                className={`text-xs font-bold px-3 py-1.5 rounded-full ${language === 'pt' ? 'bg-primary text-white' : 'text-white/60 border border-white/20'}`}
+              >
+                PORTUGUÊS
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
