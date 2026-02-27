@@ -102,7 +102,7 @@ const Quote = () => {
               ...prev,
               city: place['place name'],
               state: place['state abbreviation'],
-              address: prev.address || `${place['place name']}, ${place['state abbreviation']}`
+              address: prev.address || ""
             }));
           }
           revealNext(1);
@@ -226,7 +226,7 @@ const Quote = () => {
         details: formData.details || undefined,
         locationType: formData.locationType,
         fullName: formData.fullName,
-        address: `${formData.address}, ${formData.city}, ${formData.state}`,
+        address: `${formData.address.trim()}${formData.city ? `, ${formData.city.trim()}` : ""}${formData.state ? `, ${formData.state.trim()}` : ""}`,
         email: formData.email,
         phone: formData.phone,
         selectedPros: selectedProNames,
@@ -300,9 +300,9 @@ const Quote = () => {
         <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Service Not Found</h1>
+            <h1 className="text-2xl font-bold mb-4">{t("nav.service_not_found")}</h1>
             <button onClick={() => navigate("/services")} className="px-6 py-3 bg-primary text-primary-foreground rounded-full text-sm font-medium">
-              Browse All Services
+              {t("nav.browse_services")}
             </button>
           </div>
         </div>
@@ -333,7 +333,7 @@ const Quote = () => {
         <div className="max-w-3xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between mb-2">
             <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-xs text-white/50 hover:text-white/80 transition-colors">
-              <ArrowLeft className="h-3.5 w-3.5" /> Back
+              <ArrowLeft className="h-3.5 w-3.5" /> {t("nav.back")}
             </button>
             <span className="text-sm font-bold text-white">{progressPct}%</span>
           </div>
@@ -626,6 +626,8 @@ const Quote = () => {
                     { key: "address", label: t("quote.address"), type: "text", placeholder: "Street Name, Number, Apt", valid: formData.address.trim().length > 0 },
                     { key: "email", label: t("quote.email"), type: "email", valid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) },
                     { key: "phone", label: t("quote.phone"), type: "tel", valid: /^[\d\s()+-]{7,}$/.test(formData.phone) },
+                    { key: "city", label: t("quote.city"), type: "text", valid: formData.city.trim().length > 0 },
+                    { key: "state", label: t("quote.state"), type: "text", valid: formData.state.trim().length > 0 },
                   ].map((field) => (
                     <div key={field.key} className="floating-input">
                       <input

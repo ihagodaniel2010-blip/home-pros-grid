@@ -27,6 +27,17 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.admin_login": "Admin Login",
         "nav.back_to_site": "Back to Site",
 
+        // Hero
+        "hero.title": "Your Home. Happier.",
+        "hero.subtitle": "Finding the right contractor is fast, easy and free!",
+        "hero.search_placeholder": "What type of pro are you looking for?",
+        "hero.start": "Start",
+
+        // Navigation
+        "nav.back": "Back",
+        "nav.service_not_found": "Service Not Found",
+        "nav.browse_services": "Browse All Services",
+
         // Quote Form
         "quote.zip_code": "Zip Code",
         "quote.city": "City",
@@ -54,6 +65,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.reviews": "Reviews",
         "admin.analytics": "Analytics",
         "admin.locations": "Locations",
+
+        // Services
+        "service.carpentry": "Carpentry",
+        "service.plumbing": "Plumbing",
+        "service.remodeling": "Remodeling",
+        "service.roofing": "Roofing",
+        "service.cleaning": "Cleaning",
+        "service.air-conditioning": "Air Conditioning",
+        "service.drywall": "Drywall",
+        "service.electrician": "Electrician",
+        "service.fencing": "Fencing",
+        "service.flooring": "Flooring",
+        "service.painting": "Painting",
+        "service.tile": "Tile",
+        "service.handyman": "Handyman",
     },
     pt: {
         "nav.find_pro": "Encontrar Profissional",
@@ -71,6 +97,19 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Sair",
         "nav.admin_login": "Login Admin",
         "nav.back_to_site": "Voltar ao Site",
+
+        // Hero
+        "hero.title": "Sua Casa. Mais Feliz.",
+        "hero.subtitle": "Encontrar o empreiteiro certo é rápido, fácil e grátis!",
+        "hero.search_placeholder": "Que tipo de profissional você procura?",
+        "hero.start": "Começar",
+
+        // Navigation
+        "nav.back": "Voltar",
+        "nav.service_not_found": "Serviço Não Encontrado",
+        "nav.browse_services": "Ver Todos os Serviços",
+
+
         "quote.zip_code": "CEP",
         "quote.city": "Cidade",
         "quote.state": "Estado",
@@ -95,6 +134,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.reviews": "Avaliações",
         "admin.analytics": "Análise",
         "admin.locations": "Locais",
+
+        // Services
+        "service.carpentry": "Carpintaria",
+        "service.plumbing": "Encanamento",
+        "service.remodeling": "Reforma",
+        "service.roofing": "Telhado",
+        "service.cleaning": "Limpeza",
+        "service.air-conditioning": "Ar Condicionado",
+        "service.drywall": "Drywall",
+        "service.electrician": "Eletricista",
+        "service.fencing": "Cerca",
+        "service.flooring": "Pisos",
+        "service.painting": "Pintura",
+        "service.tile": "Azulejo",
+        "service.handyman": "Handyman",
     },
     es: {
         "nav.find_pro": "Encontrar un Pro",
@@ -112,6 +166,13 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Salir",
         "nav.admin_login": "Login Admin",
         "nav.back_to_site": "Volver al Sitio",
+
+        // Hero
+        "hero.title": "Tu Hogar. Más Feliz.",
+        "hero.subtitle": "¡Encontrar al contratista adecuado es rápido, fácil y gratis!",
+        "hero.search_placeholder": "¿Qué tipo de profesional buscas?",
+        "hero.start": "Empezar",
+
         "quote.zip_code": "Código Postal",
         "quote.city": "Ciudad",
         "quote.state": "Estado",
@@ -132,6 +193,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.save_estimate": "Guardar Presupuesto",
         "admin.settings": "Configuraciones",
         "admin.dashboard": "Panel",
+
+        // Services
+        "service.carpentry": "Carpintería",
+        "service.plumbing": "Fontanería",
+        "service.remodeling": "Remodelación",
+        "service.roofing": "Techado",
+        "service.cleaning": "Limpieza",
+        "service.air-conditioning": "Aire Acondicionado",
+        "service.drywall": "Drywall",
+        "service.electrician": "Electricista",
+        "service.fencing": "Cercas",
+        "service.flooring": "Pisos",
+        "service.painting": "Pintura",
+        "service.tile": "Azulejo",
+        "service.handyman": "Handyman",
     },
     zh: {
         "nav.find_pro": "寻找专家",
@@ -149,6 +225,13 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "退出",
         "nav.admin_login": "管理员登录",
         "nav.back_to_site": "返回网站",
+
+        // Hero
+        "hero.title": "您的家，更快乐。",
+        "hero.subtitle": "寻找合适的承包商是快速、简单且免费的！",
+        "hero.search_placeholder": "您在寻找什么类型的专家？",
+        "hero.start": "开始",
+
         "quote.zip_code": "邮政编码",
         "quote.city": "城市",
         "quote.state": "州",
@@ -169,6 +252,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.save_estimate": "保存估算",
         "admin.settings": "设置",
         "admin.dashboard": "仪表板",
+
+        // Services
+        "service.carpentry": "木工",
+        "service.plumbing": "管道",
+        "service.remodeling": "翻新",
+        "service.roofing": "屋顶",
+        "service.cleaning": "清洁",
+        "service.air-conditioning": "空调",
+        "service.drywall": "干墙",
+        "service.electrician": "电工",
+        "service.fencing": "栅栏",
+        "service.flooring": "地板",
+        "service.painting": "油漆",
+        "service.tile": "瓷砖",
+        "service.handyman": "杂工",
     },
     fr: {
         "nav.find_pro": "Trouver un pro",
@@ -186,6 +284,13 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Se déconnecter",
         "nav.admin_login": "Connexion Admin",
         "nav.back_to_site": "Retour au Site",
+
+        // Hero
+        "hero.title": "Votre Maison. Plus Heureuse.",
+        "hero.subtitle": "Trouver le bon entrepreneur est rapide, facile et gratuit !",
+        "hero.search_placeholder": "Quel type de pro recherchez-vous ?",
+        "hero.start": "Démarrer",
+
         "quote.zip_code": "Code Postal",
         "quote.city": "Ville",
         "quote.state": "État",
@@ -206,6 +311,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.save_estimate": "Enregistrer le Devis",
         "admin.settings": "Réglages",
         "admin.dashboard": "Tableau de Bord",
+
+        // Services
+        "service.carpentry": "Charpenterie",
+        "service.plumbing": "Plomberie",
+        "service.remodeling": "Remodelage",
+        "service.roofing": "Toiture",
+        "service.cleaning": "Nettoyage",
+        "service.air-conditioning": "Climatisation",
+        "service.drywall": "Cloison sèche",
+        "service.electrician": "Électricien",
+        "service.fencing": "Clôture",
+        "service.flooring": "Revêtement de sol",
+        "service.painting": "Peinture",
+        "service.tile": "Carrelage",
+        "service.handyman": "Bricoleur",
     },
     ht: {
         "nav.find_pro": "Jwenn yon Pro",
@@ -223,6 +343,13 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Dekonekte",
         "nav.admin_login": "Login Admin",
         "nav.back_to_site": "Retounen sou Sit la",
+
+        // Hero
+        "hero.title": "Kay Ou. Plis Kontan.",
+        "hero.subtitle": "Jwenn bon kontraktè a rapid, fasil epi gratis!",
+        "hero.search_placeholder": "Ki kalite pro w ap chèche?",
+        "hero.start": "Kòmanse",
+
         "quote.zip_code": "Kòd Postal",
         "quote.city": "Vil",
         "quote.state": "Eta",
@@ -243,6 +370,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.save_estimate": "Sove Estimasyon",
         "admin.settings": "Anviwònman",
         "admin.dashboard": "Tablo bò",
+
+        // Services
+        "service.carpentry": "Mennen",
+        "service.plumbing": "Plonbri",
+        "service.remodeling": "Remodelaj",
+        "service.roofing": "Twati",
+        "service.cleaning": "Netwayaj",
+        "service.air-conditioning": "È kondisyone",
+        "service.drywall": "Draywòl",
+        "service.electrician": "Elektrisyen",
+        "service.fencing": "Kloti",
+        "service.flooring": "Planche",
+        "service.painting": "Penti",
+        "service.tile": "Til",
+        "service.handyman": "Handyman",
     },
     vi: {
         "nav.find_pro": "Tìm Chuyên gia",
@@ -260,6 +402,13 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Đăng xuất",
         "nav.admin_login": "Đăng nhập Admin",
         "nav.back_to_site": "Quay lại Trang web",
+
+        // Hero
+        "hero.title": "Ngôi Nhà Bạn. Hạnh Phúc Hơn.",
+        "hero.subtitle": "Tìm kiếm nhà thầu phù hợp thật nhanh chóng, dễ dàng và miễn phí!",
+        "hero.search_placeholder": "Bạn đang tìm kiếm loại chuyên gia nào?",
+        "hero.start": "Bắt đầu",
+
         "quote.zip_code": "Mã bưu chính",
         "quote.city": "Thành phố",
         "quote.state": "Bang",
@@ -280,6 +429,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.save_estimate": "Lưu Báo giá",
         "admin.settings": "Cài đặt",
         "admin.dashboard": "Bảng điều khiển",
+
+        // Services
+        "service.carpentry": "Thợ mộc",
+        "service.plumbing": "Hệ thống ống nước",
+        "service.remodeling": "Tân trang",
+        "service.roofing": "Lợp mái",
+        "service.cleaning": "Dọn dẹp",
+        "service.air-conditioning": "Máy lạnh",
+        "service.drywall": "Tường thạch cao",
+        "service.electrician": "Thợ điện",
+        "service.fencing": "Hàng rào",
+        "service.flooring": "Lát sàn",
+        "service.painting": "Sơn",
+        "service.tile": "Gạch",
+        "service.handyman": "Thợ sửa vặt",
     },
     ar: {
         "nav.find_pro": "ابحث عن محترف",
@@ -297,6 +461,13 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "خروج",
         "nav.admin_login": "دخول المدير",
         "nav.back_to_site": "العودة للموقع",
+
+        // Hero
+        "hero.title": "منزلك. أكثر سعادة.",
+        "hero.subtitle": "العثور على المقاول المناسب سريع وسهل ومجاني!",
+        "hero.search_placeholder": "ما هو نوع المحترف الذي تبحث عنه؟",
+        "hero.start": "ابدأ",
+
         "quote.zip_code": "الرمز البريدي",
         "quote.city": "المدينة",
         "quote.state": "الولاية",
@@ -317,6 +488,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.save_estimate": "حفظ التقدير",
         "admin.settings": "الإعدادات",
         "admin.dashboard": "لوحة القيادة",
+
+        // Services
+        "service.carpentry": "نجارة",
+        "service.plumbing": "سباكة",
+        "service.remodeling": "ترميم",
+        "service.roofing": "تسقيف",
+        "service.cleaning": "تنظيف",
+        "service.air-conditioning": "تكييف",
+        "service.drywall": "جبس",
+        "service.electrician": "كهربائي",
+        "service.fencing": "سياج",
+        "service.flooring": "أرضيات",
+        "service.painting": "صباغة",
+        "service.tile": "بلاط",
+        "service.handyman": "عامل صيانة",
     },
     ru: {
         "nav.find_pro": "Найти профи",
@@ -334,6 +520,13 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Выйти",
         "nav.admin_login": "Вход для админа",
         "nav.back_to_site": "Вернуться на сайт",
+
+        // Hero
+        "hero.title": "Ваш дом. Счастливее.",
+        "hero.subtitle": "Найти подрядчика — это быстро, просто и бесплатно!",
+        "hero.search_placeholder": "Какого мастера вы ищете?",
+        "hero.start": "Начать",
+
         "quote.zip_code": "Почтовый индекс",
         "quote.city": "Город",
         "quote.state": "Штат",
@@ -354,6 +547,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.save_estimate": "Сохранить расчет",
         "admin.settings": "Настройки",
         "admin.dashboard": "Панель",
+
+        // Services
+        "service.carpentry": "Плотник",
+        "service.plumbing": "Сантехник",
+        "service.remodeling": "Ремонт",
+        "service.roofing": "Кровля",
+        "service.cleaning": "Уборка",
+        "service.air-conditioning": "Кондиционер",
+        "service.drywall": "Гипсокартон",
+        "service.electrician": "Электрик",
+        "service.fencing": "Заборы",
+        "service.flooring": "Полы",
+        "service.painting": "Покраска",
+        "service.tile": "Плитка",
+        "service.handyman": "Мастер",
     },
     hi: {
         "nav.find_pro": "प्रोफेशनल खोजें",
@@ -371,6 +579,13 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "साइन आउट",
         "nav.admin_login": "एडमिन लॉगिन",
         "nav.back_to_site": "साइट पर वापस जाएं",
+
+        // Hero
+        "hero.title": "आपका घर। खुशहाल।",
+        "hero.subtitle": "सही ठेकेदार ढूँढना तेज़, आसान और मुफ़्त है!",
+        "hero.search_placeholder": "आप किस प्रकार के प्रो की तलाश कर रहे हैं?",
+        "hero.start": "शुरू करें",
+
         "quote.zip_code": "पिन कोड",
         "quote.city": "शहर",
         "quote.state": "राज्य",
@@ -391,6 +606,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.save_estimate": "अनुमान सहेजें",
         "admin.settings": "सेटिंग्स",
         "admin.dashboard": "डैशबोर्ड",
+
+        // Services
+        "service.carpentry": "बढ़ईगिरी",
+        "service.plumbing": "नलसाजी",
+        "service.remodeling": "पुनर्निर्माण",
+        "service.roofing": "छत",
+        "service.cleaning": "सफाई",
+        "service.air-conditioning": "वातानुकूलन",
+        "service.drywall": "ड्रायवॉल",
+        "service.electrician": "इलेक्ट्रीशियन",
+        "service.fencing": "फेंसिंग",
+        "service.flooring": "फ्लोरिंग",
+        "service.painting": "पेंटिंग",
+        "service.tile": "टाइल",
+        "service.handyman": "हैंडीमैन",
     },
     it: {
         "nav.find_pro": "Trova un pro",
@@ -408,6 +638,13 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Esci",
         "nav.admin_login": "Login Admin",
         "nav.back_to_site": "Torna al sito",
+
+        // Hero
+        "hero.title": "La Tua Casa. Più Felice.",
+        "hero.subtitle": "Trovare l'impresa giusta è veloce, facile e gratuito!",
+        "hero.search_placeholder": "Che tipo di professionista cerchi?",
+        "hero.start": "Inizia",
+
         "quote.zip_code": "Codice Postale",
         "quote.city": "Città",
         "quote.state": "Provincia",
@@ -428,6 +665,21 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.save_estimate": "Salva Preventivo",
         "admin.settings": "Impostazioni",
         "admin.dashboard": "Dashboard",
+
+        // Services
+        "service.carpentry": "Carpenteria",
+        "service.plumbing": "Idraulica",
+        "service.remodeling": "Ristrutturazione",
+        "service.roofing": "Tetti",
+        "service.cleaning": "Pulizia",
+        "service.air-conditioning": "Climatizzazione",
+        "service.drywall": "Cartongesso",
+        "service.electrician": "Elettricista",
+        "service.fencing": "Recinzioni",
+        "service.flooring": "Pavimenti",
+        "service.painting": "Pittura",
+        "service.tile": "Piastrelle",
+        "service.handyman": "Tuttofare",
     },
 };
 

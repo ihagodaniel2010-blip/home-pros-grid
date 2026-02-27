@@ -86,8 +86,8 @@ const Header = () => {
   };
 
   const handleNavigate = (path: string) => {
+    setLoginOpen(false);
     navigate(path);
-    setTimeout(() => setLoginOpen(false), 80);
   };
 
   useEffect(() => {
@@ -245,7 +245,7 @@ const Header = () => {
                 <span className="text-[10px] font-bold uppercase">{language}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 max-h-[400px] overflow-y-auto rounded-xl shadow-xl border-slate-200/50">
+            <DropdownMenuContent align="end" className="w-56 max-h-[450px] overflow-y-auto rounded-xl shadow-2xl border-slate-200/60 p-1.5 scrollbar-thin">
               {[
                 { code: "en", label: "English" },
                 { code: "pt", label: "Português" },
@@ -444,7 +444,7 @@ const Header = () => {
             className={`lg:hidden border-t transition-colors ${isHeroPage
               ? "border-white/10 bg-black/10 backdrop-blur-xl"
               : "border-border/50 bg-background/95 backdrop-blur-xl"
-              } px-6 py-5 space-y-1 overflow-hidden`}
+              } px-6 py-5 space-y-1 overflow-y-auto max-h-[calc(100vh-80px)]`}
           >
             <Link to="/services" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
               ? "text-white/80 hover:text-white"
@@ -472,8 +472,8 @@ const Header = () => {
               }`} onClick={() => { navigate("/join"); setMobileOpen(false); }}>{t("nav.join_pro")}</Button>
 
             {/* Mobile Language Selector */}
-            <div className="pt-6 border-t border-white/10 mt-6 box-border">
-              <div className="grid grid-cols-3 gap-2">
+            <div className="pt-6 border-t border-white/10 mt-6 box-border pb-4">
+              <div className="grid grid-cols-4 gap-2">
                 {[
                   { code: "en", label: "EN" },
                   { code: "pt", label: "PT" },
