@@ -3,20 +3,24 @@ import { Label } from "@/components/ui/label";
 
 interface TotalsSummaryProps {
     subtotal: number;
+    tax_rate: number;
     tax_amount: number;
     discount_amount: number;
     total_amount: number;
-    onTaxChange: (val: number) => void;
+    onTaxRateChange: (val: number) => void;
     onDiscountChange: (val: number) => void;
+    onRecalculate: () => void;
 }
 
 const TotalsSummary = ({
     subtotal,
+    tax_rate,
     tax_amount,
     discount_amount,
     total_amount,
-    onTaxChange,
-    onDiscountChange
+    onTaxRateChange,
+    onDiscountChange,
+    onRecalculate
 }: TotalsSummaryProps) => {
     return (
         <div className="flex justify-end p-6 bg-gray-50/50">
@@ -27,18 +31,22 @@ const TotalsSummary = ({
                 </div>
 
                 <div className="flex justify-between items-center gap-4">
-                    <Label htmlFor="tax" className="text-sm text-gray-600 shrink-0">Tax</Label>
+                    <div className="flex flex-col">
+                        <Label htmlFor="tax" className="text-sm text-gray-600">Tax</Label>
+                        <span className="text-[10px] text-gray-400 font-medium">${tax_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
                     <div className="flex items-center gap-1.5 w-32 shrink-0">
-                        <span className="text-gray-400 text-sm">$</span>
                         <Input
                             id="tax"
                             type="number"
                             min="0"
                             step="0.01"
+                            max="100"
                             className="h-8 text-right font-medium"
-                            value={tax_amount}
-                            onChange={(e) => onTaxChange(parseFloat(e.target.value) || 0)}
+                            value={tax_rate}
+                            onChange={(e) => onTaxRateChange(parseFloat(e.target.value) || 0)}
                         />
+                        <span className="text-gray-400 text-sm font-bold w-4">%</span>
                     </div>
                 </div>
 
@@ -56,6 +64,15 @@ const TotalsSummary = ({
                             onChange={(e) => onDiscountChange(parseFloat(e.target.value) || 0)}
                         />
                     </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                    <button
+                        onClick={onRecalculate}
+                        className="text-[10px] font-bold text-primary/60 hover:text-primary transition-colors flex items-center gap-1 uppercase tracking-wider"
+                    >
+                        Recalculate
+                    </button>
                 </div>
 
                 <div className="pt-3 border-t border-gray-200 flex justify-between items-center">

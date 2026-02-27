@@ -22,6 +22,7 @@ import AdminPortfolio from "./pages-spa/admin/Portfolio";
 import AdminReviews from "./pages-spa/admin/Reviews";
 import EstimatesList from "./pages-spa/admin/EstimatesList";
 import EstimateEditor from "./pages-spa/admin/EstimateEditor";
+import CompanySettings from "./pages-spa/admin/CompanySettings";
 import NotFound from "./pages-spa/NotFound";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -54,6 +55,7 @@ const App = () => (
           <Route path="estimates/new" element={<EstimateEditor />} />
           <Route path="estimates/:id" element={<EstimateEditor />} />
           <Route path="settings" element={<AdminSettings />} />
+          <Route path="company" element={<CompanySettings />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

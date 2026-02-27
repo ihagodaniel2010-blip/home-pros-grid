@@ -11,6 +11,7 @@ import {
     Estimate,
     EstimateLineItem
 } from "@/lib/estimates";
+import { getCompanySettings } from "@/lib/company-settings";
 import { getLeads } from "@/lib/leads";
 import EstimateForm from "@/components/admin/estimates/EstimateForm";
 import EstimateItemsTable from "@/components/admin/estimates/EstimateItemsTable";
@@ -66,6 +67,18 @@ const EstimateEditor = () => {
                     }));
                 }
             }
+
+            // Load company settings for default tax rate
+            if (user?.organization?.id) {
+                const settings = await getCompanySettings(user.organization.id);
+                if (settings && !id) {
+                    setFormData(prev => ({
+                        ...prev,
+                        tax_rate: settings.default_tax_rate || 0,
+                        terms: settings.default_terms || prev.terms
+                    }));
+                }
+            }
         } catch (error) {
             console.error("Error loading data:", error);
             toast.error("Failed to load data.");
@@ -80,14 +93,16 @@ const EstimateEditor = () => {
         }
     }, [user, loadData]);
 
-    const calculateTotals = (currentItems: EstimateLineItem[], tax: number, discount: number) => {
+    const calculateTotals = (currentItems: EstimateLineItem[], taxRate: number, discount: number) => {
         const subtotal = currentItems.reduce((acc, item) => acc + (item.total_price || 0), 0);
-        const total = subtotal + tax - discount;
+        const taxAmount = (subtotal * taxRate) / 100;
+        const total = subtotal + taxAmount - discount;
 
         setFormData(prev => ({
             ...prev,
             subtotal,
-            tax_amount: tax,
+            tax_rate: taxRate,
+            tax_amount: taxAmount,
             discount_amount: discount,
             total_amount: total
         }));
@@ -95,7 +110,7 @@ const EstimateEditor = () => {
 
     const handleItemsChange = (newItems: EstimateLineItem[]) => {
         setItems(newItems);
-        calculateTotals(newItems, formData.tax_amount || 0, formData.discount_amount || 0);
+        calculateTotals(newItems, formData.tax_rate || 0, formData.discount_amount || 0);
     };
 
     const handleSave = async () => {
@@ -195,11 +210,13 @@ const EstimateEditor = () => {
                     <div className="mt-8 border-t border-gray-100 -mx-8">
                         <TotalsSummary
                             subtotal={formData.subtotal || 0}
+                            tax_rate={formData.tax_rate || 0}
                             tax_amount={formData.tax_amount || 0}
                             discount_amount={formData.discount_amount || 0}
                             total_amount={formData.total_amount || 0}
-                            onTaxChange={(val) => calculateTotals(items, val, formData.discount_amount || 0)}
-                            onDiscountChange={(val) => calculateTotals(items, formData.tax_amount || 0, val)}
+                            onTaxRateChange={(val) => calculateTotals(items, val, formData.discount_amount || 0)}
+                            onDiscountChange={(val) => calculateTotals(items, formData.tax_rate || 0, val)}
+                            onRecalculate={() => calculateTotals(items, formData.tax_rate || 0, formData.discount_amount || 0)}
                         />
                     </div>
                 </section>
