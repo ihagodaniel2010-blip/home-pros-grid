@@ -245,19 +245,28 @@ const Header = () => {
                 <span className="text-[10px] font-bold uppercase">{language}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40 rounded-xl overflow-hidden shadow-xl border-slate-200/50">
-              <DropdownMenuItem
-                onClick={() => setLanguage("en")}
-                className={`flex items-center justify-between cursor-pointer px-4 py-2.5 ${language === "en" ? "bg-primary/5 text-primary font-medium" : ""}`}
-              >
-                English {language === "en" && <Check className="h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setLanguage("pt")}
-                className={`flex items-center justify-between cursor-pointer px-4 py-2.5 ${language === "pt" ? "bg-primary/5 text-primary font-medium" : ""}`}
-              >
-                Português {language === "pt" && <Check className="h-4 w-4" />}
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-48 max-h-[400px] overflow-y-auto rounded-xl shadow-xl border-slate-200/50">
+              {[
+                { code: "en", label: "English" },
+                { code: "pt", label: "Português" },
+                { code: "es", label: "Español" },
+                { code: "zh", label: "中文" },
+                { code: "fr", label: "Français" },
+                { code: "ht", label: "Kreyòl" },
+                { code: "vi", label: "Việt" },
+                { code: "ar", label: "العربية" },
+                { code: "ru", label: "Русский" },
+                { code: "hi", label: "हिन्दी" },
+                { code: "it", label: "Italiano" },
+              ].map((lang) => (
+                <DropdownMenuItem
+                  key={lang.code}
+                  onClick={() => setLanguage(lang.code as any)}
+                  className={`flex items-center justify-between cursor-pointer px-4 py-2.5 ${language === lang.code ? "bg-primary/5 text-primary font-medium" : ""}`}
+                >
+                  {lang.label} {language === lang.code && <Check className="h-4 w-4" />}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -289,7 +298,7 @@ const Header = () => {
                   <span className="max-w-[80px] truncate">{user.name.split(' ')[0]}</span>
                 </div>
               ) : (
-                "Login"
+                t("nav.login")
               )}
               <ChevronDown className={`h-3.5 w-3.5 ml-1 transition-transform duration-200 ${loginOpen ? "rotate-180" : ""}`} />
             </Button>
@@ -462,20 +471,31 @@ const Header = () => {
             <Button size="sm" className={`w-full rounded-full ${isHeroPage ? "" : ""
               }`} onClick={() => { navigate("/join"); setMobileOpen(false); }}>{t("nav.join_pro")}</Button>
 
-            {/* Mobile Language Toggle */}
-            <div className="flex justify-center gap-4 pt-6 border-t border-white/10 mt-6">
-              <button
-                onClick={() => setLanguage("en")}
-                className={`text-xs font-bold px-3 py-1.5 rounded-full ${language === 'en' ? 'bg-primary text-white' : 'text-white/60 border border-white/20'}`}
-              >
-                ENGLISH
-              </button>
-              <button
-                onClick={() => setLanguage("pt")}
-                className={`text-xs font-bold px-3 py-1.5 rounded-full ${language === 'pt' ? 'bg-primary text-white' : 'text-white/60 border border-white/20'}`}
-              >
-                PORTUGUÊS
-              </button>
+            {/* Mobile Language Selector */}
+            <div className="pt-6 border-t border-white/10 mt-6 box-border">
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { code: "en", label: "EN" },
+                  { code: "pt", label: "PT" },
+                  { code: "es", label: "ES" },
+                  { code: "zh", label: "ZH" },
+                  { code: "fr", label: "FR" },
+                  { code: "ht", label: "HT" },
+                  { code: "vi", label: "VI" },
+                  { code: "ar", label: "AR" },
+                  { code: "ru", label: "RU" },
+                  { code: "hi", label: "HI" },
+                  { code: "it", label: "IT" },
+                ].map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => setLanguage(lang.code as any)}
+                    className={`text-[10px] font-bold py-2 rounded-lg transition-all ${language === lang.code ? 'bg-primary text-white scale-105 shadow-lg' : 'text-white/40 border border-white/10 hover:bg-white/5'}`}
+                  >
+                    {lang.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </motion.div>
         )}
