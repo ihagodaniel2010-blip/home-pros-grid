@@ -1,7 +1,8 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Estimate } from "@/lib/estimates";
+import { Estimate, EstimateStatus } from "@/lib/estimates";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface EstimateFormProps {
     formData: Partial<Estimate>;
@@ -9,6 +10,30 @@ interface EstimateFormProps {
 }
 
 const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
+    const { t } = useLanguage();
+
+    const projectTypes = [
+        "Kitchen Remodel",
+        "Bathroom Remodel",
+        "Deck Build",
+        "Framing",
+        "Trim Work",
+        "Custom Carpentry",
+        "Roofing Repair",
+        "Siding",
+        "General Repair"
+    ];
+
+    const statuses: EstimateStatus[] = [
+        'Draft',
+        'Sent',
+        'Viewed',
+        'Approved',
+        'Rejected',
+        'Expired',
+        'Paid',
+        'Partially_Paid'
+    ];
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -41,6 +66,20 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         onChange={(e) => onChange({ client_phone: e.target.value })}
                     />
                 </div>
+                <div className="space-y-2">
+                    <Label htmlFor="project_type">{t("estimate.project.type")}</Label>
+                    <select
+                        id="project_type"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        value={formData.project_type || ""}
+                        onChange={(e) => onChange({ project_type: e.target.value })}
+                    >
+                        <option value="">Select Project Type</option>
+                        {projectTypes.map(type => (
+                            <option key={type} value={type}>{type}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -61,11 +100,9 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         value={formData.status || "Draft"}
                         onChange={(e) => onChange({ status: e.target.value as any })}
                     >
-                        <option value="Draft">Draft</option>
-                        <option value="Sent">Sent</option>
-                        <option value="Approved">Approved</option>
-                        <option value="Declined">Declined</option>
-                        <option value="Expired">Expired</option>
+                        {statuses.map(s => (
+                            <option key={s} value={s}>{t(`admin.status.${s.toLowerCase()}`)}</option>
+                        ))}
                     </select>
                 </div>
             </div>

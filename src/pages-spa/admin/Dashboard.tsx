@@ -2,8 +2,9 @@ import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "@/lib/navigation-compat";
 import { useUser } from "@/context/UserContext";
 import { getLeads, type Lead } from "@/lib/leads";
-import { Users, TrendingUp, Calendar, Clock } from "lucide-react";
+import { Users, TrendingUp, Calendar, Clock, DollarSign, FileText, CheckCircle2, AlertCircle } from "lucide-react";
 import { fetchLoginAttempts, type LoginAttempt } from "@/lib/admin-auth";
+import { getEstimates, type Estimate } from "@/lib/estimates";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -30,14 +31,17 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useUser();
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [loginAttempts, setLoginAttempts] = useState<LoginAttempt[]>([]);
   const [attemptFilter, setAttemptFilter] = useState<"all" | "success" | "fail">("all");
 
   useEffect(() => {
     if (user?.organization?.id) {
       getLeads(user.organization.id).then(setLeads);
+      getEstimates().then(setEstimates); // Assumes getEstimates handles its own RLS/org filtering
     } else {
       getLeads().then(setLeads);
+      getEstimates().then(setEstimates);
     }
   }, [user]);
 
@@ -87,8 +91,22 @@ const Dashboard = () => {
     { label: "Today", value: leadsToday, icon: Clock, color: "#2563eb" },
     { label: "This Week", value: leadsWeek, icon: Calendar, color: "#7c3aed" },
     { label: "This Month", value: leadsMonth, icon: TrendingUp, color: "#059669" },
-    { label: "Total", value: leads.length, icon: Users, color: "#0b2a4a" },
+    { label: "Total Leads", value: leads.length, icon: Users, color: "#0b2a4a" },
   ];
+
+  const financialKpis = useMemo(() => {
+    const totalRevenue = estimates.reduce((acc, e) => acc + (e.amount_paid || 0), 0);
+    const outstanding = estimates.reduce((acc, e) => acc + (e.balance_due || 0), 0);
+    const pendingCount = estimates.filter(e => e.status === 'Sent' || e.status === 'Viewed').length;
+    const approvedCount = estimates.filter(e => e.status === 'Approved').length;
+
+    return [
+      { label: "Total Revenue", value: totalRevenue, icon: DollarSign, color: "#059669", isCurrency: true },
+      { label: "Outstanding", value: outstanding, icon: AlertCircle, color: "#ea580c", isCurrency: true },
+      { label: "Pending Issues", value: pendingCount, icon: FileText, color: "#2563eb" },
+      { label: "Approved", value: approvedCount, icon: CheckCircle2, color: "#7c3aed" },
+    ];
+  }, [estimates]);
 
   useEffect(() => {
     let active = true;
@@ -114,6 +132,32 @@ const Dashboard = () => {
         <p className="text-sm text-gray-600 mt-1">Overview of all leads and metrics</p>
       </div>
 
+      {/* Financial Overview */}
+      <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+        <DollarSign className="h-5 w-5 text-gray-400" />
+        Financial Insights
+      </h2>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
+        {financialKpis.map((k) => (
+          <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-6 hover:border-gray-300 transition-all duration-200 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">{k.label}</span>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${k.color}15` }}>
+                <k.icon className="h-4 w-4" style={{ color: k.color }} strokeWidth={1.5} />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-gray-900 tracking-tight">
+              {k.isCurrency && "$"}
+              {k.isCurrency ? k.value.toLocaleString() : <AnimatedNumber value={k.value} />}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+        <TrendingUp className="h-5 w-5 text-gray-400" />
+        Leads & Performance
+      </h2>
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
         {kpis.map((k) => (
