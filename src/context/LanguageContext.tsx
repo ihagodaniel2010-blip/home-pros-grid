@@ -39,6 +39,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.back": "Back",
         "nav.service_not_found": "Service Not Found",
         "nav.browse_services": "Browse All Services",
+        "nav.view_all_services": "View All Services",
 
         // Quote Form
         "quote.zip_code": "Zip Code",
@@ -147,8 +148,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.back": "Voltar",
         "nav.service_not_found": "Serviço Não Encontrado",
         "nav.browse_services": "Ver Todos os Serviços",
-
-
+        "nav.view_all_services": "Ver Todos os Serviços",
         "quote.zip_code": "CEP",
         "quote.city": "Cidade",
         "quote.state": "Estado",
@@ -809,6 +809,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const t = (key: string) => {
+        if (!translations[language]) return translations["en"][key] || key;
         return translations[language][key] || translations["en"][key] || key;
     };
 
