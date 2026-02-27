@@ -4,8 +4,10 @@ import { Search, MapPin } from "lucide-react";
 import { allServices } from "@/data/services";
 import { motion } from "framer-motion";
 import heroBg from "@/assets/hero-bg.jpg";
+import { useLanguage } from "@/context/LanguageContext";
 
 const HeroSection = () => {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [zip, setZip] = useState("");
@@ -72,7 +74,7 @@ const HeroSection = () => {
             marginBottom: '14px'
           }}
         >
-          Your Home. Happier.
+          {t("hero.title")}
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 16 }}
@@ -89,7 +91,7 @@ const HeroSection = () => {
             maxWidth: '600px'
           }}
         >
-          Finding the right contractor is fast, easy and free!
+          {t("hero.subtitle")}
         </motion.p>
 
         <motion.div
@@ -113,7 +115,7 @@ const HeroSection = () => {
                 style={{
                   borderRadius: '28px 0 0 28px'
                 }}
-                placeholder="What type of pro are you looking for?"
+                placeholder={t("hero.search_placeholder")}
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true); }}
                 onFocus={() => setShowSuggestions(true)}
@@ -132,7 +134,7 @@ const HeroSection = () => {
                       className="w-full text-left px-4 py-3 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150"
                       onClick={() => selectService(s.slug)}
                     >
-                      {s.name}
+                      {t(`service.${s.slug}`)}
                     </button>
                   ))}
                 </motion.div>
@@ -146,7 +148,7 @@ const HeroSection = () => {
                 style={{
                   borderRadius: '0'
                 }}
-                placeholder="Zip Code"
+                placeholder={t("quote.zip_code")}
                 value={zip}
                 onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
                 onKeyDown={(e) => e.key === "Enter" && handleStart()}
@@ -157,7 +159,7 @@ const HeroSection = () => {
               className="h-full bg-primary hover:bg-primary/90 text-white text-base font-semibold transition-all duration-250 active:scale-[0.98] whitespace-nowrap"
               style={{ borderRadius: '0 28px 28px 0', width: '170px', flex: '0 0 170px' }}
             >
-              Start
+              {t("hero.start")}
             </button>
           </div>
         </motion.div>
