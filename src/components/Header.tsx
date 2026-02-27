@@ -245,7 +245,11 @@ const Header = () => {
                 <span className="text-[10px] font-bold uppercase">{language}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 max-h-[400px] overflow-y-auto rounded-xl shadow-xl border-slate-200/50">
+            <DropdownMenuContent
+              align={direction === "rtl" ? "start" : "end"}
+              sideOffset={8}
+              className="w-56 max-h-[450px] overflow-y-auto rounded-xl shadow-2xl border-slate-200/60 p-1.5 scrollbar-thin z-[100] bg-white text-foreground"
+            >
               {[
                 { code: "en", label: "English" },
                 { code: "pt", label: "Português" },
@@ -472,8 +476,8 @@ const Header = () => {
               }`} onClick={() => { navigate("/join"); setMobileOpen(false); }}>{t("nav.join_pro")}</Button>
 
             {/* Mobile Language Selector */}
-            <div className="pt-6 border-t border-white/10 mt-6 box-border">
-              <div className="grid grid-cols-3 gap-2">
+            <div className={`pt-6 border-t mt-6 box-border pb-4 ${isHeroPage ? "border-white/10" : "border-slate-100"}`}>
+              <div className="grid grid-cols-4 gap-2">
                 {[
                   { code: "en", label: "EN" },
                   { code: "pt", label: "PT" },
@@ -490,7 +494,12 @@ const Header = () => {
                   <button
                     key={lang.code}
                     onClick={() => setLanguage(lang.code as any)}
-                    className={`text-[10px] font-bold py-2 rounded-lg transition-all ${language === lang.code ? 'bg-primary text-white scale-105 shadow-lg' : 'text-white/40 border border-white/10 hover:bg-white/5'}`}
+                    className={`text-[10px] font-bold py-2 rounded-lg transition-all ${language === lang.code
+                      ? 'bg-primary text-white scale-105 shadow-lg'
+                      : isHeroPage
+                        ? 'text-white/60 border border-white/20 hover:bg-white/10'
+                        : 'text-foreground/60 border border-slate-200 hover:bg-slate-50'
+                      }`}
                   >
                     {lang.label}
                   </button>

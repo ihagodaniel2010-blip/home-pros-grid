@@ -4,6 +4,7 @@ type Language = "en" | "pt" | "es" | "zh" | "fr" | "ht" | "vi" | "ar" | "ru" | "
 
 interface LanguageContextType {
     language: Language;
+    direction: "ltr" | "rtl";
     setLanguage: (lang: Language) => void;
     t: (key: string) => string;
 }
@@ -26,6 +27,8 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Sign Out",
         "nav.admin_login": "Admin Login",
         "nav.back_to_site": "Back to Site",
+        "nav.language": "Language",
+        "nav.view_all_services": "View All Services",
 
         // Quote Form
         "quote.zip_code": "Zip Code",
@@ -71,6 +74,8 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Sair",
         "nav.admin_login": "Login Admin",
         "nav.back_to_site": "Voltar ao Site",
+        "nav.language": "Idioma",
+        "nav.view_all_services": "Ver Todos os Serviços",
         "quote.zip_code": "CEP",
         "quote.city": "Cidade",
         "quote.state": "Estado",
@@ -437,6 +442,12 @@ const supportedLanguages: Language[] = ["en", "pt", "es", "zh", "fr", "ht", "vi"
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [language, setLanguageState] = useState<Language>("en");
+    const direction = language === "ar" ? "rtl" : "ltr";
+
+    useEffect(() => {
+        document.documentElement.dir = direction;
+        document.documentElement.lang = language;
+    }, [language, direction]);
 
     useEffect(() => {
         const saved = localStorage.getItem("preferred_language") as Language;
@@ -456,11 +467,12 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const t = (key: string) => {
+        if (!translations[language]) return translations["en"][key] || key;
         return translations[language][key] || translations["en"][key] || key;
     };
 
     return (
-        <LanguageContext.Provider value={{ language, setLanguage, t }}>
+        <LanguageContext.Provider value={{ language, direction, setLanguage, t }}>
             {children}
         </LanguageContext.Provider>
     );
