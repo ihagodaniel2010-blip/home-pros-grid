@@ -4,6 +4,7 @@ type Language = "en" | "pt" | "es" | "zh" | "fr" | "ht" | "vi" | "ar" | "ru" | "
 
 interface LanguageContextType {
     language: Language;
+    direction: "ltr" | "rtl";
     setLanguage: (lang: Language) => void;
     t: (key: string) => string;
 }
@@ -26,6 +27,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Sign Out",
         "nav.admin_login": "Admin Login",
         "nav.back_to_site": "Back to Site",
+        "nav.language": "Language",
 
         // Hero
         "hero.title": "Your Home. Happier.",
@@ -97,6 +99,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Sair",
         "nav.admin_login": "Login Admin",
         "nav.back_to_site": "Voltar ao Site",
+        "nav.language": "Idioma",
 
         // Hero
         "hero.title": "Sua Casa. Mais Feliz.",
@@ -166,6 +169,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Salir",
         "nav.admin_login": "Login Admin",
         "nav.back_to_site": "Volver al Sitio",
+        "nav.language": "Idioma",
 
         // Hero
         "hero.title": "Tu Hogar. Más Feliz.",
@@ -225,6 +229,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "退出",
         "nav.admin_login": "管理员登录",
         "nav.back_to_site": "返回网站",
+        "nav.language": "语言",
 
         // Hero
         "hero.title": "您的家，更快乐。",
@@ -284,6 +289,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Se déconnecter",
         "nav.admin_login": "Connexion Admin",
         "nav.back_to_site": "Retour au Site",
+        "nav.language": "Langue",
 
         // Hero
         "hero.title": "Votre Maison. Plus Heureuse.",
@@ -343,6 +349,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Dekonekte",
         "nav.admin_login": "Login Admin",
         "nav.back_to_site": "Retounen sou Sit la",
+        "nav.language": "Langaj",
 
         // Hero
         "hero.title": "Kay Ou. Plis Kontan.",
@@ -402,6 +409,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Đăng xuất",
         "nav.admin_login": "Đăng nhập Admin",
         "nav.back_to_site": "Quay lại Trang web",
+        "nav.language": "Ngôn ngữ",
 
         // Hero
         "hero.title": "Ngôi Nhà Bạn. Hạnh Phúc Hơn.",
@@ -461,6 +469,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "خروج",
         "nav.admin_login": "دخول المدير",
         "nav.back_to_site": "العودة للموقع",
+        "nav.language": "اللغة",
 
         // Hero
         "hero.title": "منزلك. أكثر سعادة.",
@@ -520,6 +529,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Выйти",
         "nav.admin_login": "Вход для админа",
         "nav.back_to_site": "Вернуться на сайт",
+        "nav.language": "Язык",
 
         // Hero
         "hero.title": "Ваш дом. Счастливее.",
@@ -579,6 +589,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "साइन आउट",
         "nav.admin_login": "एडमिन लॉगिन",
         "nav.back_to_site": "साइट पर वापस जाएं",
+        "nav.language": "भाषा",
 
         // Hero
         "hero.title": "आपका घर। खुशहाल।",
@@ -638,6 +649,7 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.sign_out": "Esci",
         "nav.admin_login": "Login Admin",
         "nav.back_to_site": "Torna al sito",
+        "nav.language": "Lingua",
 
         // Hero
         "hero.title": "La Tua Casa. Più Felice.",
@@ -689,6 +701,12 @@ const supportedLanguages: Language[] = ["en", "pt", "es", "zh", "fr", "ht", "vi"
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [language, setLanguageState] = useState<Language>("en");
+    const direction = language === "ar" ? "rtl" : "ltr";
+
+    useEffect(() => {
+        document.documentElement.dir = direction;
+        document.documentElement.lang = language;
+    }, [language, direction]);
 
     useEffect(() => {
         const saved = localStorage.getItem("preferred_language") as Language;
@@ -712,7 +730,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     return (
-        <LanguageContext.Provider value={{ language, setLanguage, t }}>
+        <LanguageContext.Provider value={{ language, direction, setLanguage, t }}>
             {children}
         </LanguageContext.Provider>
     );
