@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe } from "lucide-react";
+import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe, Building2 } from "lucide-react";
 import { adminLogout, fetchAdminSession } from "@/lib/admin-auth";
 import { getLeads } from "@/lib/leads";
 import { useLanguage } from "@/context/LanguageContext";
@@ -28,6 +28,7 @@ const AdminLayout = () => {
       { label: t("admin.reviews"), icon: BarChart3, path: "/admin/reviews" },
       { label: t("admin.analytics"), icon: BarChart3, path: "/admin/analytics" },
       { label: t("admin.locations"), icon: MapPin, path: "/admin/settings?tab=maps" },
+      { label: t("admin.company"), icon: Building2, path: "/admin/company" },
       { label: t("admin.settings"), icon: Settings, path: "/admin/settings" },
     ],
     []

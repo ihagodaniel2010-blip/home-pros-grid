@@ -62,6 +62,7 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.saving": "Saving...",
         "admin.save_estimate": "Save Estimate",
         "admin.settings": "Settings",
+        "admin.company": "Company",
         "admin.dashboard": "Dashboard",
         "admin.estimates": "Estimates",
         "admin.reviews": "Reviews",
@@ -132,6 +133,7 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.saving": "Salvando...",
         "admin.save_estimate": "Salvar Orçamento",
         "admin.settings": "Configurações",
+        "admin.company": "Empresa",
         "admin.dashboard": "Painel",
         "admin.estimates": "Orçamentos",
         "admin.reviews": "Avaliações",
@@ -196,6 +198,7 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.saving": "Guardando...",
         "admin.save_estimate": "Guardar Presupuesto",
         "admin.settings": "Configuraciones",
+        "admin.company": "Empresa",
         "admin.dashboard": "Panel",
 
         // Services
@@ -256,6 +259,7 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.saving": "保存中...",
         "admin.save_estimate": "保存估算",
         "admin.settings": "设置",
+        "admin.company": "企业",
         "admin.dashboard": "仪表板",
 
         // Services
@@ -314,8 +318,9 @@ const translations: Record<Language, Record<string, string>> = {
         "quote.submit": "Obtenir mon devis gratuit",
         "admin.save": "Enregistrer",
         "admin.saving": "Enregistrement...",
-        "admin.save_estimate": "Enregistrer le Devis",
+        "admin.save_estimate": "Enregistrer le devis",
         "admin.settings": "Réglages",
+        "admin.company": "Entreprise",
         "admin.dashboard": "Tableau de Bord",
 
         // Services
@@ -376,6 +381,7 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.saving": "Ap sove...",
         "admin.save_estimate": "Sove Estimasyon",
         "admin.settings": "Anviwònman",
+        "admin.company": "Konpayi",
         "admin.dashboard": "Tablo bò",
 
         // Services
@@ -434,8 +440,9 @@ const translations: Record<Language, Record<string, string>> = {
         "quote.submit": "Nhận báo giá miễn phí",
         "admin.save": "Lưu",
         "admin.saving": "Đang lưu...",
-        "admin.save_estimate": "Lưu Báo giá",
+        "admin.save_estimate": "Lưu báo giá",
         "admin.settings": "Cài đặt",
+        "admin.company": "Công ty",
         "admin.dashboard": "Bảng điều khiển",
 
         // Services
@@ -496,6 +503,7 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.saving": "جاري الحفظ...",
         "admin.save_estimate": "حفظ التقدير",
         "admin.settings": "الإعدادات",
+        "admin.company": "الشركة",
         "admin.dashboard": "لوحة القيادة",
 
         // Services
@@ -554,8 +562,9 @@ const translations: Record<Language, Record<string, string>> = {
         "quote.submit": "Получить расчет",
         "admin.save": "Сохранить",
         "admin.saving": "Сохранение...",
-        "admin.save_estimate": "Сохранить расчет",
+        "admin.save_estimate": "Сохранить смету",
         "admin.settings": "Настройки",
+        "admin.company": "Компания",
         "admin.dashboard": "Панель",
 
         // Services
@@ -616,6 +625,7 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.saving": "सहेज रहा है...",
         "admin.save_estimate": "अनुमान सहेजें",
         "admin.settings": "सेटिंग्स",
+        "admin.company": "कंपनी",
         "admin.dashboard": "डैशबोर्ड",
 
         // Services
@@ -674,8 +684,9 @@ const translations: Record<Language, Record<string, string>> = {
         "quote.submit": "Ottieni preventivo gratuito",
         "admin.save": "Salva",
         "admin.saving": "Salvataggio...",
-        "admin.save_estimate": "Salva Preventivo",
+        "admin.save_estimate": "Salva preventivo",
         "admin.settings": "Impostazioni",
+        "admin.company": "Azienda",
         "admin.dashboard": "Dashboard",
 
         // Services

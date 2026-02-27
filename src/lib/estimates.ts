@@ -22,6 +22,7 @@ export interface Estimate {
     client_phone?: string;
     status: EstimateStatus;
     subtotal: number;
+    tax_rate: number;
     tax_amount: number;
     discount_amount: number;
     total_amount: number;
