@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Save, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -11,7 +11,7 @@ import {
     Estimate,
     EstimateLineItem
 } from "@/lib/estimates";
-import { getCompanySettings } from "@/lib/company-settings";
+import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
 import { getLeads } from "@/lib/leads";
 import EstimateForm from "@/components/admin/estimates/EstimateForm";
 import EstimateItemsTable from "@/components/admin/estimates/EstimateItemsTable";
@@ -20,11 +20,6 @@ import RegisterPaymentModal from "@/components/admin/estimates/RegisterPaymentMo
 import { generateProfessionalPDF } from "@/lib/pdf-generator";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, FileText, Share2, Printer } from "lucide-react";
-import {
-    getCompanySettings,
-    CompanySettings
-} from "@/lib/company-settings";
 import { cn } from "@/lib/utils";
 
 const EstimateEditor = () => {
@@ -101,7 +96,7 @@ const EstimateEditor = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [id, leadId, t]);
+    }, [id, leadId, t, user]);
 
     useEffect(() => {
         if (user?.organization?.id) {
