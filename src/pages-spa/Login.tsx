@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "@/lib/navigation-compat";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -12,10 +13,12 @@ const Login = () => {
   const { user, login, signInWithGoogle } = useUser();
   const { toast } = useToast();
 
-  // If already logged in, redirect to experiences
-  if (user) {
-    navigate("/experiences");
-  }
+  // Redirect to experiences if logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/experiences");
+    }
+  }, [user, navigate]);
 
   const handleGoogleLogin = async () => {
     if (isSupabaseConfigured) {

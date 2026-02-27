@@ -96,6 +96,13 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.revenue": "Total Revenue",
         "admin.outstanding": "Outstanding Balance",
         "admin.pending": "Pending Estimates",
+        "estimate.create_title": "Create New Estimate",
+        "estimate.edit_title": "Edit Estimate",
+        "estimate.create_desc": "Create a professional detailed estimate for your client.",
+        "estimate.save": "Save Estimate",
+        "estimate.cancel": "Cancel",
+        "estimate.converted_from": "Converted from",
+        "estimate.project.type": "Project Type",
 
         // Services
         "service.carpentry": "Carpentry",
@@ -197,6 +204,13 @@ const translations: Record<Language, Record<string, string>> = {
         "admin.pending": "Orçamentos Pendentes",
         "admin.approved_count": "Orçamentos Aprovados",
         "admin.rejected_count": "Orçamentos Rejeitados",
+        "estimate.create_title": "Criar Novo Orçamento",
+        "estimate.edit_title": "Editar Orçamento",
+        "estimate.create_desc": "Crie um orçamento detalhado e profissional para seu cliente.",
+        "estimate.save": "Salvar Orçamento",
+        "estimate.cancel": "Cancelar",
+        "estimate.converted_from": "Convertido de",
+        "estimate.project.type": "Tipo de Projeto",
 
         // Services
         "service.carpentry": "Carpintaria",

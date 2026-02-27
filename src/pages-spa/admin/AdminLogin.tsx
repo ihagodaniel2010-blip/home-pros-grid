@@ -7,10 +7,16 @@ import { motion } from "framer-motion";
 const AdminLogin = () => {
   const navigate = useNavigate();
   const [error, setError] = useState("");
-  const [checkingSession, setCheckingSession] = useState(true);
-
   useEffect(() => {
     let active = true;
+
+    // Timeout for session check
+    const timeoutId = setTimeout(() => {
+      if (active && checkingSession) {
+        console.warn("Admin session check timed out.");
+        setCheckingSession(false);
+      }
+    }, 4000);
 
     fetchAdminSession()
       .then((session) => {
@@ -20,29 +26,36 @@ const AdminLogin = () => {
           return;
         }
         setCheckingSession(false);
+        clearTimeout(timeoutId);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Admin session check error:", err);
         if (!active) return;
         setCheckingSession(false);
+        clearTimeout(timeoutId);
       });
 
     return () => {
       active = false;
+      clearTimeout(timeoutId);
     };
   }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    const result = await fetchAdminSession();
-    if (sessionStorage.getItem("admin_session") || result?.email) {
-      navigate("/admin", { replace: true });
-      return;
-    }
+    setCheckingSession(true);
 
-    const loginResult = await adminLogin();
-    if (!loginResult.ok) {
-      setError(loginResult.error || "Login failed");
+    try {
+      const loginResult = await adminLogin();
+      if (!loginResult.ok) {
+        setError(loginResult.error || "Login failed");
+        setCheckingSession(false);
+      }
+      // If ok, the browser will redirect via OAuth
+    } catch (err) {
+      setError("An unexpected error occurred during login.");
+      setCheckingSession(false);
     }
   };
 

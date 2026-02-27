@@ -25,12 +25,17 @@ export const adminLogin = async (): Promise<AdminLoginResult> => {
 
 export const fetchAdminSession = async (): Promise<AdminSession | null> => {
   if (!supabase) return null;
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return null;
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session?.user) return null;
 
-  return {
-    email: session.user.email || "Unknown",
-  };
+    return {
+      email: session.user.email || "Unknown",
+    };
+  } catch (e) {
+    console.error("fetchAdminSession error:", e);
+    return null;
+  }
 };
 
 export const adminLogout = async (): Promise<void> => {
