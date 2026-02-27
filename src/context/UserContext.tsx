@@ -40,26 +40,36 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserOrganizations = async (userId: string): Promise<Organization[]> => {
     if (!supabase) return [];
 
-    const { data, error } = await supabase
-      .from('organization_users')
-      .select(`
-        role,
-        organization:organizations (
-          id,
-          name,
-          slug
-        )
-      `)
-      .eq('user_id', userId);
+    try {
+      const { data, error } = await supabase
+        .from('organization_users')
+        .select(`
+          role,
+          organization:organizations (
+            id,
+            name,
+            slug
+          )
+        `)
+        .eq('user_id', userId);
 
-    if (error || !data) return [];
+      if (error || !data) {
+        console.error("Error fetching organizations:", error);
+        return [];
+      }
 
-    return data.map((item: any) => ({
-      id: item.organization.id,
-      name: item.organization.name,
-      slug: item.organization.slug,
-      role: item.role
-    }));
+      return data
+        .filter((item: any) => item.organization) // Defensive check
+        .map((item: any) => ({
+          id: item.organization.id,
+          name: item.organization.name,
+          slug: item.organization.slug,
+          role: item.role
+        }));
+    } catch (e) {
+      console.error("Critical error in fetchUserOrganizations:", e);
+      return [];
+    }
   };
 
   const mapSupabaseUser = async (authUser: User): Promise<UserSession> => {
@@ -76,23 +86,38 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // Safety timeout: ensure loading state clears even if Supabase hangs
+    const timeoutId = setTimeout(() => {
+      if (isLoading) {
+        console.warn("Auth initialization timed out. Proceeding as guest.");
+        setIsLoading(false);
+      }
+    }, 5000);
+
     if (isSupabaseConfigured && supabase) {
       let isMounted = true;
 
       supabase.auth.getSession().then(async ({ data }) => {
         if (!isMounted) return;
-        if (data.session?.user) {
-          const mappedUser = await mapSupabaseUser(data.session.user);
-          setUser(mappedUser);
-        } else {
-          const stored = localStorage.getItem(USER_STORAGE_KEY);
-          if (stored) {
-            setUser(JSON.parse(stored));
+        try {
+          if (data.session?.user) {
+            const mappedUser = await mapSupabaseUser(data.session.user);
+            setUser(mappedUser);
           } else {
-            setUser(null);
+            const stored = localStorage.getItem(USER_STORAGE_KEY);
+            if (stored) {
+              setUser(JSON.parse(stored));
+            } else {
+              setUser(null);
+            }
           }
+        } catch (error) {
+          console.error("Auth initialization error:", error);
+          setUser(null);
+        } finally {
+          setIsLoading(false);
+          clearTimeout(timeoutId);
         }
-        setIsLoading(false);
       });
 
       const {
@@ -111,6 +136,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return () => {
         isMounted = false;
         subscription.unsubscribe();
+        clearTimeout(timeoutId);
       };
     } else {
       try {
@@ -122,6 +148,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // ignore
       } finally {
         setIsLoading(false);
+        clearTimeout(timeoutId);
       }
     }
   }, []);

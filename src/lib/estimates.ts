@@ -22,6 +22,10 @@ export interface Estimate {
     client_name: string;
     client_email?: string;
     client_phone?: string;
+    client_address?: string;
+    client_city?: string;
+    client_state?: string;
+    client_zip?: string;
     status: EstimateStatus;
     project_type?: string;
     subtotal: number;

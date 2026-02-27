@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getEstimateByToken, approveEstimate, Estimate } from "@/lib/estimates";
+import { getEstimateByToken, approveEstimate, updateEstimate, Estimate } from "@/lib/estimates";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, FileText, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,12 @@ const PublicView = () => {
             setEstimate(data);
             if (data.status === 'Approved' || data.status === 'Paid') {
                 setIsApproved(true);
+            }
+
+            // Auto-track "Viewed" status
+            if (data.status === 'Sent') {
+                await updateEstimate(data.id, { status: 'Viewed' });
+                setEstimate(prev => prev ? { ...prev, status: 'Viewed' } : null);
             }
         }
         setIsLoading(false);
@@ -104,6 +110,12 @@ const PublicView = () => {
                                 <p className="text-xl font-bold text-gray-900">{estimate.client_name}</p>
                                 <p className="text-gray-600 mt-1">{estimate.client_email}</p>
                                 <p className="text-gray-600">{estimate.client_phone}</p>
+                                {estimate.client_address && (
+                                    <div className="mt-2 text-sm text-gray-500">
+                                        <p>{estimate.client_address}</p>
+                                        <p>{estimate.client_city}, {estimate.client_state} {estimate.client_zip}</p>
+                                    </div>
+                                )}
                             </div>
                             <div className="md:text-right">
                                 <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Estimate Details</h2>

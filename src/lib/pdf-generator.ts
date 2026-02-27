@@ -56,8 +56,20 @@ export const generateProfessionalPDF = async (
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.text(estimate.client_name || "Client Name", 20, 78);
-    doc.text(estimate.client_email || "", 20, 83);
-    doc.text(estimate.client_phone || "", 20, 88);
+    let currentY = 83;
+    if (estimate.client_email) {
+        doc.text(estimate.client_email, 20, currentY);
+        currentY += 5;
+    }
+    if (estimate.client_phone) {
+        doc.text(estimate.client_phone, 20, currentY);
+        currentY += 5;
+    }
+    if (estimate.client_address) {
+        doc.text(estimate.client_address, 20, currentY);
+        currentY += 5;
+        doc.text(`${estimate.client_city || ""}, ${estimate.client_state || ""} ${estimate.client_zip || ""}`, 20, currentY);
+    }
 
     // Estimate Meta
     doc.setFont("helvetica", "bold");

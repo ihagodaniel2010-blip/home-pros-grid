@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer } from "lucide-react";
+import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -127,6 +127,17 @@ const EstimateEditor = () => {
         calculateTotals(newItems, formData.tax_rate || 0, formData.discount_amount || 0);
     };
 
+    const handleShare = () => {
+        if (!formData.public_token) {
+            toast.error("Public token missing. Save the estimate first.");
+            return;
+        }
+        const slice = formData.public_token;
+        const shareUrl = `${window.location.host.includes('localhost') ? 'http' : 'https'}://${window.location.host}/estimate/view/${slice}`;
+        navigator.clipboard.writeText(shareUrl);
+        toast.success("Share link copied to clipboard!");
+    };
+
     const handleGeneratePDF = async () => {
         if (!id) {
             toast.error("Save the estimate first to generate PDF.");
@@ -244,6 +255,14 @@ const EstimateEditor = () => {
                             >
                                 {isGeneratingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
                                 PDF
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="h-10 gap-2 border-gray-200"
+                                onClick={handleShare}
+                            >
+                                <Copy className="h-4 w-4" />
+                                Share
                             </Button>
                             <Button
                                 variant="outline"

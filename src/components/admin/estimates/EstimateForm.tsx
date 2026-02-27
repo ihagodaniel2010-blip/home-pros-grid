@@ -66,6 +66,50 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         onChange={(e) => onChange({ client_phone: e.target.value })}
                     />
                 </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="md:col-span-2 space-y-2">
+                    <Label htmlFor="client_address">Client Address (Street)</Label>
+                    <Input
+                        id="client_address"
+                        placeholder="123 Main St"
+                        value={formData.client_address || ""}
+                        onChange={(e) => onChange({ client_address: e.target.value })}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="client_city">City</Label>
+                    <Input
+                        id="client_city"
+                        placeholder="City"
+                        value={formData.client_city || ""}
+                        onChange={(e) => onChange({ client_city: e.target.value })}
+                    />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                        <Label htmlFor="client_state">State</Label>
+                        <Input
+                            id="client_state"
+                            placeholder="ST"
+                            value={formData.client_state || ""}
+                            onChange={(e) => onChange({ client_state: e.target.value })}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="client_zip">ZIP</Label>
+                        <Input
+                            id="client_zip"
+                            placeholder="00000"
+                            value={formData.client_zip || ""}
+                            onChange={(e) => onChange({ client_zip: e.target.value })}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
                     <Label htmlFor="project_type">{t("estimate.project.type")}</Label>
                     <select
