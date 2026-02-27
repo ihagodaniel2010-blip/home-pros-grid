@@ -23,7 +23,7 @@ const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useUser();
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage, t, direction } = useLanguage();
 
   // Detect if on hero page (homepage)
   const isHeroPage = location.pathname === "/";
@@ -240,31 +240,42 @@ const Header = () => {
                 variant="ghost"
                 size="sm"
                 className={`flex items-center gap-2 rounded-full px-3 hover:bg-white/10 ${isHeroPage ? "text-white hover:text-white/80 hover:bg-white/10" : "text-foreground/70"}`}
+                title={t("nav.language")}
               >
                 <Languages className="h-4 w-4" />
                 <span className="text-[10px] font-bold uppercase">{language}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 max-h-[450px] overflow-y-auto rounded-xl shadow-2xl border-slate-200/60 p-1.5 scrollbar-thin">
+            <DropdownMenuContent
+              align={direction === "rtl" ? "start" : "end"}
+              sideOffset={8}
+              className="w-56 max-h-[450px] overflow-y-auto rounded-xl shadow-2xl border-slate-200/60 p-1.5 scrollbar-thin z-[100]"
+            >
               {[
-                { code: "en", label: "English" },
-                { code: "pt", label: "Português" },
-                { code: "es", label: "Español" },
-                { code: "zh", label: "中文" },
-                { code: "fr", label: "Français" },
-                { code: "ht", label: "Kreyòl" },
-                { code: "vi", label: "Việt" },
-                { code: "ar", label: "العربية" },
-                { code: "ru", label: "Русский" },
-                { code: "hi", label: "हिन्दी" },
-                { code: "it", label: "Italiano" },
+                { code: "en", label: "English", local: "English" },
+                { code: "pt", label: "Portuguese", local: "Português" },
+                { code: "es", label: "Spanish", local: "Español" },
+                { code: "zh", label: "Chinese", local: "中文" },
+                { code: "fr", label: "French", local: "Français" },
+                { code: "ht", label: "Haitian Creole", local: "Kreyòl" },
+                { code: "vi", label: "Vietnamese", local: "Việt" },
+                { code: "ar", label: "Arabic", local: "العربية" },
+                { code: "ru", label: "Russian", local: "Русский" },
+                { code: "hi", label: "Hindi", local: "हिन्दी" },
+                { code: "it", label: "Italiano", local: "Italiano" },
               ].map((lang) => (
                 <DropdownMenuItem
                   key={lang.code}
                   onClick={() => setLanguage(lang.code as any)}
-                  className={`flex items-center justify-between cursor-pointer px-4 py-2.5 ${language === lang.code ? "bg-primary/5 text-primary font-medium" : ""}`}
+                  className={`flex flex-col items-start cursor-pointer px-4 py-3 rounded-lg transition-colors ${language === lang.code ? "bg-primary/10 text-primary font-medium" : "hover:bg-slate-50"}`}
                 >
-                  {lang.label} {language === lang.code && <Check className="h-4 w-4" />}
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-sm font-semibold">{lang.local}</span>
+                    {language === lang.code && <Check className="h-4 w-4" />}
+                  </div>
+                  {lang.code !== "en" && (
+                    <span className="text-[10px] text-slate-400 mt-0.5">{lang.label}</span>
+                  )}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
