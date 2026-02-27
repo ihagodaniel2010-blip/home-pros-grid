@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import imageCompression from "browser-image-compression";
 import { Upload, X, Image as ImageIcon, Video as VideoIcon, Loader2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabasePublic } from "@/lib/supabase";
 import { useLanguage } from "@/context/LanguageContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,8 +57,8 @@ const Quote = () => {
   const hasSubtypes = !!(selectedSubService?.subtypes && selectedSubService.subtypes.length > 0);
 
   // Determine total sections and progress
-  const totalSections = hasSubtypes ? 9 : 8;
-  const progressPct = Math.min(Math.round(((revealedSections - 1) / (totalSections - 1)) * 100), 100);
+  const totalSections = hasSubtypes ? 8 : 7;
+  const progressPct = Math.min(Math.round((revealedSections / totalSections) * 100), 100);
 
   const set = (key: string, value: string | string[]) =>
     setFormData((p) => ({ ...p, [key]: value }));
@@ -206,13 +206,13 @@ const Quote = () => {
           const orgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID;
           const filePath = `${orgId}/${fileName}`;
 
-          const { error: uploadError } = await supabase!.storage
+          const { error: uploadError } = await supabasePublic!.storage
             .from('organization-private')
             .upload(filePath, fileToUpload);
 
           if (uploadError) throw uploadError;
 
-          const { data: { publicUrl } } = supabase!.storage.from('organization-private').getPublicUrl(filePath);
+          const { data: { publicUrl } } = supabasePublic!.storage.from('organization-private').getPublicUrl(filePath);
           uploadedUrls.push(publicUrl);
         }
       }

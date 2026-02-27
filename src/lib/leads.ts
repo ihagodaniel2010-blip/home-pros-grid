@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, supabasePublic, isSupabaseConfigured } from "@/lib/supabase";
 
 export interface StatusChange {
   status: string;
@@ -110,7 +110,7 @@ const saveLeadSupabase = async (
     updatedAt: now,
     statusHistory: [{ status: "New", timestamp: now }],
   };
-  const { error } = await supabase.from("leads").insert(payload);
+  const { error } = await supabasePublic!.from("leads").insert(payload);
   if (error) {
     console.error("Supabase saveLead error:", error);
     throw new Error(error.message);

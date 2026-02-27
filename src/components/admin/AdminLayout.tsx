@@ -3,10 +3,12 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe } from "lucide-react";
 import { adminLogout, fetchAdminSession } from "@/lib/admin-auth";
 import { getLeads } from "@/lib/leads";
+import { useLanguage } from "@/context/LanguageContext";
 
 const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   const [newLeads, setNewLeads] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthed, setIsAuthed] = useState(false);
@@ -19,14 +21,14 @@ const AdminLayout = () => {
 
   const navItems = useMemo(
     () => [
-      { label: "Dashboard", icon: LayoutDashboard, path: "/admin" },
-      { label: "Portfolio", icon: Images, path: "/admin/portfolio" },
+      { label: t("admin.dashboard"), icon: LayoutDashboard, path: "/admin" },
+      { label: t("nav.portfolio"), icon: Images, path: "/admin/portfolio" },
       { label: "Leads", icon: Inbox, path: "/admin/inbox" },
-      { label: "Estimates", icon: FileText, path: "/admin/estimates" },
-      { label: "Reviews", icon: BarChart3, path: "/admin/reviews" },
-      { label: "Analytics", icon: BarChart3, path: "/admin/analytics" },
-      { label: "Locations", icon: MapPin, path: "/admin/settings?tab=maps" },
-      { label: "Settings", icon: Settings, path: "/admin/settings" },
+      { label: t("admin.estimates"), icon: FileText, path: "/admin/estimates" },
+      { label: t("admin.reviews"), icon: BarChart3, path: "/admin/reviews" },
+      { label: t("admin.analytics"), icon: BarChart3, path: "/admin/analytics" },
+      { label: t("admin.locations"), icon: MapPin, path: "/admin/settings?tab=maps" },
+      { label: t("admin.settings"), icon: Settings, path: "/admin/settings" },
     ],
     []
   );
@@ -78,7 +80,7 @@ const AdminLayout = () => {
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10 mb-4 border-b border-white/10 pb-4"
           >
             <Globe className="h-4 w-4" strokeWidth={1.5} />
-            Voltar ao Site
+            {t("nav.back_to_site")}
           </Link>
           {navItems.map((item) => {
             const active = isNavActive(item.path);
@@ -110,7 +112,7 @@ const AdminLayout = () => {
             }}
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10 w-full transition-all duration-200"
           >
-            <LogOut className="h-4 w-4" strokeWidth={1.5} /> Logout
+            <LogOut className="h-4 w-4" strokeWidth={1.5} /> {t("nav.sign_out")}
           </button>
         </div>
       </aside>
