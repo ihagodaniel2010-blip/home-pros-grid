@@ -1,6 +1,8 @@
 import { supabase } from "./supabase";
 
-export type EstimateStatus = 'Draft' | 'Sent' | 'Approved' | 'Declined' | 'Expired';
+export type EstimateStatus = 'Draft' | 'Sent' | 'Viewed' | 'Approved' | 'Rejected' | 'Expired' | 'Paid' | 'Partially_Paid';
+
+export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid';
 
 export interface EstimateLineItem {
     id?: string;
@@ -21,14 +23,21 @@ export interface Estimate {
     client_email?: string;
     client_phone?: string;
     status: EstimateStatus;
+    project_type?: string;
     subtotal: number;
     tax_rate: number;
     tax_amount: number;
     discount_amount: number;
     total_amount: number;
+    amount_paid: number;
+    balance_due: number;
+    payment_status: PaymentStatus;
+    public_token: string;
     notes?: string;
     terms?: string;
     valid_until?: string;
+    sent_at?: string;
+    approved_at?: string;
     created_at: string;
     updated_at: string;
     items?: EstimateLineItem[];
@@ -149,4 +158,106 @@ export const updateEstimate = async (
     }
 
     return data as Estimate;
+};
+
+export interface EstimatePayment {
+    id?: string;
+    organization_id: string;
+    estimate_id: string;
+    amount: number;
+    payment_method: string;
+    payment_date: string;
+    created_at?: string;
+}
+
+export const createPayment = async (payment: EstimatePayment): Promise<EstimatePayment | null> => {
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+        .from('estimate_payments')
+        .insert([payment])
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating payment:', error);
+        return null;
+    }
+
+    // Refresh estimate totals (amount_paid / balance_due)
+    const { data: payments } = await supabase
+        .from('estimate_payments')
+        .select('amount')
+        .eq('estimate_id', payment.estimate_id);
+
+    if (payments) {
+        const totalPaid = payments.reduce((acc, p) => acc + (p.amount || 0), 0);
+
+        // Fetch current estimate to get total_amount
+        const { data: est } = await supabase
+            .from('estimates')
+            .select('total_amount, status')
+            .eq('id', payment.estimate_id)
+            .single();
+
+        if (est) {
+            const balance = est.total_amount - totalPaid;
+            let paymentStatus: PaymentStatus = balance <= 0 ? 'paid' : (totalPaid > 0 ? 'partially_paid' : 'unpaid');
+
+            // If fully paid, also update the main status to 'Paid' for convenience, 
+            // but keep 'Approved' or others if preferred. The user's request says 
+            // "paid" and "partially_paid" are values for the main status too.
+            let mainStatus = est.status;
+            if (balance <= 0) mainStatus = 'Paid';
+            else if (totalPaid > 0) mainStatus = 'Partially_Paid';
+
+            await supabase
+                .from('estimates')
+                .update({
+                    amount_paid: totalPaid,
+                    balance_due: balance,
+                    payment_status: paymentStatus,
+                    status: mainStatus
+                })
+                .eq('id', payment.estimate_id);
+        }
+    }
+
+    return data as EstimatePayment;
+};
+
+export const getEstimateByToken = async (token: string): Promise<Estimate | null> => {
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+        .from('estimates')
+        .select('*, items:estimate_items(*)')
+        .eq('public_token', token)
+        .single();
+
+    if (error) {
+        console.error('Error fetching public estimate:', error);
+        return null;
+    }
+
+    return data as Estimate;
+};
+
+export const approveEstimate = async (id: string): Promise<boolean> => {
+    if (!supabase) return false;
+
+    const { error } = await supabase
+        .from('estimates')
+        .update({
+            status: 'Approved',
+            approved_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error approving estimate:', error);
+        return false;
+    }
+
+    return true;
 };

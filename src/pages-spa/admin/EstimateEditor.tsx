@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Save, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -11,12 +11,16 @@ import {
     Estimate,
     EstimateLineItem
 } from "@/lib/estimates";
-import { getCompanySettings } from "@/lib/company-settings";
+import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
 import { getLeads } from "@/lib/leads";
 import EstimateForm from "@/components/admin/estimates/EstimateForm";
 import EstimateItemsTable from "@/components/admin/estimates/EstimateItemsTable";
 import TotalsSummary from "@/components/admin/estimates/TotalsSummary";
+import RegisterPaymentModal from "@/components/admin/estimates/RegisterPaymentModal";
+import { generateProfessionalPDF } from "@/lib/pdf-generator";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const EstimateEditor = () => {
     const { id } = useParams();
@@ -28,6 +32,9 @@ const EstimateEditor = () => {
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+    const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
     const [formData, setFormData] = useState<Partial<Estimate>>({
         status: 'Draft',
@@ -68,14 +75,18 @@ const EstimateEditor = () => {
                 }
             }
 
-            // Load company settings for default tax rate
+            // Load company settings
             if (user?.organization?.id) {
                 const settings = await getCompanySettings(user.organization.id);
+                setCompanySettings(settings);
                 if (settings && !id) {
                     setFormData(prev => ({
                         ...prev,
                         tax_rate: settings.default_tax_rate || 0,
-                        terms: settings.default_terms || prev.terms
+                        terms: settings.default_terms || prev.terms,
+                        amount_paid: 0,
+                        balance_due: 0,
+                        payment_status: 'unpaid'
                     }));
                 }
             }
@@ -85,7 +96,7 @@ const EstimateEditor = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [id, leadId, t]);
+    }, [id, leadId, t, user]);
 
     useEffect(() => {
         if (user?.organization?.id) {
@@ -97,6 +108,7 @@ const EstimateEditor = () => {
         const subtotal = currentItems.reduce((acc, item) => acc + (item.total_price || 0), 0);
         const taxAmount = (subtotal * taxRate) / 100;
         const total = subtotal + taxAmount - discount;
+        const paid = formData.amount_paid || 0;
 
         setFormData(prev => ({
             ...prev,
@@ -104,13 +116,38 @@ const EstimateEditor = () => {
             tax_rate: taxRate,
             tax_amount: taxAmount,
             discount_amount: discount,
-            total_amount: total
+            total_amount: total,
+            balance_due: total - paid,
+            payment_status: total - paid <= 0 ? 'paid' : (paid > 0 ? 'partially_paid' : 'unpaid')
         }));
     };
 
     const handleItemsChange = (newItems: EstimateLineItem[]) => {
         setItems(newItems);
         calculateTotals(newItems, formData.tax_rate || 0, formData.discount_amount || 0);
+    };
+
+    const handleGeneratePDF = async () => {
+        if (!id) {
+            toast.error("Save the estimate first to generate PDF.");
+            return;
+        }
+        setIsGeneratingPDF(true);
+        try {
+            await generateProfessionalPDF(formData as Estimate, companySettings, {});
+            toast.success("PDF generated successfully!");
+
+            // Auto update status to Sent if it was Draft
+            if (formData.status === 'Draft') {
+                await updateEstimate(id, { status: 'Sent' });
+                setFormData(prev => ({ ...prev, status: 'Sent' }));
+            }
+        } catch (error) {
+            console.error("PDF generation failed:", error);
+            toast.error("Failed to generate PDF.");
+        } finally {
+            setIsGeneratingPDF(false);
+        }
     };
 
     const handleSave = async () => {
@@ -155,34 +192,79 @@ const EstimateEditor = () => {
         );
     }
 
+    const getStatusColor = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'draft': return 'bg-gray-100 text-gray-700 border-gray-200';
+            case 'sent': return 'bg-blue-100 text-blue-700 border-blue-200';
+            case 'viewed': return 'bg-purple-100 text-purple-700 border-purple-200';
+            case 'approved': return 'bg-green-100 text-green-700 border-green-200';
+            case 'paid': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+            case 'rejected': return 'bg-red-100 text-red-700 border-red-200';
+            default: return 'bg-gray-100 text-gray-700 border-gray-200';
+        }
+    };
+
     return (
         <div className="p-8 max-w-5xl mx-auto">
-            <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
+            <div className="mb-8 flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
                     <Button
                         variant="outline"
                         size="icon"
                         onClick={() => navigate("/admin/estimates")}
-                        className="rounded-full h-10 w-10 border-gray-200"
+                        className="rounded-full h-10 w-10 border-gray-200 mt-1"
                     >
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">
-                            {id ? t("estimate.edit_title") : t("estimate.create_title")}
-                        </h1>
+                        <div className="flex items-center gap-3 mb-1">
+                            <h1 className="text-2xl font-bold text-gray-900">
+                                {id ? t("estimate.edit_title") : t("estimate.create_title")}
+                            </h1>
+                            {id && (
+                                <Badge variant="outline" className={cn("capitalize px-3 py-0.5", getStatusColor(formData.status || ""))}>
+                                    {t(`admin.status.${(formData.status || 'Draft').toLowerCase()}`)}
+                                </Badge>
+                            )}
+                        </div>
                         <p className="text-gray-500 text-sm">
                             {id ? `ID: ${id.split('-')[0].toUpperCase()}` : t("estimate.create_desc")}
                         </p>
                     </div>
                 </div>
-                <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => navigate("/admin/estimates")}>
+
+                <div className="flex flex-wrap gap-2">
+                    {id && (
+                        <>
+                            <Button
+                                variant="outline"
+                                className="h-10 gap-2 border-gray-200"
+                                onClick={handleGeneratePDF}
+                                disabled={isGeneratingPDF}
+                            >
+                                {isGeneratingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                                PDF
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="h-10 gap-2 border-gray-200"
+                                onClick={() => setIsPaymentModalOpen(true)}
+                            >
+                                <CreditCard className="h-4 w-4" />
+                                {t("admin.payment.register")}
+                            </Button>
+                        </>
+                    )}
+                    <Button
+                        variant="outline"
+                        className="h-10 border-gray-200"
+                        onClick={() => navigate("/admin/estimates")}
+                    >
                         {t("estimate.cancel")}
                     </Button>
                     <Button
-                        className="bg-[#0b2a4a] hover:bg-[#081e35] text-white shadow-lg"
-                        onClick={handleSave}
+                        className="h-10 bg-[#0b2a4a] hover:bg-[#081e35] text-white shadow-lg shadow-blue-900/10 min-w-[100px]"
+                        onClick={() => handleSave()}
                         disabled={isSaving}
                     >
                         {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
@@ -190,6 +272,24 @@ const EstimateEditor = () => {
                     </Button>
                 </div>
             </div>
+
+            {/* Financial Overview Cards */}
+            {id && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Grand Total</p>
+                        <p className="text-2xl font-bold text-gray-900">${(formData.total_amount || 0).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm border-l-4 border-l-emerald-500">
+                        <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-1">{t("admin.payment.paid")}</p>
+                        <p className="text-2xl font-bold text-emerald-700">${(formData.amount_paid || 0).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm border-l-4 border-l-orange-500">
+                        <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider mb-1">{t("admin.payment.balance")}</p>
+                        <p className="text-2xl font-bold text-orange-700">${(formData.balance_due ?? (formData.total_amount || 0)).toLocaleString()}</p>
+                    </div>
+                </div>
+            )}
 
             <div className="space-y-8 pb-32">
                 {/* Main Form Section */}
@@ -202,6 +302,11 @@ const EstimateEditor = () => {
 
                 {/* Items Section */}
                 <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+                    <div className="flex items-center gap-2 mb-6">
+                        <FileText className="h-5 w-5 text-gray-400" />
+                        <h2 className="text-lg font-bold text-gray-900">Line Items</h2>
+                    </div>
+
                     <EstimateItemsTable
                         items={items}
                         onChange={handleItemsChange}
@@ -222,11 +327,14 @@ const EstimateEditor = () => {
                 </section>
 
                 {/* Bottom Action Bar */}
-                <div className="flex justify-end pt-4">
+                <div className="flex items-center justify-between pt-4">
+                    <div className="text-sm text-gray-500 italic">
+                        * All changes are saved to the secure cloud.
+                    </div>
                     <Button
                         size="lg"
                         className="bg-[#0b2a4a] hover:bg-[#081e35] text-white px-8 h-12 rounded-xl shadow-xl shadow-blue-900/10 flex items-center gap-2"
-                        onClick={handleSave}
+                        onClick={() => handleSave()}
                         disabled={isSaving}
                     >
                         {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
@@ -234,6 +342,17 @@ const EstimateEditor = () => {
                     </Button>
                 </div>
             </div>
+
+            {id && user?.organization?.id && (
+                <RegisterPaymentModal
+                    isOpen={isPaymentModalOpen}
+                    onClose={() => setIsPaymentModalOpen(false)}
+                    estimateId={id}
+                    organizationId={user.organization.id}
+                    remainingBalance={formData.balance_due ?? (formData.total_amount || 0)}
+                    onSuccess={() => loadData()}
+                />
+            )}
         </div>
     );
 };
