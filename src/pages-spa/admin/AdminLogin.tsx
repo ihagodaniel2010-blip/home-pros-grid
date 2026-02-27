@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 const AdminLogin = () => {
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  const [checkingSession, setCheckingSession] = useState(true);
   useEffect(() => {
     let active = true;
 
