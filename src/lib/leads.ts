@@ -76,67 +76,140 @@ const updateLeadLocal = (id: string, updates: Partial<Lead>): Lead | null => {
 };
 
 // ─── SUPABASE ────────────────────────────────────────────
+const mapFrontendStatusToDb = (status: string): string => {
+  switch (status) {
+    case "New": return "new";
+    case "Contacted": return "contacted";
+    case "Estimate Sent": return "distributed";
+    case "Approved": return "converted";
+    case "Closed": return "closed";
+    default: return status.toLowerCase();
+  }
+};
+
+const mapDbStatusToFrontend = (status: string): "New" | "Contacted" | "Estimate Sent" | "Approved" | "Closed" => {
+  switch (status?.toLowerCase()) {
+    case "new": return "New";
+    case "contacted": return "Contacted";
+    case "distributed": return "Estimate Sent";
+    case "converted": return "Approved";
+    case "closed": return "Closed";
+    default: return "New";
+  }
+};
+
+// ─── SUPABASE ────────────────────────────────────────────
 const getLeadsSupabase = async (organizationId?: string): Promise<Lead[]> => {
   if (!supabase) return [];
-  let query = supabase
-    .from("leads")
-    .select("*")
-    .order("createdAt", { ascending: false });
-
-  if (organizationId) {
-    query = query.eq("organization_id", organizationId);
-  }
-
-  const { data, error } = await query;
+  
+  // Note: We don't filter by organizationId here so that the organization can see both:
+  // 1. Leads they created directly (with organization_id = their org)
+  // 2. Public leads distributed to them via lead_distributions (which have organization_id = NULL in the main table)
+  // RLS on the Supabase database takes care of filtering automatically.
+  const { data, error } = await supabase.rpc("get_my_organization_leads");
   if (error) {
     console.error("Supabase getLeads error:", error.message);
     return [];
   }
-  return (data || []) as Lead[];
-};
-
-const saveLeadSupabase = async (
-  lead: Omit<Lead, "id" | "createdAt" | "status" | "ownerNotes" | "updatedAt" | "statusHistory"> & { organization_id?: string }
-): Promise<Lead> => {
-  if (!supabase) throw new Error("Supabase not configured");
-  const now = new Date().toISOString();
-  const defaultOrgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID;
-
-  const payload = {
+  
+  return (data || []).map((lead: any) => ({
     ...lead,
-    organization_id: lead.organization_id || defaultOrgId,
-    status: "New",
-    ownerNotes: "",
-    updatedAt: now,
-    statusHistory: [{ status: "New", timestamp: now }],
+    status: mapDbStatusToFrontend(lead.status),
+    statusHistory: (lead.statusHistory || []).map((h: any) => ({
+      status: mapDbStatusToFrontend(h.status),
+      timestamp: h.timestamp
+    }))
+  })) as Lead[];
+};
+const saveLeadSupabase = async (
+  lead: Omit<Lead, "id" | "createdAt" | "status" | "ownerNotes" | "updatedAt" | "statusHistory"> & { organization_id?: string; taskSlug?: string; clientAnswers?: any }
+): Promise<Lead> => {
+  if (!supabasePublic) throw new Error("Supabase not configured");
+  const now = new Date().toISOString();
+
+  const rpcPayload = {
+    p_service_slug: lead.serviceSlug,
+    p_selected_service_option: lead.selectedServiceOption,
+    p_location_type: lead.locationType,
+    p_full_name: lead.fullName,
+    p_email: lead.email,
+    p_phone: lead.phone,
+    p_zip: lead.zip,
+    p_address: lead.address,
+    p_details: lead.details || null,
+    p_subtype: lead.subtype || null,
+    p_media_urls: lead.media_urls || null,
+    p_selected_pros: lead.selectedPros || null,
+    p_task_slug: lead.taskSlug || null,
+    p_client_answers: lead.clientAnswers || {}
   };
-  const { error } = await supabasePublic!.from("leads").insert(payload);
+
+  const { data, error } = await supabasePublic!.rpc("submit_public_lead", rpcPayload);
+
   if (error) {
-    console.error("Supabase saveLead error:", error);
+    console.error("Supabase submit_public_lead error:", error);
+    if (error.message.includes("Could not find the function")) {
+      throw new Error("Public lead RPC is not applied yet.");
+    }
     throw new Error(error.message);
   }
-  return { ...payload, id: "temp", createdAt: now } as Lead;
+
+  if (data && data.success === false) {
+    throw new Error(data.error || "Failed to submit public lead");
+  }
+
+  return {
+    ...lead,
+    organization_id: null,
+    source: "public",
+    status: "New",
+    statusHistory: [{ status: "New", timestamp: now }],
+    id: data?.lead_id || "temp",
+    createdAt: now,
+    updatedAt: now
+  } as unknown as Lead;
 };
 
 const updateLeadSupabase = async (id: string, updates: Partial<Lead>): Promise<Lead | null> => {
   if (!supabase) return null;
   const now = new Date().toISOString();
   const { data: current } = await supabase.from("leads").select("statusHistory, status").eq("id", id).single();
+  
+  const dbStatus = updates.status ? mapFrontendStatusToDb(updates.status) : undefined;
+  const currentStatus = current?.status;
+  
   const statusHistory = current?.statusHistory || [];
-  if (updates.status && updates.status !== current?.status) {
-    statusHistory.push({ status: updates.status, timestamp: now });
+  if (dbStatus && dbStatus !== currentStatus) {
+    statusHistory.push({ status: dbStatus, timestamp: now });
   }
+  
+  const dbUpdates = {
+    ...updates,
+    status: dbStatus,
+    updatedAt: now,
+    statusHistory
+  };
+  
   const { data, error } = await supabase
     .from("leads")
-    .update({ ...updates, updatedAt: now, statusHistory })
+    .update(dbUpdates)
     .eq("id", id)
     .select()
     .single();
+    
   if (error) {
     console.error("Supabase updateLead error:", error.message);
     return null;
   }
-  return data as Lead;
+  
+  return {
+    ...data,
+    status: mapDbStatusToFrontend(data.status),
+    statusHistory: (data.statusHistory || []).map((h: any) => ({
+      status: mapDbStatusToFrontend(h.status),
+      timestamp: h.timestamp
+    }))
+  } as Lead;
 };
 
 // ─── EXPORTS PÚBLICOS ─────────────────────────────────────
@@ -146,7 +219,7 @@ export const getLeads = async (organizationId?: string): Promise<Lead[]> => {
 };
 
 export const saveLead = async (
-  lead: Omit<Lead, "id" | "createdAt" | "status" | "ownerNotes" | "updatedAt" | "statusHistory"> & { organization_id?: string }
+  lead: Omit<Lead, "id" | "createdAt" | "status" | "ownerNotes" | "updatedAt" | "statusHistory"> & { organization_id?: string; taskSlug?: string; clientAnswers?: any }
 ): Promise<Lead> => {
   if (isSupabaseConfigured && supabase) return saveLeadSupabase(lead);
   return saveLeadLocal(lead);
@@ -162,7 +235,14 @@ export const getLeadById = async (id: string): Promise<Lead | null> => {
     if (!supabase) return null;
     const { data, error } = await supabase.from("leads").select("*").eq("id", id).single();
     if (error) return null;
-    return data as Lead;
+    return {
+      ...data,
+      status: mapDbStatusToFrontend(data.status),
+      statusHistory: (data.statusHistory || []).map((h: any) => ({
+        status: mapDbStatusToFrontend(h.status),
+        timestamp: h.timestamp
+      }))
+    } as Lead;
   }
   return getLeadsLocal().find((l) => l.id === id) || null;
 };

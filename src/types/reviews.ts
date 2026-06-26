@@ -21,6 +21,8 @@ export interface AddReviewInput {
   userAvatarUrl: string;
   rating: number;
   body: string;
+  organizationId?: string;
+  leadId?: string;
 }
 
 export interface ReviewsFilter {

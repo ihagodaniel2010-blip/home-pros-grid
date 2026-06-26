@@ -88,14 +88,7 @@ const AdminSettings = () => {
     return `https://www.google.com/maps/search/?api=1&query=${encoded}`;
   }, [settings.mapsQuery, settings.businessAddress, settings.directionsUrl]);
 
-  const updateServiceArea = (index: number, value: string) => {
-    setSettings((prev) => {
-      const next = [...prev.serviceAreas];
-      while (next.length < 10) next.push("");
-      next[index] = value;
-      return { ...prev, serviceAreas: next.slice(0, 10) };
-    });
-  };
+
 
   const handleSave = async (payload: SiteSettings) => {
     setIsSaving(true);
@@ -144,7 +137,6 @@ const AdminSettings = () => {
         <TabsList className="bg-slate-100/50 p-1 rounded-xl h-12 w-fit border border-slate-200/40 backdrop-blur-sm">
           <TabsTrigger value="general" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold">{t("settings.tabs_general")}</TabsTrigger>
           <TabsTrigger value="maps" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold">{t("settings.tabs_maps")}</TabsTrigger>
-          <TabsTrigger value="areas" className="rounded-lg px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold">{t("settings.tabs_areas")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -255,30 +247,6 @@ const AdminSettings = () => {
                   {directionsPreview}
                 </a>
               </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="areas" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <div className="bg-white rounded-2xl border border-slate-200/60 p-8 shadow-sm">
-            <h3 className="font-bold text-base text-gray-900 mb-2">{t("settings.areas_title")}</h3>
-            <p className="text-xs text-slate-500 mb-8 font-medium">{t("settings.areas_desc")}</p>
-
-            <div className="grid md:grid-cols-2 gap-5">
-              {Array.from({ length: 10 }).map((_, index) => (
-                <div key={`area-${index}`} className="group space-y-2.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 group-focus-within:text-primary transition-colors">
-                    Area {index + 1}
-                  </Label>
-                  <Input
-                    className="h-12 rounded-xl focus:ring-2 focus:ring-primary/10 border-slate-200"
-                    id={`area-${index}`}
-                    value={settings.serviceAreas[index] || ""}
-                    onChange={(e) => updateServiceArea(index, e.target.value)}
-                    placeholder={`Service area ${index + 1}`}
-                  />
-                </div>
-              ))}
             </div>
           </div>
         </TabsContent>

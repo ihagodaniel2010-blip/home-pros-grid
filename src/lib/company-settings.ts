@@ -11,8 +11,13 @@ export interface CompanySettings {
     license_number: string;
     insurance_info: string;
     default_tax_rate: number;
-    default_footer: string;
+    default_footer?: string;
     default_terms: string;
+    lead_status?: string;
+    paused_until?: string | null;
+    monthly_lead_budget?: number;
+    max_lead_price?: number;
+    auto_receive_leads?: boolean;
     created_at?: string;
     updated_at?: string;
 }
@@ -35,10 +40,11 @@ export const getCompanySettings = async (organizationId: string): Promise<Compan
 
 export const saveCompanySettings = async (settings: Partial<CompanySettings>): Promise<CompanySettings | null> => {
     try {
+        const { default_footer, ...cleanSettings } = settings;
         const { data, error } = await supabase
             .from("company_settings")
             .upsert({
-                ...settings,
+                ...cleanSettings,
                 updated_at: new Date().toISOString(),
             })
             .select()

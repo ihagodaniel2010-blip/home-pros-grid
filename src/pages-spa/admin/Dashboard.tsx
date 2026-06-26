@@ -2,13 +2,15 @@ import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "@/lib/navigation-compat";
 import { useUser } from "@/context/UserContext";
 import { getLeads, type Lead } from "@/lib/leads";
-import { Users, TrendingUp, Calendar, Clock, DollarSign, FileText, CheckCircle2, AlertCircle } from "lucide-react";
+import { Users, TrendingUp, Calendar, Clock, DollarSign, FileText, CheckCircle2, AlertCircle, Play, ClipboardList, Plus, Sparkles, Check, Loader2 } from "lucide-react";
 import { fetchLoginAttempts, type LoginAttempt } from "@/lib/admin-auth";
 import { getEstimates, type Estimate } from "@/lib/estimates";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 const COLORS = ["#2563eb", "#7c3aed", "#059669", "#0b2a4a"];
 
@@ -34,6 +36,12 @@ const Dashboard = () => {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [loginAttempts, setLoginAttempts] = useState<LoginAttempt[]>([]);
   const [attemptFilter, setAttemptFilter] = useState<"all" | "success" | "fail">("all");
+
+  const userRole = user?.organization?.role;
+
+  if (userRole === "worker") {
+    return <WorkerDashboard />;
+  }
 
   useEffect(() => {
     if (user?.organization?.id) {
@@ -317,6 +325,358 @@ const Dashboard = () => {
           </table>
         </div>
       </div>
+    </div>
+  );
+};
+
+const WorkerDashboard = () => {
+  const { user } = useUser();
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [checklists, setChecklists] = useState<Record<string, any[]>>({});
+  const [files, setFiles] = useState<Record<string, any[]>>({});
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [newFileTitle, setNewFileTitle] = useState("");
+  const [newFileUrl, setNewFileUrl] = useState("");
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadWorkerData();
+  }, [user]);
+
+  const loadWorkerData = async () => {
+    if (!supabase || !user) return;
+    setLoading(true);
+    try {
+      const { data: jobsData, error: jobsError } = await supabase
+        .from("service_jobs")
+        .select(`
+          id,
+          status,
+          scheduled_at,
+          address_released_to_worker,
+          lead_id,
+          lead:leads (
+            id,
+            fullName,
+            phone,
+            address,
+            serviceSlug
+          )
+        `);
+
+      if (jobsError) {
+        console.error("Error loading worker jobs:", jobsError);
+      } else if (jobsData) {
+        setJobs(jobsData);
+        for (const job of jobsData) {
+          await loadChecklistsForJob(job.id);
+          await loadFilesForJob(job.id);
+        }
+      }
+    } catch (err) {
+      console.error("Worker load error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadChecklistsForJob = async (jobId: string) => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from("service_checklists")
+      .select(`
+        id,
+        title,
+        tasks:checklist_tasks (
+          id,
+          description,
+          is_completed
+        )
+      `)
+      .eq("service_job_id", jobId);
+
+    if (!error && data) {
+      setChecklists(prev => ({ ...prev, [jobId]: data }));
+    }
+  };
+
+  const loadFilesForJob = async (jobId: string) => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from("service_files")
+      .select("id, title, file_url, created_at, uploaded_by")
+      .eq("service_job_id", jobId);
+
+    if (!error && data) {
+      setFiles(prev => ({ ...prev, [jobId]: data }));
+    }
+  };
+
+  const handleUpdateJobStatus = async (jobId: string, newStatus: string) => {
+    if (!supabase) return;
+    setActionLoading(prev => ({ ...prev, [jobId]: true }));
+    try {
+      const { error } = await supabase
+        .from("service_jobs")
+        .update({
+          status: newStatus,
+          started_at: newStatus === "in_progress" ? new Date().toISOString() : undefined,
+          completed_at: newStatus === "completed" ? new Date().toISOString() : undefined,
+        })
+        .eq("id", jobId);
+
+      if (error) {
+        toast.error(`Failed to update job status: ${error.message}`);
+      } else {
+        toast.success(`Job marked as ${newStatus.replace("_", " ")}!`);
+        setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: newStatus } : j));
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error updating job status.");
+    } finally {
+      setActionLoading(prev => ({ ...prev, [jobId]: false }));
+    }
+  };
+
+  const handleToggleTask = async (jobId: string, taskId: string, currentCompleted: boolean) => {
+    if (!supabase) return;
+    try {
+      const { error } = await supabase
+        .from("checklist_tasks")
+        .update({ is_completed: !currentCompleted })
+        .eq("id", taskId);
+
+      if (error) {
+        toast.error(`Failed to toggle task: ${error.message}`);
+      } else {
+        await loadChecklistsForJob(jobId);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error toggling task.");
+    }
+  };
+
+  const handleAddFile = async (jobId: string) => {
+    if (!supabase || !user) return;
+    if (!newFileTitle.trim()) {
+      toast.error("Please enter a title for the file.");
+      return;
+    }
+    const urlToUse = newFileUrl.trim() || "https://api.dicebear.com/7.x/shapes/svg?seed=" + encodeURIComponent(newFileTitle);
+    
+    try {
+      const { error } = await supabase
+        .from("service_files")
+        .insert({
+          organization_id: user.organization?.id,
+          service_job_id: jobId,
+          file_url: urlToUse,
+          title: newFileTitle,
+          file_type: "image",
+          mime_type: "image/png",
+          file_size: 10240,
+          visibility: "internal",
+          uploaded_by: user.id
+        });
+
+      if (error) {
+        toast.error(`Failed to add file: ${error.message}`);
+      } else {
+        toast.success("File added successfully!");
+        setNewFileTitle("");
+        setNewFileUrl("");
+        await loadFilesForJob(jobId);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error adding file.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 max-w-4xl mx-auto">
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-1">
+          <Sparkles className="h-5 w-5 text-amber-500" />
+          <span className="text-xs font-bold uppercase tracking-widest text-amber-600">Operational Panel</span>
+        </div>
+        <h1 className="text-3xl font-black text-slate-900">My Assigned Jobs</h1>
+        <p className="text-sm text-slate-600 mt-1">Manage your active service orders and checklists.</p>
+      </div>
+
+      {jobs.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
+          <ClipboardList className="mx-auto h-12 w-12 text-slate-400 mb-4" strokeWidth={1.5} />
+          <h3 className="text-lg font-bold text-slate-900 mb-1">No Jobs Assigned</h3>
+          <p className="text-sm text-slate-600">You don't have any active jobs assigned to you at the moment.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {jobs.map(job => {
+            const jobChecklists = checklists[job.id] || [];
+            const jobFiles = files[job.id] || [];
+            const isExpanded = expandedJobId === job.id;
+            
+            let totalTasks = 0;
+            let completedTasks = 0;
+            jobChecklists.forEach(c => {
+              c.tasks?.forEach((t: any) => {
+                totalTasks++;
+                if (t.is_completed) completedTasks++;
+              });
+            });
+            const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+            return (
+              <div key={job.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:border-slate-300 transition-all">
+                <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+                  <div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        job.status === "completed" ? "bg-green-100 text-green-800" :
+                        job.status === "in_progress" ? "bg-blue-100 text-blue-800" :
+                        "bg-amber-100 text-amber-800"
+                      }`}>
+                        {job.status.replace("_", " ")}
+                      </span>
+                      {job.scheduled_at && (
+                        <span className="text-xs text-slate-500 font-medium">
+                          {new Date(job.scheduled_at).toLocaleDateString()} at {new Date(job.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                    <h2 className="text-lg font-bold text-slate-900">{job.lead?.serviceSlug || "Service Job"}</h2>
+                    <p className="text-sm font-semibold text-slate-700 mt-1">{job.lead?.fullName}</p>
+                    {job.address_released_to_worker && job.lead?.address && (
+                      <p className="text-xs text-slate-500 mt-0.5">{job.lead.address}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {job.status === "scheduled" && (
+                      <button
+                        onClick={() => handleUpdateJobStatus(job.id, "in_progress")}
+                        disabled={actionLoading[job.id]}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50"
+                      >
+                        <Play size={14} /> Start Job
+                      </button>
+                    )}
+                    {job.status === "in_progress" && (
+                      <button
+                        onClick={() => handleUpdateJobStatus(job.id, "completed")}
+                        disabled={actionLoading[job.id]}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white text-xs font-semibold rounded-xl hover:bg-green-700 active:scale-[0.98] transition-all disabled:opacity-50"
+                      >
+                        <CheckCircle2 size={14} /> Complete Job
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
+                      className="px-4 py-2 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-50 transition-all"
+                    >
+                      {isExpanded ? "Collapse" : "View Checklist & Media"}
+                    </button>
+                  </div>
+                </div>
+
+                {totalTasks > 0 && (
+                  <div className="h-1.5 bg-slate-100 w-full relative">
+                    <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${progress}%` }} />
+                  </div>
+                )}
+
+                {isExpanded && (
+                  <div className="p-6 space-y-8 divide-y divide-slate-100">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Job Checklists ({progress}% complete)</h3>
+                      {jobChecklists.length === 0 ? (
+                        <p className="text-sm text-slate-500">No checklists set up for this job.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {jobChecklists.map((c: any) => (
+                            <div key={c.id} className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
+                              <h4 className="font-bold text-sm text-slate-900 mb-3">{c.title}</h4>
+                              <div className="space-y-2">
+                                {c.tasks?.map((t: any) => (
+                                  <label key={t.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-100 cursor-pointer hover:bg-slate-50/80 transition-all select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={t.is_completed}
+                                      onChange={() => handleToggleTask(job.id, t.id, t.is_completed)}
+                                      className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 border-slate-300"
+                                    />
+                                    <span className={`text-xs font-medium text-slate-800 ${t.is_completed ? "line-through text-slate-400" : ""}`}>
+                                      {t.description}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-6">
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Job Files / Photos</h3>
+                      
+                      {jobFiles.length === 0 ? (
+                        <p className="text-sm text-slate-500 mb-4">No photos uploaded yet.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                          {jobFiles.map((f: any) => (
+                            <div key={f.id} className="group relative rounded-xl border border-slate-200 overflow-hidden shadow-sm aspect-square bg-slate-50">
+                              <img src={f.file_url} alt={f.title} className="w-full h-full object-cover" />
+                              <div className="absolute inset-x-0 bottom-0 bg-slate-900/80 p-2 text-white">
+                                <p className="text-[10px] font-bold truncate">{f.title}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                        <h4 className="text-xs font-bold text-slate-700">Add Service Photo</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <input
+                            type="text"
+                            placeholder="Photo Title (e.g. Work Progress)"
+                            value={newFileTitle}
+                            onChange={e => setNewFileTitle(e.target.value)}
+                            className="px-3 py-2 border border-slate-300 rounded-lg text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-900"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Photo URL (Optional - default generated)"
+                            value={newFileUrl}
+                            onChange={e => setNewFileUrl(e.target.value)}
+                            className="px-3 py-2 border border-slate-300 rounded-lg text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-900"
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleAddFile(job.id)}
+                          className="flex items-center gap-1 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-all"
+                        >
+                          <Plus size={12} /> Add Photo
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

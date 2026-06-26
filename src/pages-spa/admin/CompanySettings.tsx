@@ -36,7 +36,10 @@ const CompanySettings = () => {
             try {
                 const data = await getCompanySettings(user.organization.id);
                 if (data) {
-                    setSettings(data);
+                    setSettings({
+                        ...data,
+                        default_footer: data.default_footer || ""
+                    });
                 }
             } catch (error) {
                 console.error("Error loading settings:", error);
@@ -163,7 +166,7 @@ const CompanySettings = () => {
                                     step="0.01"
                                     min="0"
                                     max="100"
-                                    value={settings.default_tax_rate}
+                                    value={settings.default_tax_rate ?? ""}
                                     onChange={(e) => setSettings({ ...settings, default_tax_rate: parseFloat(e.target.value) || 0 })}
                                     className="h-12 pr-12 font-bold text-lg rounded-xl"
                                 />
@@ -185,7 +188,7 @@ const CompanySettings = () => {
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Company Name</Label>
                                 <Input
-                                    value={settings.company_name}
+                                    value={settings.company_name ?? ""}
                                     onChange={(e) => setSettings({ ...settings, company_name: e.target.value })}
                                     placeholder="ACME Corp"
                                     className="h-12 rounded-xl"
@@ -194,7 +197,7 @@ const CompanySettings = () => {
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Public Email</Label>
                                 <Input
-                                    value={settings.email}
+                                    value={settings.email ?? ""}
                                     onChange={(e) => setSettings({ ...settings, email: e.target.value })}
                                     placeholder="contact@company.com"
                                     className="h-12 rounded-xl"
@@ -203,7 +206,7 @@ const CompanySettings = () => {
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Business Phone</Label>
                                 <Input
-                                    value={settings.phone}
+                                    value={settings.phone ?? ""}
                                     onChange={(e) => setSettings({ ...settings, phone: e.target.value })}
                                     placeholder="(555) 000-0000"
                                     className="h-12 rounded-xl"
@@ -212,7 +215,7 @@ const CompanySettings = () => {
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">License Number</Label>
                                 <Input
-                                    value={settings.license_number}
+                                    value={settings.license_number ?? ""}
                                     onChange={(e) => setSettings({ ...settings, license_number: e.target.value })}
                                     placeholder="CSL-123456"
                                     className="h-12 rounded-xl"
@@ -221,7 +224,7 @@ const CompanySettings = () => {
                             <div className="col-span-1 md:col-span-2 space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Business Address</Label>
                                 <Input
-                                    value={settings.address}
+                                    value={settings.address ?? ""}
                                     onChange={(e) => setSettings({ ...settings, address: e.target.value })}
                                     placeholder="Street, City, Zip"
                                     className="h-12 rounded-xl"
@@ -239,7 +242,7 @@ const CompanySettings = () => {
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Insurance Info (Optional)</Label>
                                 <Input
-                                    value={settings.insurance_info}
+                                    value={settings.insurance_info ?? ""}
                                     onChange={(e) => setSettings({ ...settings, insurance_info: e.target.value })}
                                     placeholder="General Liability Policy #..."
                                     className="h-12 rounded-xl"
@@ -248,7 +251,7 @@ const CompanySettings = () => {
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Default Footer Note</Label>
                                 <Textarea
-                                    value={settings.default_footer}
+                                    value={settings.default_footer ?? ""}
                                     onChange={(e) => setSettings({ ...settings, default_footer: e.target.value })}
                                     placeholder="Thank you for your business!"
                                     className="min-h-[80px] rounded-xl"
@@ -257,7 +260,7 @@ const CompanySettings = () => {
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Default Terms & Conditions</Label>
                                 <Textarea
-                                    value={settings.default_terms}
+                                    value={settings.default_terms ?? ""}
                                     onChange={(e) => setSettings({ ...settings, default_terms: e.target.value })}
                                     placeholder="50% deposit required to start..."
                                     className="min-h-[120px] rounded-xl"

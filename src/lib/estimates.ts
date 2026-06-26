@@ -45,6 +45,7 @@ export interface Estimate {
     created_at: string;
     updated_at: string;
     items?: EstimateLineItem[];
+    files?: any[];
 }
 
 export const getEstimates = async (): Promise<Estimate[]> => {
@@ -233,22 +234,53 @@ export const createPayment = async (payment: EstimatePayment): Promise<EstimateP
 export const getEstimateByToken = async (token: string): Promise<Estimate | null> => {
     if (!supabase) return null;
 
-    const { data, error } = await supabase
-        .from('estimates')
-        .select('*, items:estimate_items(*)')
-        .eq('public_token', token)
-        .single();
+    // Call public RPC for estimate header
+    const { data: estimate, error: estimateError } = await supabase
+        .rpc('get_public_estimate', { p_token: token });
 
-    if (error) {
-        console.error('Error fetching public estimate:', error);
+    if (estimateError || !estimate) {
+        console.error('Error fetching public estimate:', estimateError);
         return null;
     }
 
-    return data as Estimate;
+    // Call public RPC for estimate items
+    const { data: items, error: itemsError } = await supabase
+        .rpc('get_public_estimate_items', { p_token: token });
+
+    if (itemsError) {
+        console.error('Error fetching public estimate items:', itemsError);
+    }
+
+    // Call public RPC for estimate files
+    let files: any[] = [];
+    try {
+        const { data: filesData, error: filesError } = await supabase
+            .rpc('get_public_estimate_files', { p_token: token });
+        if (!filesError && filesData) {
+            files = filesData;
+        }
+    } catch (e) {
+        console.warn('get_public_estimate_files RPC may not exist:', e);
+    }
+
+    return {
+        ...estimate,
+        items: items || [],
+        files
+    } as Estimate;
 };
 
-export const approveEstimate = async (id: string): Promise<boolean> => {
+export const approveEstimate = async (id: string, token?: string): Promise<boolean> => {
     if (!supabase) return false;
+
+    if (token) {
+        const { error } = await supabase.rpc('approve_public_estimate', { p_token: token });
+        if (error) {
+            console.error('Error approving estimate via RPC:', error);
+            return false;
+        }
+        return true;
+    }
 
     const { error } = await supabase
         .from('estimates')
@@ -260,6 +292,34 @@ export const approveEstimate = async (id: string): Promise<boolean> => {
 
     if (error) {
         console.error('Error approving estimate:', error);
+        return false;
+    }
+
+    return true;
+};
+
+export const rejectEstimate = async (id: string, token?: string): Promise<boolean> => {
+    if (!supabase) return false;
+
+    if (token) {
+        const { error } = await supabase.rpc('reject_public_estimate', { p_token: token });
+        if (error) {
+            console.error('Error rejecting estimate via RPC:', error);
+            return false;
+        }
+        return true;
+    }
+
+    const { error } = await supabase
+        .from('estimates')
+        .update({
+            status: 'Rejected',
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error rejecting estimate:', error);
         return false;
     }
 

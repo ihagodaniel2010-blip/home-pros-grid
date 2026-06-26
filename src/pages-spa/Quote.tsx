@@ -50,14 +50,56 @@ const Quote = () => {
   const [selectedMedia, setSelectedMedia] = useState<{ file: File; preview: string; type: 'image' | 'video' }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
+  // Dynamic flow state
+  const [questionFlows, setQuestionFlows] = useState<any[]>([]);
+  const [clientAnswers, setClientAnswers] = useState<Record<string, string>>({});
+  const [taskSlug, setTaskSlug] = useState<string>("");
+  const [isFlowsLoading, setIsFlowsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    if (!serviceSlug || !supabasePublic) {
+      setIsFlowsLoading(false);
+      return;
+    }
+
+    const mapServiceSlugToCategorySlug = (slug: string) => {
+      switch (slug) {
+        case 'drywall': return 'drywall-plaster';
+        case 'flooring': return 'flooring-carpet';
+        default: return slug;
+      }
+    };
+
+    const categorySlug = mapServiceSlugToCategorySlug(serviceSlug);
+
+    supabasePublic
+      .from('service_question_flows')
+      .select('*')
+      .eq('category_slug', categorySlug)
+      .eq('active', true)
+      .order('step_order', { ascending: true })
+      .then(({ data }) => {
+        if (!active) return;
+        if (data && data.length > 0) {
+          setQuestionFlows(data);
+        }
+        setIsFlowsLoading(false);
+      });
+    return () => { active = false; };
+  }, [serviceSlug]);
+
   const selectedSubService: SubServiceOption | undefined = useMemo(
     () => subServices.find((s) => s.label === formData.selectedService),
     [subServices, formData.selectedService]
   );
   const hasSubtypes = !!(selectedSubService?.subtypes && selectedSubService.subtypes.length > 0);
+  const hasDynamicFlow = questionFlows.length > 0;
 
   // Determine total sections and progress
-  const totalSections = hasSubtypes ? 8 : 7;
+  const totalSections = hasDynamicFlow 
+    ? 1 + questionFlows.length + 4 
+    : (hasSubtypes ? 8 : 7);
   const progressPct = Math.min(Math.round((revealedSections / totalSections) * 100), 100);
 
   const set = (key: string, value: string | string[]) =>
@@ -75,16 +117,29 @@ const Quote = () => {
   }, [revealedSections, scrollToBottom]);
 
   // Calculate section indices dynamically
-  const sectionIdx = {
-    zip: 0,
-    service: 1,
-    subtype: hasSubtypes ? 2 : -1,
-    details: hasSubtypes ? 3 : 2,
-    media: hasSubtypes ? 4 : 3,
-    location: hasSubtypes ? 5 : 4,
-    contact: hasSubtypes ? 6 : 5,
-    review: hasSubtypes ? 7 : 6,
-  };
+  const sectionIdx = hasDynamicFlow 
+    ? {
+        zip: 0,
+        dynamicStart: 1,
+        details: 1 + questionFlows.length,
+        media: 2 + questionFlows.length,
+        location: 3 + questionFlows.length,
+        contact: 4 + questionFlows.length,
+        review: 5 + questionFlows.length,
+        service: -1,
+        subtype: -1,
+      }
+    : {
+        zip: 0,
+        service: 1,
+        subtype: hasSubtypes ? 2 : -1,
+        details: hasSubtypes ? 3 : 2,
+        media: hasSubtypes ? 4 : 3,
+        location: hasSubtypes ? 5 : 4,
+        contact: hasSubtypes ? 6 : 5,
+        review: hasSubtypes ? 7 : 6,
+        dynamicStart: -1,
+      };
 
   // Auto-reveal on valid zip
   useEffect(() => {
@@ -146,8 +201,18 @@ const Quote = () => {
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {};
     if (!/^\d{5}$/.test(formData.zip)) e.zip = "Enter a valid 5-digit zip code";
-    if (!formData.selectedService) e.selectedService = "Please select a service";
-    if (hasSubtypes && !formData.subtype) e.subtype = "Please select a subtype";
+    
+    if (hasDynamicFlow) {
+      questionFlows.forEach(q => {
+        if (!clientAnswers[q.question_key]) {
+          e[q.question_key] = "Please select an option";
+        }
+      });
+    } else {
+      if (!formData.selectedService) e.selectedService = "Please select a service";
+      if (hasSubtypes && !formData.subtype) e.subtype = "Please select a subtype";
+    }
+
     if (!formData.locationType) e.locationType = "Please select a location type";
     if (!formData.fullName.trim()) e.fullName = "Name is required";
     if (!formData.address.trim()) e.address = "Address is required";
@@ -162,7 +227,6 @@ const Quote = () => {
     // 1. Honeypot check
     if (formData.websiteUrl) {
       console.warn("Spam filter triggered: Honeypot filled.");
-      toast.success("Request sent successfully!"); // Lie to bots
       navigate("/success");
       return;
     }
@@ -221,8 +285,8 @@ const Quote = () => {
       await saveLead({
         serviceSlug: serviceSlug || "",
         zip: formData.zip,
-        selectedServiceOption: formData.selectedService,
-        subtype: formData.subtype || undefined,
+        selectedServiceOption: hasDynamicFlow ? "Dynamic Flow" : formData.selectedService,
+        subtype: hasDynamicFlow ? undefined : (formData.subtype || undefined),
         details: formData.details || undefined,
         locationType: formData.locationType,
         fullName: formData.fullName,
@@ -230,14 +294,14 @@ const Quote = () => {
         email: formData.email,
         phone: formData.phone,
         selectedPros: selectedProNames,
-        media_urls: uploadedUrls
+        media_urls: uploadedUrls,
+        taskSlug: hasDynamicFlow ? (taskSlug || "needs_review") : undefined,
+        clientAnswers: clientAnswers
       });
-      toast.success("Request sent successfully!");
       navigate("/success");
     } catch (error) {
       console.error("Submission error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to send request. Please try again.");
-    } finally {
       setIsSubmitting(false);
       setIsUploading(false);
     }
@@ -278,7 +342,7 @@ const Quote = () => {
     set("selectedPros", current.includes(id) ? current.filter((p) => p !== id) : [...current, id]);
   };
 
-  const ValidIcon = ({ valid }: { valid: boolean }) => (
+  const renderValidIcon = (valid: boolean) => (
     <AnimatePresence>
       {valid && (
         <motion.div
@@ -396,7 +460,7 @@ const Quote = () => {
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     </div>
                   )}
-                  <ValidIcon valid={/^\d{5}$/.test(formData.zip)} />
+                  {renderValidIcon(/^\d{5}$/.test(formData.zip))}
                 </div>
               </div>
 
@@ -426,9 +490,49 @@ const Quote = () => {
             {errors.zip && <p className="text-destructive text-xs mt-2">{errors.zip}</p>}
           </motion.section>
 
+          {/* DYNAMIC SECTIONS */}
+          <AnimatePresence>
+            {hasDynamicFlow && questionFlows.map((q, idx) => {
+              const currentSectionIdx = sectionIdx.dynamicStart + idx;
+              if (revealedSections <= currentSectionIdx) return null;
+              return (
+                <motion.section key={q.id} variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10 mb-6">
+                  <h2 className="text-xl font-bold tracking-tight mb-6">{q.question_text}</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {q.options?.map((opt: any) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          const newAnswers = { ...clientAnswers, [q.question_key]: opt.value };
+                          setClientAnswers(newAnswers);
+                          if (opt.maps_to_task_slug) {
+                            setTaskSlug(opt.maps_to_task_slug);
+                          }
+                          revealNext(currentSectionIdx + 1);
+                        }}
+                        className={`group relative text-left p-4 rounded-2xl border-2 transition-all duration-200 ${clientAnswers[q.question_key] === opt.value
+                          ? "border-primary bg-primary/5 glow-border"
+                          : "border-border/60 hover:border-primary/30 hover:bg-card"
+                          }`}
+                      >
+                        <span className="text-sm font-medium">{opt.label}</span>
+                        {clientAnswers[q.question_key] === opt.value && (
+                          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <Check className="h-4 w-4 text-primary" />
+                          </motion.div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  {errors[q.question_key] && <p className="text-destructive text-xs mt-2">{errors[q.question_key]}</p>}
+                </motion.section>
+              );
+            })}
+          </AnimatePresence>
+
           {/* SECTION 2 – Service Type */}
           <AnimatePresence>
-            {revealedSections > 1 && (
+            {!hasDynamicFlow && revealedSections > 1 && (
               <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
                 <h2 className="text-xl font-bold tracking-tight mb-6">{t("quote.service_type")}</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -457,7 +561,7 @@ const Quote = () => {
 
           {/* SECTION 3 – Subtype (Conditional) */}
           <AnimatePresence>
-            {hasSubtypes && revealedSections > 2 && (
+            {!hasDynamicFlow && hasSubtypes && revealedSections > 2 && (
               <motion.section variants={sectionVariants} initial="hidden" animate="visible" className="glass-card-strong p-8 md:p-10">
                 <h2 className="text-xl font-bold tracking-tight mb-6">What type of {formData.selectedService}?</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -638,7 +742,7 @@ const Quote = () => {
                         className="!rounded-2xl !bg-secondary/50"
                       />
                       <label>{field.label}</label>
-                      <ValidIcon valid={field.valid} />
+                      {renderValidIcon(field.valid)}
                       {errors[field.key] && <p className="text-destructive text-xs mt-1 pl-1">{errors[field.key]}</p>}
                     </div>
                   ))}

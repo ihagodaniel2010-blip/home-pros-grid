@@ -1,28 +1,41 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Download, FileText, User, MapPin, Calendar, Clock, ChevronRight, MoreVertical, Filter, ArrowUpRight } from "lucide-react";
+import { Search, Download, FileText, User, MapPin, Calendar, Clock, ChevronRight, MoreVertical, Filter, ArrowUpRight, ShieldOff } from "lucide-react";
 import { getLeads, updateLead, type Lead } from "@/lib/leads";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { useUser } from "@/context/UserContext";
 
 type StatusFilter = "All" | "New" | "Contacted" | "Estimate Sent" | "Approved" | "Closed";
 type DateFilter = "All" | "Today" | "7d" | "30d";
 
 const AdminInbox = () => {
   const navigate = useNavigate();
+  const { user } = useUser();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const userRole = user?.organization?.role;
+
+  // Workers should NOT see the commercial leads inbox.
+  // Their operational view is exclusively through WorkerDashboard at /admin.
   useEffect(() => {
+    if (userRole === "worker") {
+      navigate("/admin", { replace: true });
+    }
+  }, [userRole, navigate]);
+
+  useEffect(() => {
+    if (userRole === "worker") return; // skip fetching for workers
     setIsLoading(true);
     getLeads().then(data => {
       setLeads(data);
       setIsLoading(false);
     });
-  }, []);
+  }, [userRole]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
