@@ -6,7 +6,7 @@ export interface Organization {
   id: string;
   name: string;
   slug: string;
-  role: 'owner' | 'admin' | 'staff';
+  role: 'super_admin' | 'owner' | 'admin' | 'worker' | 'staff';
 }
 
 export interface UserSession {
@@ -51,7 +51,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             slug
           )
         `)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .eq('status', 'active');
 
       if (error || !data) {
         console.error("Error fetching organizations:", error);

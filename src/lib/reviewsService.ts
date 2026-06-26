@@ -136,13 +136,33 @@ export class SupabaseReviewsService implements ReviewsServiceInterface {
       return [];
     }
 
+    if (!filter?.includeHidden) {
+      const { data, error } = await supabase.rpc('get_public_reviews');
+      if (error) {
+        console.error("Error calling get_public_reviews RPC:", error.message);
+        throw new Error(error.message);
+      }
+      
+      let reviews = (data || []).map((row: any) => this.mapRowToReview(row as SupabaseReviewRow));
+      
+      if (filter?.rating) {
+        reviews = reviews.filter((r) => r.rating === filter.rating);
+      }
+      
+      if (filter?.sort === "highest") {
+        reviews.sort((a, b) => b.rating - a.rating || b.createdAt.getTime() - a.createdAt.getTime());
+      } else {
+        reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      }
+      
+      const limit = filter?.limit ?? 6;
+      const offset = filter?.offset ?? 0;
+      return reviews.slice(offset, offset + limit);
+    }
+
     let query = supabase
       .from("reviews")
       .select("id, user_name, user_avatar_url, rating, body, created_at, is_hidden");
-
-    if (!filter?.includeHidden) {
-      query = query.eq("is_hidden", false);
-    }
 
     if (filter?.rating) {
       query = query.eq("rating", filter.rating);
@@ -176,29 +196,54 @@ export class SupabaseReviewsService implements ReviewsServiceInterface {
       error: userError,
     } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      throw new Error("You must be logged in to post a review.");
+    if (user && !userError) {
+      const payload = {
+        user_id: user.id,
+        user_name: input.userName,
+        user_avatar_url: input.userAvatarUrl || null,
+        rating: Math.max(1, Math.min(5, input.rating)),
+        body: input.body,
+      };
+
+      const { data, error } = await supabase
+        .from("reviews")
+        .insert(payload)
+        .select("id, user_name, user_avatar_url, rating, body, created_at, is_hidden")
+        .single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return this.mapRowToReview(data as SupabaseReviewRow);
+    } else {
+      const orgId = input.organizationId;
+      if (!orgId) {
+        throw new Error("organizationId is required to submit a public review when not logged in.");
+      }
+
+      const { data, error } = await supabase.rpc('submit_public_review', {
+        p_organization_id: orgId,
+        p_user_name: input.userName,
+        p_rating: Math.max(1, Math.min(5, input.rating)),
+        p_body: input.body,
+        p_lead_id: input.leadId || null
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return {
+        id: data as string,
+        userName: input.userName,
+        userAvatarUrl: input.userAvatarUrl || "",
+        rating: input.rating,
+        body: input.body,
+        createdAt: new Date(),
+        isHidden: false
+      };
     }
-
-    const payload = {
-      user_id: user.id,
-      user_name: input.userName,
-      user_avatar_url: input.userAvatarUrl || null,
-      rating: Math.max(1, Math.min(5, input.rating)),
-      body: input.body,
-    };
-
-    const { data, error } = await supabase
-      .from("reviews")
-      .insert(payload)
-      .select("id, user_name, user_avatar_url, rating, body, created_at")
-      .single();
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return this.mapRowToReview(data as SupabaseReviewRow);
   }
 
   async deleteReview(id: string): Promise<void> {
@@ -232,37 +277,41 @@ export class SupabaseReviewsService implements ReviewsServiceInterface {
       };
     }
 
-    const { data, error } = await supabase.from("reviews").select("rating");
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const ratings = (data || []).map((r) => r.rating as number);
-    const totalReviews = ratings.length;
-
-    const ratingDistribution: { [key: number]: number } = {
-      1: 0,
-      2: 0,
-      3: 0,
-      4: 0,
-      5: 0,
-    };
-
-    ratings.forEach((rating) => {
-      if (ratingDistribution[rating] !== undefined) {
-        ratingDistribution[rating] += 1;
+    // Use get_public_reviews RPC so anonymous users and those blocked by RLS
+    // can still see aggregated stats without direct table access.
+    try {
+      const { data, error } = await supabase.rpc('get_public_reviews');
+      if (error) {
+        console.error("getStats: get_public_reviews RPC error:", error.message);
+        return { avgRating: 0, totalReviews: 0, ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
       }
-    });
 
-    const avgRating = totalReviews > 0
-      ? ratings.reduce((sum, value) => sum + value, 0) / totalReviews
-      : 0;
+      const ratings = (data || []).map((r: any) => r.rating as number);
+      const totalReviews = ratings.length;
 
-    return {
-      avgRating: Math.round(avgRating * 10) / 10,
-      totalReviews,
-      ratingDistribution,
-    };
+      const ratingDistribution: { [key: number]: number } = {
+        1: 0, 2: 0, 3: 0, 4: 0, 5: 0,
+      };
+
+      ratings.forEach((rating) => {
+        if (ratingDistribution[rating] !== undefined) {
+          ratingDistribution[rating] += 1;
+        }
+      });
+
+      const avgRating = totalReviews > 0
+        ? ratings.reduce((sum: number, value: number) => sum + value, 0) / totalReviews
+        : 0;
+
+      return {
+        avgRating: Math.round(avgRating * 10) / 10,
+        totalReviews,
+        ratingDistribution,
+      };
+    } catch (e) {
+      console.error("getStats: unexpected error:", e);
+      return { avgRating: 0, totalReviews: 0, ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
+    }
   }
 }
 

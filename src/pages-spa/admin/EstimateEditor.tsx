@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer, Copy } from "lucide-react";
+import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer, Copy, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -11,6 +11,8 @@ import {
     Estimate,
     EstimateLineItem
 } from "@/lib/estimates";
+import { getAssistantDraftById, saveAssistantDraft } from "@/lib/estimate-assistant";
+import { createServiceJob, getServiceJobByEstimateId } from "@/lib/service-jobs";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
 import { getLeads } from "@/lib/leads";
 import EstimateForm from "@/components/admin/estimates/EstimateForm";
@@ -26,6 +28,7 @@ const EstimateEditor = () => {
     const { id } = useParams();
     const [searchParams] = useSearchParams();
     const leadId = searchParams.get("leadId");
+    const draftId = searchParams.get("draftId");
     const navigate = useNavigate();
     const { user } = useUser();
     const { t } = useLanguage();
@@ -46,6 +49,7 @@ const EstimateEditor = () => {
     });
 
     const [items, setItems] = useState<EstimateLineItem[]>([]);
+    const [serviceJob, setServiceJob] = useState<any>(null);
 
     const loadData = useCallback(async () => {
         setIsLoading(true);
@@ -55,6 +59,63 @@ const EstimateEditor = () => {
                 if (estimate) {
                     setFormData(estimate);
                     setItems(estimate.items || []);
+                    const job = await getServiceJobByEstimateId(id);
+                    if (job) setServiceJob(job);
+                }
+            } else if (draftId) {
+                const draft = await getAssistantDraftById(draftId);
+                if (draft) {
+                    setFormData(prev => ({
+                        ...prev,
+                        lead_id: draft.lead_id,
+                        notes: draft.output.scopeOfWork,
+                        project_type: draft.service_type
+                    }));
+                    
+                    const newItems = [
+                        ...draft.output.laborItems.map(li => ({
+                            description: li.description,
+                            quantity: li.quantity,
+                            unit_price: li.unitPrice,
+                            total_price: li.totalPrice
+                        })),
+                        ...draft.output.materialItems.map(mi => ({
+                            description: mi.description,
+                            quantity: mi.quantity,
+                            unit_price: mi.unitPrice,
+                            total_price: mi.totalPrice
+                        }))
+                    ];
+                    
+                    // Re-add profit and overhead as generic line items if we want to show it, or we can just leave it to be adjusted. 
+                    // Actually, the user asked not to show margin/profit. We just add one line item for overhead/profit or bake it into unit prices.
+                    // To keep it simple, we add a "Project Management & Setup" item for the remaining balance.
+                    const extra = draft.output.totals.overheadAmount + draft.output.totals.profitAmount - draft.output.totals.discountAmount;
+                    if (extra > 0) {
+                        newItems.push({
+                            description: "Project Management, Setup & Logistics",
+                            quantity: 1,
+                            unit_price: extra,
+                            total_price: extra
+                        });
+                    }
+                    
+                    setItems(newItems);
+                    calculateTotals(newItems, formData.tax_rate || 0, formData.discount_amount || 0);
+                    
+                    // If the draft is linked to a lead, try to fetch the client name
+                    if (draft.lead_id) {
+                        const leads = await getLeads();
+                        const lead = leads.find(l => l.id === draft.lead_id);
+                        if (lead) {
+                            setFormData(prev => ({
+                                ...prev,
+                                client_name: lead.fullName,
+                                client_email: lead.email,
+                                client_phone: lead.phone
+                            }));
+                        }
+                    }
                 }
             } else if (leadId) {
                 const leads = await getLeads();
@@ -96,7 +157,7 @@ const EstimateEditor = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [id, leadId, t, user]);
+    }, [id, leadId, draftId, t, user]);
 
     useEffect(() => {
         if (user?.organization?.id) {
@@ -133,7 +194,7 @@ const EstimateEditor = () => {
             return;
         }
         const slice = formData.public_token;
-        const shareUrl = `${window.location.host.includes('localhost') ? 'http' : 'https'}://${window.location.host}/estimate/view/${slice}`;
+        const shareUrl = `${window.location.host.includes('localhost') ? 'http' : 'https'}://${window.location.host}/estimate/${slice}`;
         navigator.clipboard.writeText(shareUrl);
         toast.success("Share link copied to clipboard!");
     };
@@ -183,13 +244,37 @@ const EstimateEditor = () => {
                 await updateEstimate(id, payload, items);
                 toast.success("Estimate updated successfully.");
             } else {
-                await createEstimate(payload, items);
+                const created = await createEstimate(payload, items);
                 toast.success("Estimate created successfully.");
+                
+                // If it came from a draft, mark draft as converted
+                if (draftId && created) {
+                    await saveAssistantDraft({ id: draftId, status: 'converted', organization_id: user.organization.id, input: {} as any, output: {} as any, service_type: 'converted' });
+                }
             }
             navigate("/admin/estimates");
         } catch (error) {
             console.error("Save error:", error);
             toast.error("Failed to save estimate.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleCreateJob = async () => {
+        if (!user?.organization?.id || !formData.lead_id || !id) return;
+        setIsSaving(true);
+        try {
+            const job = await createServiceJob({
+                organization_id: user.organization.id,
+                lead_id: formData.lead_id,
+                estimate_id: id,
+                status: 'scheduled'
+            });
+            setServiceJob(job);
+            toast.success("Service Job created successfully.");
+        } catch (error) {
+            toast.error("Failed to create Service Job.");
         } finally {
             setIsSaving(false);
         }
@@ -245,8 +330,39 @@ const EstimateEditor = () => {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                    {!id && (
+                        <Button
+                            variant="outline"
+                            className="h-10 gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 bg-emerald-50/50"
+                            onClick={() => navigate(`/admin/estimate-assistant${leadId ? `?leadId=${leadId}` : ''}`)}
+                        >
+                            <Wand2 className="h-4 w-4" />
+                            Smart Assistant
+                        </Button>
+                    )}
                     {id && (
                         <>
+                            {formData.status === 'Approved' && !serviceJob && (
+                                <Button
+                                    variant="outline"
+                                    className="h-10 gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
+                                    onClick={handleCreateJob}
+                                    disabled={isSaving}
+                                >
+                                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                                    Create Job
+                                </Button>
+                            )}
+                            {serviceJob && (
+                                <Button
+                                    variant="outline"
+                                    className="h-10 gap-2 border-green-200 text-green-700 hover:bg-green-50"
+                                    onClick={() => navigate(`/admin/leads/${formData.lead_id}`)}
+                                >
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    Job Scheduled
+                                </Button>
+                            )}
                             <Button
                                 variant="outline"
                                 className="h-10 gap-2 border-gray-200"
@@ -260,9 +376,11 @@ const EstimateEditor = () => {
                                 variant="outline"
                                 className="h-10 gap-2 border-gray-200"
                                 onClick={handleShare}
+                                disabled={!formData.public_token}
+                                title={!formData.public_token ? "Save the estimate to generate a public link" : "Copy public link"}
                             >
                                 <Copy className="h-4 w-4" />
-                                Share
+                                Copy public link
                             </Button>
                             <Button
                                 variant="outline"

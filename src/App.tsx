@@ -18,12 +18,25 @@ import AdminInbox from "./pages-spa/admin/Inbox";
 import Analytics from "./pages-spa/admin/Analytics";
 import LeadDetail from "./pages-spa/admin/LeadDetail";
 import AdminSettings from "./pages-spa/admin/Settings";
+import Locations from "./pages-spa/admin/Locations";
 import AdminPortfolio from "./pages-spa/admin/Portfolio";
 import AdminReviews from "./pages-spa/admin/Reviews";
+import Expenses from "./pages-spa/admin/Expenses";
+import Reimbursements from "./pages-spa/admin/Reimbursements";
+import ClientReceipts from "./pages-spa/admin/ClientReceipts";
+import PublicReceipt from "./pages-spa/public/PublicReceipt";
+import EstimateAssistant from "./pages-spa/admin/EstimateAssistant";
+import TaxCenter from "./pages-spa/admin/TaxCenter";
+import NotificationsCenter from "./pages-spa/admin/NotificationsCenter";
+import Reports from "./pages-spa/admin/Reports";
 import EstimatesList from "./pages-spa/admin/EstimatesList";
 import EstimateEditor from "./pages-spa/admin/EstimateEditor";
+import AdminServices from "./pages-spa/admin/Services";
+import LeadSettings from "./pages-spa/admin/LeadSettings";
 import CompanySettings from "./pages-spa/admin/CompanySettings";
+import LeadMarket from "./pages-spa/admin/LeadMarket";
 import PublicView from "./pages-spa/PublicView";
+import PublicExtraView from "./pages-spa/PublicExtraView";
 import NotFound from "./pages-spa/NotFound";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -51,14 +64,26 @@ const App = () => (
           <Route path="reviews" element={<AdminReviews />} />
           <Route path="inbox" element={<AdminInbox />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="expenses" element={<Expenses />} />
+          <Route path="reimbursements" element={<Reimbursements />} />
+          <Route path="client-receipts" element={<ClientReceipts />} />
+          <Route path="tax-center" element={<TaxCenter />} />
+          <Route path="notifications" element={<NotificationsCenter />} />
+          <Route path="reports" element={<Reports />} />
           <Route path="leads/:id" element={<LeadDetail />} />
+          <Route path="estimate-assistant" element={<EstimateAssistant />} />
           <Route path="estimates" element={<EstimatesList />} />
           <Route path="estimates/new" element={<EstimateEditor />} />
           <Route path="estimates/:id" element={<EstimateEditor />} />
           <Route path="settings" element={<AdminSettings />} />
+          <Route path="locations" element={<Locations />} />
+          <Route path="services" element={<AdminServices />} />
+          <Route path="lead-settings" element={<LeadSettings />} />
           <Route path="company" element={<CompanySettings />} />
+          <Route path="lead-market" element={<LeadMarket />} />
         </Route>
-        <Route path="/estimate/view/:token" element={<PublicView />} />
+        <Route path="/estimate/:token" element={<PublicView />} />
+        <Route path="/extra/:token" element={<PublicExtraView />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getEstimateByToken, approveEstimate, updateEstimate, Estimate } from "@/lib/estimates";
+import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Estimate } from "@/lib/estimates";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, FileText, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -29,11 +29,17 @@ const PublicView = () => {
                 setIsApproved(true);
             }
 
-            // Auto-track "Viewed" status
-            if (data.status === 'Sent') {
-                await updateEstimate(data.id, { status: 'Viewed' });
-                setEstimate(prev => prev ? { ...prev, status: 'Viewed' } : null);
-            }
+            // TODO (Fase 4.1): track_public_estimate_view RPC not yet created in DB.
+            // When the SQL in supabase/migrations/005_homeleadpro_track_public_estimate_view_rpc.sql
+            // is reviewed and applied, replace this block with:
+            //
+            //   if (data.status === 'Sent') {
+            //     await supabase.rpc('track_public_estimate_view', { p_token: tk });
+            //     setEstimate(prev => prev ? { ...prev, status: 'Viewed' } : null);
+            //   }
+            //
+            // DO NOT use direct updateEstimate() here — anons are blocked by RLS.
+
         }
         setIsLoading(false);
     };
@@ -41,12 +47,25 @@ const PublicView = () => {
     const handleApprove = async () => {
         if (!estimate) return;
         setIsApproving(true);
-        const success = await approveEstimate(estimate.id);
+        const success = await approveEstimate(estimate.id, token);
         if (success) {
             setIsApproved(true);
             toast.success("Estimate approved successfully!");
         } else {
             toast.error("Failed to approve estimate.");
+        }
+        setIsApproving(false);
+    };
+
+    const handleReject = async () => {
+        if (!estimate) return;
+        setIsApproving(true);
+        const success = await rejectEstimate(estimate.id, token);
+        if (success) {
+            setEstimate({ ...estimate, status: 'Declined' });
+            toast.success("Estimate declined.");
+        } else {
+            toast.error("Failed to decline estimate.");
         }
         setIsApproving(false);
     };
@@ -57,6 +76,7 @@ const PublicView = () => {
             case 'sent': return 'bg-blue-100 text-blue-700 border-blue-200';
             case 'viewed': return 'bg-purple-100 text-purple-700 border-purple-200';
             case 'approved': return 'bg-green-100 text-green-700 border-green-200';
+            case 'declined': return 'bg-red-100 text-red-700 border-red-200';
             case 'paid': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
             default: return 'bg-gray-100 text-gray-700 border-gray-200';
         }
@@ -80,6 +100,8 @@ const PublicView = () => {
             </div>
         );
     }
+
+    const isDeclined = estimate.status === 'Declined' || estimate.status === 'Rejected';
 
     return (
         <div className="min-h-screen bg-gray-50 py-12 px-4">
@@ -190,6 +212,10 @@ const PublicView = () => {
                                     <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center text-white">
                                         <CheckCircle2 className="h-6 w-6" />
                                     </div>
+                                ) : isDeclined ? (
+                                    <div className="h-12 w-12 rounded-full bg-red-500 flex items-center justify-center text-white">
+                                        <FileText className="h-6 w-6" />
+                                    </div>
                                 ) : (
                                     <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center text-white">
                                         <FileText className="h-6 w-6" />
@@ -197,25 +223,38 @@ const PublicView = () => {
                                 )}
                                 <div>
                                     <p className="text-gray-900 font-bold text-lg">
-                                        {isApproved ? "Approved & Verified" : "Ready for your approval"}
+                                        {isApproved ? "Approved & Verified" : isDeclined ? "Estimate Declined" : "Ready for your decision"}
                                     </p>
                                     <p className="text-blue-700/60 text-sm">
                                         {isApproved
                                             ? `This estimate was approved on ${new Date(estimate.approved_at || Date.now()).toLocaleDateString()}`
+                                            : isDeclined 
+                                            ? "You have declined this estimate. Contact us if you have questions."
                                             : "Please review and approve to proceed with the project."}
                                     </p>
                                 </div>
                             </div>
 
-                            {!isApproved && (
-                                <Button
-                                    size="lg"
-                                    onClick={handleApprove}
-                                    disabled={isApproving}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white min-w-[200px] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-blue-600/20"
-                                >
-                                    {isApproving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Approve Estimate"}
-                                </Button>
+                            {!isApproved && !isDeclined && (
+                                <div className="flex gap-3">
+                                    <Button
+                                        size="lg"
+                                        variant="outline"
+                                        onClick={handleReject}
+                                        disabled={isApproving}
+                                        className="h-14 rounded-2xl text-lg font-bold border-red-200 text-red-600 hover:bg-red-50 min-w-[120px]"
+                                    >
+                                        Decline
+                                    </Button>
+                                    <Button
+                                        size="lg"
+                                        onClick={handleApprove}
+                                        disabled={isApproving}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white min-w-[160px] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-blue-600/20"
+                                    >
+                                        {isApproving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Approve"}
+                                    </Button>
+                                </div>
                             )}
                         </div>
                     </div>

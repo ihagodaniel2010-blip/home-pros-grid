@@ -1,13 +1,25 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, Save, FileText, User, Mail, Phone, MapPin, CheckCircle2, MoreHorizontal, Images } from "lucide-react";
+import { ArrowLeft, Clock, Save, FileText, User, Mail, Phone, MapPin, CheckCircle2, MoreHorizontal, Images, Wrench, UserCheck, Wand2 } from "lucide-react";
 import { getLeadById, updateLead, type Lead } from "@/lib/leads";
+import { getServiceExtrasByJobId, createServiceExtra, type ServiceExtra } from "@/lib/service-extras";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabase";
 
 const statuses: Lead["status"][] = ["New", "Contacted", "Estimate Sent", "Approved", "Closed"];
+
+type ServiceJob = {
+  id: string;
+  status: string;
+  scheduled_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  assigned_worker_id: string | null;
+  worker_name?: string | null;
+};
 
 const LeadDetail = () => {
   const { id } = useParams();
@@ -15,12 +27,66 @@ const LeadDetail = () => {
   const [lead, setLead] = useState<Lead | null>(null);
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [serviceJob, setServiceJob] = useState<ServiceJob | null>(null);
+  const [serviceExtras, setServiceExtras] = useState<ServiceExtra[]>([]);
+  const [isAddingExtra, setIsAddingExtra] = useState(false);
+  const [newExtra, setNewExtra] = useState({ description: '', amount: '' });
+  const [isSavingExtra, setIsSavingExtra] = useState(false);
 
   useEffect(() => {
     getLeadById(id || "").then((l) => {
       if (l) { setLead(l); setNotes(l.ownerNotes); }
     });
   }, [id]);
+
+  // Fetch service job linked to this lead
+  useEffect(() => {
+    if (!id || !supabase) return;
+    supabase
+      .from("service_jobs")
+      .select("id, status, scheduled_at, started_at, completed_at, assigned_worker_id, organization_id, estimate_id")
+      .eq("lead_id", id)
+      .maybeSingle()
+      .then(async ({ data, error }) => {
+        if (error) {
+          console.warn("Could not load service job for lead:", error.message);
+          return;
+        }
+        if (data) {
+          setServiceJob(data as any);
+          const extras = await getServiceExtrasByJobId(data.id);
+          setServiceExtras(extras);
+        }
+      });
+  }, [id]);
+
+  const handleCreateExtra = async () => {
+    if (!serviceJob || !newExtra.description || !newExtra.amount) return;
+    setIsSavingExtra(true);
+    try {
+      const extra = await createServiceExtra({
+        organization_id: (serviceJob as any).organization_id,
+        service_job_id: serviceJob.id,
+        estimate_id: (serviceJob as any).estimate_id,
+        description: newExtra.description,
+        amount: parseFloat(newExtra.amount)
+      });
+      setServiceExtras([extra, ...serviceExtras]);
+      setIsAddingExtra(false);
+      setNewExtra({ description: '', amount: '' });
+      toast.success("Extra created successfully.");
+    } catch (err) {
+      toast.error("Failed to create extra.");
+    } finally {
+      setIsSavingExtra(false);
+    }
+  };
+
+  const copyExtraLink = (token: string) => {
+    const url = `${window.location.origin}/extra/${token}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Extra link copied to clipboard!");
+  };
 
   if (!lead) return (
     <div className="p-20 text-center">
@@ -84,11 +150,19 @@ const LeadDetail = () => {
 
         <div className="flex items-center gap-3">
           <Button
+            onClick={() => navigate(`/admin/estimate-assistant?leadId=${lead.id}`)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 px-6 font-bold shadow-lg shadow-emerald-500/20"
+          >
+            <Wand2 className="h-4 w-4 mr-2" />
+            Smart Assistant
+          </Button>
+          <Button
             onClick={() => navigate(`/admin/estimates/new?leadId=${lead.id}`)}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-6 font-bold shadow-lg shadow-blue-500/20"
+            variant="outline"
+            className="h-11 px-6 font-bold rounded-xl border-gray-200"
           >
             <FileText className="h-4 w-4 mr-2" />
-            Convert to Estimate
+            Manual Estimate
           </Button>
           <Button variant="outline" className="rounded-xl h-11 border-gray-200">
             <MoreHorizontal className="h-4 w-4" />
@@ -200,6 +274,143 @@ const LeadDetail = () => {
               {isSaving ? "Saving..." : "Save Internal Notes"}
             </Button>
           </section>
+
+          {/* Service Job Status Card — shown when a job was created from this lead */}
+          {serviceJob && (
+            <section className="bg-white rounded-2xl border border-amber-200/60 shadow-sm p-6">
+              <h3 className="font-bold text-[#0b2a4a] text-sm mb-4 flex items-center gap-2">
+                <Wrench className="h-4 w-4 text-amber-500" />
+                Service Job
+              </h3>
+
+              <div className="mb-4">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Job Status</span>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                  serviceJob.status === "completed"   ? "bg-green-50 text-green-700 border-green-100" :
+                  serviceJob.status === "in_progress" ? "bg-blue-50 text-blue-700 border-blue-100" :
+                  serviceJob.status === "scheduled"   ? "bg-amber-50 text-amber-700 border-amber-100" :
+                  "bg-gray-50 text-gray-700 border-gray-100"
+                }`}>
+                  {serviceJob.status.replace("_", " ")}
+                </span>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                {serviceJob.scheduled_at && (
+                  <div className="flex items-start gap-2">
+                    <Clock className="h-3.5 w-3.5 text-gray-300 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase tracking-widest text-[10px]">Scheduled</span>
+                      <p className="text-gray-700 font-semibold">{new Date(serviceJob.scheduled_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                )}
+                {serviceJob.started_at && (
+                  <div className="flex items-start gap-2">
+                    <Clock className="h-3.5 w-3.5 text-blue-400 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase tracking-widest text-[10px]">Started</span>
+                      <p className="text-gray-700 font-semibold">{new Date(serviceJob.started_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                )}
+                {serviceJob.completed_at && (
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase tracking-widest text-[10px]">Completed</span>
+                      <p className="text-gray-700 font-semibold">{new Date(serviceJob.completed_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                )}
+                {serviceJob.assigned_worker_id && (
+                  <div className="flex items-start gap-2">
+                    <UserCheck className="h-3.5 w-3.5 text-purple-400 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-bold text-gray-400 uppercase tracking-widest text-[10px]">Assigned Worker</span>
+                      <p className="text-gray-700 font-mono text-[10px]">{serviceJob.assigned_worker_id.split("-")[0].toUpperCase()}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-[10px] text-gray-400 mt-4 pt-3 border-t border-gray-50 leading-relaxed">
+                ℹ️ Job status is independent from lead status. Updating the commercial lead status above does not change the service job.
+              </p>
+            </section>
+          )}
+
+          {serviceJob && (
+            <section className="bg-white rounded-2xl border border-purple-200/60 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-[#0b2a4a] text-sm flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-purple-500" />
+                  Service Extras
+                </h3>
+                <Button variant="outline" size="sm" onClick={() => setIsAddingExtra(!isAddingExtra)} className="h-7 text-xs">
+                  {isAddingExtra ? "Cancel" : "Add Extra"}
+                </Button>
+              </div>
+
+              {isAddingExtra && (
+                <div className="mb-4 space-y-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <input
+                    type="text"
+                    placeholder="Description"
+                    value={newExtra.description}
+                    onChange={(e) => setNewExtra({ ...newExtra, description: e.target.value })}
+                    className="w-full text-sm p-2 rounded-lg border-gray-200"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Amount ($)"
+                    value={newExtra.amount}
+                    onChange={(e) => setNewExtra({ ...newExtra, amount: e.target.value })}
+                    className="w-full text-sm p-2 rounded-lg border-gray-200"
+                  />
+                  <Button
+                    onClick={handleCreateExtra}
+                    disabled={isSavingExtra}
+                    className="w-full h-8 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    {isSavingExtra ? "Saving..." : "Save Extra"}
+                  </Button>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {serviceExtras.map((extra) => (
+                  <div key={extra.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex flex-col gap-2">
+                    <div className="flex justify-between items-start">
+                      <span className="font-medium text-sm text-gray-900">{extra.description}</span>
+                      <span className="font-bold text-gray-900">${extra.amount}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        extra.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        extra.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        extra.status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
+                        'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        {extra.status}
+                      </span>
+                      {extra.public_token && (
+                        <button
+                          onClick={() => copyExtraLink(extra.public_token!)}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          Copy Link
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {serviceExtras.length === 0 && !isAddingExtra && (
+                  <p className="text-xs text-gray-400 italic">No extras added yet.</p>
+                )}
+              </div>
+            </section>
+          )}
 
           <section className="bg-white rounded-2xl border border-gray-200/60 shadow-sm p-6">
             <h3 className="font-bold text-[#0b2a4a] text-sm mb-6 flex items-center justify-between">
