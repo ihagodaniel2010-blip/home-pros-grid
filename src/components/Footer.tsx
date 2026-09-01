@@ -59,15 +59,23 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Col 4: Trust & Coverage */}
+          {/* Col 4: Trust & Legal */}
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-4">Coverage & Support</h4>
-            <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Proudly serving general contractors, roofers, painters, carpenters, flooring, and remodeling specialists across the United States.
-            </p>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-4">Legal & Trust</h4>
+            <ul className="space-y-2.5 text-sm text-slate-400 mb-4">
+              <li>
+                <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+              </li>
+              <li>
+                <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+              </li>
+              <li>
+                <Link to="/disclaimer" className="hover:text-white transition-colors">Legal Disclaimer</Link>
+              </li>
+            </ul>
             <div className="flex items-center gap-3 text-xs text-slate-400 border-t border-slate-800 pt-4">
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Network Status: All Systems Operational</span>
+              <span>Network Status: Operational</span>
             </div>
           </div>
         </div>

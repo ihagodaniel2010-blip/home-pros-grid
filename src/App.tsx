@@ -38,6 +38,9 @@ import LeadMarket from "./pages-spa/admin/LeadMarket";
 import PublicView from "./pages-spa/PublicView";
 import PublicExtraView from "./pages-spa/PublicExtraView";
 import Pricing from "./pages-spa/Pricing";
+import Terms from "./pages-spa/Terms";
+import Privacy from "./pages-spa/Privacy";
+import Disclaimer from "./pages-spa/Disclaimer";
 import NotFound from "./pages-spa/NotFound";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -59,6 +62,9 @@ const App = () => (
         <Route path="/blog" element={<Blog />} />
         <Route path="/cost-guide" element={<CostGuide />} />
         <Route path="/experiences" element={<Experiences />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/disclaimer" element={<Disclaimer />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<ErrorBoundary><AdminLayout /></ErrorBoundary>}>
           <Route index element={<Dashboard />} />

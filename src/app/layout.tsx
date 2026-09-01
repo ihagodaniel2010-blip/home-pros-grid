@@ -10,8 +10,21 @@ import Providers from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-    title: "HomeLeadPro — Local Construction Leads & Business Management",
-    description: "HomeLeadPro helps contractors get local construction leads, send estimates, manage jobs, track payments, receipts, expenses and tax-ready reports.",
+    title: "HomeLeadPro — Construction Leads & Contractor Business Management",
+    description: "Get local construction leads, send estimates, manage jobs, track payments, receipts, expenses, reimbursements and tax-ready reports with HomeLeadPro.",
+    openGraph: {
+        title: "HomeLeadPro — Construction Leads & Contractor Business Management",
+        description: "Get local construction leads, send estimates, manage jobs, track payments, receipts, expenses, reimbursements and tax-ready reports with HomeLeadPro.",
+        url: "https://homeleadpro.com",
+        siteName: "HomeLeadPro",
+        locale: "en_US",
+        type: "website",
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "HomeLeadPro — Construction Leads & Contractor Business Management",
+        description: "Get local construction leads, send estimates, manage jobs, track payments, receipts, expenses, reimbursements and tax-ready reports with HomeLeadPro.",
+    },
 };
 
 export default function RootLayout({
