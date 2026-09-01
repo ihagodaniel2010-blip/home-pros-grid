@@ -116,7 +116,7 @@ const AdminLayout = () => {
       {/* Sidebar */}
       <aside className="w-64 bg-[#0b2a4a] flex flex-col shrink-0">
         <div className="p-6 border-b border-white/10">
-          <Link to="/" className="text-lg font-bold text-white tracking-tight">Barrigudo</Link>
+          <Link to="/" className="text-lg font-bold text-white tracking-tight">HomeLeadPro</Link>
           <p className="text-xs text-white/60 mt-0.5">Admin Panel</p>
         </div>
         <nav className="flex-1 py-4 space-y-1 px-3">

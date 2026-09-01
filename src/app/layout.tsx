@@ -10,8 +10,8 @@ import Providers from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-    title: "Barrigudo - Professional Home Services",
-    description: "Quality work, trusted professionals",
+    title: "HomeLeadPro — Local Construction Leads & Business Management",
+    description: "HomeLeadPro helps contractors get local construction leads, send estimates, manage jobs, track payments, receipts, expenses and tax-ready reports.",
 };
 
 export default function RootLayout({

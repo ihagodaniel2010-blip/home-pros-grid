@@ -83,7 +83,7 @@ const Experiences = () => {
             Client Experiences
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
-            Real reviews from real homeowners. Discover why families trust Barrigudo to connect them with the best home professionals.
+            Real reviews from real homeowners. Discover why families trust HomeLeadPro to connect them with the best home professionals.
           </p>
 
           {/* Stats Card */}
@@ -160,7 +160,7 @@ const Experiences = () => {
                   : "No reviews yet"}
               </h3>
               <p className="text-slate-600">
-                Be the first to share your Barrigudo experience with the community.
+                Be the first to share your HomeLeadPro experience with the community.
               </p>
             </motion.div>
           ) : (

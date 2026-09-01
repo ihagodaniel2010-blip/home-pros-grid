@@ -37,6 +37,7 @@ import CompanySettings from "./pages-spa/admin/CompanySettings";
 import LeadMarket from "./pages-spa/admin/LeadMarket";
 import PublicView from "./pages-spa/PublicView";
 import PublicExtraView from "./pages-spa/PublicExtraView";
+import Pricing from "./pages-spa/Pricing";
 import NotFound from "./pages-spa/NotFound";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -49,6 +50,7 @@ const App = () => (
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/services" element={<Services />} />
+        <Route path="/pricing" element={<Pricing />} />
         <Route path="/quote/:serviceSlug" element={<Quote />} />
         <Route path="/success" element={<Success />} />
         <Route path="/login" element={<Login />} />
@@ -84,6 +86,7 @@ const App = () => (
         </Route>
         <Route path="/estimate/:token" element={<PublicView />} />
         <Route path="/extra/:token" element={<PublicExtraView />} />
+        <Route path="/public/receipt/:token" element={<PublicReceipt />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

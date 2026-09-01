@@ -5,11 +5,11 @@
 
 export const siteConfig = {
   // Business Information
-  businessName: "Barrigudo",
-  businessTagline: "We proudly serve these Massachusetts communities.",
+  businessName: "HomeLeadPro",
+  businessTagline: "We proudly serve construction & home service professionals across the US.",
   
   // Contact Information
-  contactEmail: "info@barrigudo.com",
+  contactEmail: "info@homeleadpro.com",
   contactPhone: undefined, // Set to null/undefined if not available
   
   // Service Areas (Massachusetts communities)

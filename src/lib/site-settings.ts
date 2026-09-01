@@ -16,8 +16,8 @@ export type SiteSettings = {
 };
 
 export const defaultSiteSettings: SiteSettings = {
-  businessName: "Barrigudo",
-  contactEmail: "contact@barrigudo.com",
+  businessName: "HomeLeadPro",
+  contactEmail: "contact@homeleadpro.com",
   contactPhone: "",
   whatsapp: "",
   businessAddress: "Boston, Massachusetts",
