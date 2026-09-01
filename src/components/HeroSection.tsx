@@ -102,19 +102,11 @@ const HeroSection = () => {
           className="relative w-full"
           style={{ marginTop: '12px', maxWidth: '700px' }}
         >
-          <div className="flex flex-col sm:flex-row items-stretch gap-0 transition-all duration-300" style={{
-            boxShadow: '0 0 0px 9px rgba(0,0,0,0.28)',
-            borderRadius: '28px',
-            height: '58px',
-            overflow: 'visible'
-          }}>
-            <div className="relative flex-1">
+          <div className="flex flex-col sm:flex-row items-stretch gap-2 sm:gap-0 bg-white sm:bg-white p-2 sm:p-0 rounded-2xl sm:rounded-[28px] shadow-2xl transition-all duration-300 sm:h-[58px]">
+            <div className="relative flex-1 h-12 sm:h-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
               <input
-                className="w-full h-full pl-12 pr-4 bg-white text-base text-slate-800 placeholder:text-slate-500 focus:outline-none transition-all duration-300"
-                style={{
-                  borderRadius: '28px 0 0 28px'
-                }}
+                className="w-full h-full pl-12 pr-4 bg-slate-50 sm:bg-white text-base text-slate-800 placeholder:text-slate-500 focus:outline-none transition-all duration-300 rounded-xl sm:rounded-l-[28px] sm:rounded-r-none"
                 placeholder={t("hero.search_placeholder")}
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true); }}
@@ -125,8 +117,7 @@ const HeroSection = () => {
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="absolute top-full left-0 right-0 mt-2 bg-white z-50 py-1 max-h-64 overflow-y-auto"
-                  style={{ borderRadius: '12px', boxShadow: '0 12px 30px rgba(11,42,74,0.14)' }}
+                  className="absolute top-full left-0 right-0 mt-2 bg-white z-50 py-1 max-h-64 overflow-y-auto rounded-xl border border-slate-100 shadow-xl"
                 >
                   {filtered.map((s) => (
                     <button
@@ -141,13 +132,10 @@ const HeroSection = () => {
               )}
             </div>
             <div className="hidden sm:block w-px bg-slate-200" />
-            <div className="relative" style={{ width: '120px', flex: '0 0 120px' }}>
+            <div className="relative h-12 sm:h-full sm:w-[120px] sm:flex-[0_0_120px]">
               <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
               <input
-                className="w-full h-full pl-11 pr-4 bg-white text-base text-slate-800 placeholder:text-slate-500 focus:outline-none transition-all duration-300"
-                style={{
-                  borderRadius: '0'
-                }}
+                className="w-full h-full pl-11 pr-4 bg-slate-50 sm:bg-white text-base text-slate-800 placeholder:text-slate-500 focus:outline-none transition-all duration-300 rounded-xl sm:rounded-none"
                 placeholder={t("quote.zip_code")}
                 value={zip}
                 onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
@@ -156,8 +144,7 @@ const HeroSection = () => {
             </div>
             <button
               onClick={handleStart}
-              className="h-full bg-primary hover:bg-primary/90 text-white text-base font-semibold transition-all duration-250 active:scale-[0.98] whitespace-nowrap"
-              style={{ borderRadius: '0 28px 28px 0', width: '170px', flex: '0 0 170px' }}
+              className="h-12 sm:h-full bg-primary hover:bg-primary/90 text-white text-base font-semibold transition-all duration-250 active:scale-[0.98] whitespace-nowrap rounded-xl sm:rounded-r-[28px] sm:rounded-l-none sm:w-[170px] sm:flex-[0_0_170px]"
             >
               {t("hero.start")}
             </button>
