@@ -50,8 +50,13 @@ export default function Communications() {
     setTestVars(initialVars);
   }, [selectedTemplate]);
 
+  useEffect(() => {
+    if (isWorker) {
+      navigate("/admin", { replace: true });
+    }
+  }, [isWorker, navigate]);
+
   if (isWorker) {
-    navigate("/admin");
     return null;
   }
 
