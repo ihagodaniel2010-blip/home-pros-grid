@@ -3,21 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Barrigudo - Home Services Platform</title>
-    <meta name="description" content="Connect with trusted local home service professionals in Greater Boston. Quality home services made simple.">
-    <meta name="author" content="Barrigudo" />
+    <title>H&amp;A Construction — Construction, Remodeling &amp; Home Improvement Services</title>
+    <meta name="description" content="H-A Construction provides construction, remodeling, roofing, flooring, drywall, painting and carpentry services with online estimates, project management and client receipts.">
+    <meta name="author" content="H&amp;A Construction" />
 
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/23c50e40-a250-4fcb-9934-0ab99735bd06/id-preview-d8f44d48--763e48ff-75d8-4a26-bbee-b11666190791.lovable.app-1771293767152.png">
+    <meta property="og:url" content="https://h-a-construction.com" />
+    <meta property="og:site_name" content="H-A Construction" />
+    <meta property="og:title" content="H&amp;A Construction — Construction, Remodeling &amp; Home Improvement Services">
+    <meta property="og:description" content="H-A Construction provides construction, remodeling, roofing, flooring, drywall, painting and carpentry services with online estimates, project management and client receipts.">
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@Barrigudo" />
-    <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/23c50e40-a250-4fcb-9934-0ab99735bd06/id-preview-d8f44d48--763e48ff-75d8-4a26-bbee-b11666190791.lovable.app-1771293767152.png">
-    <meta property="og:title" content="Barrigudo - Home Services Platform">
-  <meta name="twitter:title" content="Barrigudo - Home Services Platform">
-  <meta property="og:description" content="Connect with trusted local home service professionals in Greater Boston. Quality home services made simple.">
-  <meta name="twitter:description" content="Connect with trusted local home service professionals in Greater Boston. Quality home services made simple.">
-</head>
+    <meta name="twitter:site" content="@HA_Construction" />
+    <meta name="twitter:title" content="H&amp;A Construction — Construction, Remodeling &amp; Home Improvement Services">
+    <meta name="twitter:description" content="H-A Construction provides construction, remodeling, roofing, flooring, drywall, painting and carpentry services with online estimates, project management and client receipts.">
+  </head>
 
   <body>
     <div id="root"></div>
