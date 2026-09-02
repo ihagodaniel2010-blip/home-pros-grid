@@ -13,12 +13,10 @@ const fallbackItems: PortfolioItem[] = [
     id: "modern-kitchen-upgrade",
     title: "Modern Kitchen Upgrade",
     category: "Kitchens",
-    coverImage: "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg",
+    coverImage: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80",
     images: [
-      "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
+      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80",
+      "https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=800&q=80"
     ],
     tags: ["Kitchen", "Remodeling"],
     scope: "Layout refresh • Custom cabinetry",
@@ -27,21 +25,14 @@ const fallbackItems: PortfolioItem[] = [
     materials: ["Quartz", "Matte brass fixtures", "Solid oak"],
     timeline: ["Demo", "Prep", "Install", "Finish"],
     featured: true,
-    beforeAfter: {
-      before: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
-      after: "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg",
-    },
   },
   {
     id: "spa-bathroom-renewal",
     title: "Spa Bathroom Renewal",
     category: "Bathrooms",
-    coverImage: "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
+    coverImage: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80",
     images: [
-      "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/fSS86TPTtzR5.png",
+      "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80"
     ],
     tags: ["Bathroom", "Remodeling"],
     scope: "Tile refresh • Fixture upgrade",
@@ -55,12 +46,9 @@ const fallbackItems: PortfolioItem[] = [
     id: "flooring-transformation",
     title: "Flooring Transformation",
     category: "Flooring",
-    coverImage: "/aEomQEx4Q2sZ.com/media/250x165/AOX0l9K8erbq.png",
+    coverImage: "https://images.unsplash.com/photo-1581858726788-75bc0f6a952d?auto=format&fit=crop&w=800&q=80",
     images: [
-      "/aEomQEx4Q2sZ.com/media/250x165/AOX0l9K8erbq.png",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
+      "https://images.unsplash.com/photo-1581858726788-75bc0f6a952d?auto=format&fit=crop&w=800&q=80"
     ],
     tags: ["Flooring", "Renovation"],
     scope: "Luxury vinyl • Acoustic underlay",
@@ -72,13 +60,11 @@ const fallbackItems: PortfolioItem[] = [
   },
   {
     id: "exterior-paint-reveal",
-    title: "Exterior Paint Reveal",
+    title: "Exterior Finish & Painting",
     category: "Painting",
-    coverImage: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/fSS86TPTtzR5.png",
+    coverImage: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=800&q=80",
     images: [
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/fSS86TPTtzR5.png",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
+      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=800&q=80"
     ],
     tags: ["Painting", "Exterior"],
     scope: "Prep • Prime • Finish",
@@ -89,13 +75,11 @@ const fallbackItems: PortfolioItem[] = [
   },
   {
     id: "roofing-refresh",
-    title: "Roofing Refresh",
+    title: "Roofing Repair & Installation",
     category: "Roofing",
-    coverImage: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UZP1Emv43ZoL.png",
+    coverImage: "https://images.unsplash.com/photo-1632759145351-1d592919f522?auto=format&fit=crop&w=800&q=80",
     images: [
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UZP1Emv43ZoL.png",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
+      "https://images.unsplash.com/photo-1632759145351-1d592919f522?auto=format&fit=crop&w=800&q=80"
     ],
     tags: ["Roofing", "Exterior"],
     scope: "Shingles • Ventilation",
@@ -103,101 +87,22 @@ const fallbackItems: PortfolioItem[] = [
     highlights: ["New shingles", "Ridge vent", "Underlayment"],
     materials: ["Architectural shingles", "Ventilation kit", "Flashing"],
     timeline: ["Demo", "Install", "Finish"],
-  },
-  {
-    id: "remodel-living",
-    title: "Living Room Remodel",
-    category: "Remodeling",
-    coverImage: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-    images: [
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
-      "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
-    ],
-    tags: ["Remodeling", "Interiors"],
-    scope: "Open-plan refresh",
-    description: "An open, airy living space upgraded with tailored finishes and lighting.",
-    highlights: ["Built-ins", "Lighting plan", "Premium trim"],
-    materials: ["Custom millwork", "LED lighting", "Paint finish"],
-    timeline: ["Demo", "Prep", "Install", "Finish"],
-    beforeAfter: {
-      before: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
-      after: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-    },
-  },
-  {
-    id: "deck-outdoor-upgrade",
-    title: "Deck & Outdoor Upgrade",
-    category: "Decks",
-    coverImage: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
-    images: [
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-      "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg",
-    ],
-    tags: ["Decks", "Outdoor"],
-    scope: "Composite deck refresh",
-    description: "Outdoor entertaining space refreshed with resilient materials and clean lines.",
-    highlights: ["Composite deck", "Railing update", "Outdoor lighting"],
-    materials: ["Composite boards", "Stainless fixtures", "Outdoor lights"],
-    timeline: ["Demo", "Install", "Finish"],
-  },
-  {
-    id: "outdoor-living",
-    title: "Outdoor Living Retreat",
-    category: "Outdoor",
-    coverImage: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
-    images: [
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
-      "/aEomQEx4Q2sZ.com/resources/images/networx/v2/ay0Wmaq4Mak8.jpg",
-      "/aEomQEx4Q2sZ.com/media/250x165/k0jKHZgh5ySn.png",
-    ],
-    tags: ["Outdoor", "Lifestyle"],
-    scope: "Lounge design",
-    description: "A serene outdoor lounge with warm textures and functional amenities.",
-    highlights: ["Pergola", "Lounge seating", "Ambient lighting"],
-    materials: ["Treated wood", "Outdoor fabrics", "Lighting"],
-    timeline: ["Plan", "Install", "Finish"],
-  },
-  {
-    id: "before-after-signature",
-    title: "Signature Before & After",
-    category: "Before & After",
-    coverImage: "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
-    images: [
-      "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
-      "/aEomQEx4Q2sZ.com/media/250x165/AOX0l9K8erbq.png",
-      "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg",
-    ],
-    tags: ["Before & After", "Remodeling"],
-    scope: "Full transformation",
-    description: "See the transformation side-by-side with a refined before & after comparison.",
-    highlights: ["Full repaint", "New flooring", "Lighting refresh"],
-    materials: ["Premium paint", "Flooring", "Lighting"],
-    timeline: ["Demo", "Prep", "Install", "Finish"],
-    beforeAfter: {
-      before: "/aEomQEx4Q2sZ.com/media/250x165/AW6h4tL4mBvH.jpeg",
-      after: "/aEomQEx4Q2sZ.com/media/250x165/AOX0l9K8erbq.png",
-    },
-  },
+  }
 ];
 
 const fallbackCategories = [
   "Kitchens",
   "Bathrooms",
-  "Bedrooms",
   "Flooring",
   "Painting",
   "Roofing",
   "Remodeling",
-  "Decks",
-  "Outdoor",
 ];
 
 const metrics = [
-  { label: "Projects delivered", value: "420+" },
-  { label: "Avg. turnaround", value: "6 days" },
-  { label: "Client satisfaction", value: "4.9/5" },
+  { label: "Service Focus", value: "Residential" },
+  { label: "Primary Area", value: "Southern Maine" },
+  { label: "Estimates", value: "Free Consultation" },
 ];
 
 const steps = [

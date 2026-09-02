@@ -70,7 +70,7 @@ const ServiceCard = ({ category, items }: ServiceCardProps) => {
             loading="lazy"
             onError={(e) => {
               const target = e.target as HTMLImageElement;
-              target.src = "/aEomQEx4Q2sZ.com/media/250x165/L4iJEJBgnVg6.jpeg"; // fallback
+              target.style.display = 'none';
             }}
           />
         </AnimatePresence>

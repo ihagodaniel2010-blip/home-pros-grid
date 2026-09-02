@@ -74,10 +74,10 @@ export default function Pricing() {
               <Zap className="w-3.5 h-3.5" /> TRANSPARENT USD PRICING
             </span>
             <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white mb-4">
-              Simple, Predictable Pricing for <span className="text-blue-500">H-A Construction Projects</span>
+              Transparent Estimates &amp; Services for <span className="text-primary">H &amp; A Construction LLC</span>
             </h1>
             <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-              Get transparent project estimates, partner contractor network plans, and complete project tracking in one place.
+              Get clear, honest project estimates and high-quality residential construction services in Southern Maine.
             </p>
           </motion.div>
         </div>
