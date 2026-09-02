@@ -32,7 +32,7 @@ export default function Reports() {
       try {
         const [lData, eData, pData, expData, jData] = await Promise.all([
           getLeads(),
-          getEstimates(user.organization.id),
+          getEstimates(),
           getClientPayments(user.organization.id),
           getExpenses(user.organization.id),
           getServiceJobs(user.organization.id)
@@ -86,7 +86,7 @@ export default function Reports() {
 
     const newLeads = filteredLeads.length;
     const estimatesSent = filteredEstimates.length;
-    const estimatesApproved = filteredEstimates.filter(e => e.status === 'Approved' || e.status === 'converted').length;
+    const estimatesApproved = filteredEstimates.filter(e => e.status === 'Approved' || e.status === 'Paid').length;
     const approvalRate = estimatesSent > 0 ? Math.round((estimatesApproved / estimatesSent) * 100) : 0;
 
     const activeJobs = filteredJobs.filter(j => j.status === 'in_progress' || j.status === 'scheduled').length;
@@ -340,7 +340,7 @@ export default function Reports() {
                 <CardTitle>Estimates Summary</CardTitle>
                 <CardDescription>Conversion metrics and volume.</CardDescription>
               </div>
-              <Button size="sm" variant="outline" onClick={() => exportCSV('Estimates_Report', filteredEstimates.map(e => ({ title: e.title, total: e.total_amount, status: e.status })))}><Download className="h-4 w-4 mr-2"/> Export</Button>
+              <Button size="sm" variant="outline" onClick={() => exportCSV('Estimates_Report', filteredEstimates.map(e => ({ client: e.client_name, total: e.total_amount, status: e.status })))}><Download className="h-4 w-4 mr-2"/> Export</Button>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4 max-w-sm">

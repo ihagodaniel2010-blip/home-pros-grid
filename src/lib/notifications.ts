@@ -57,7 +57,7 @@ export const useNotifications = () => {
     try {
       const [leads, estimates, payments, expenses] = await Promise.all([
         getLeads(),
-        getEstimates(organizationId),
+        getEstimates(),
         getClientPayments(organizationId),
         getExpenses(organizationId)
       ]);
@@ -88,7 +88,7 @@ export const useNotifications = () => {
           id,
           type: 'estimate_approved',
           title: 'Estimate Approved',
-          message: `Estimate ${e.title} was approved.`,
+          message: `Estimate for ${e.client_name} was approved.`,
           link: `/admin/estimates/${e.id}`,
           severity: 'success',
           created_at: e.updated_at || e.created_at,

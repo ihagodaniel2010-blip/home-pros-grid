@@ -8,7 +8,8 @@ import { useUser } from "@/context/UserContext";
 import { useNavigate, Link } from "react-router-dom";
 
 export default function LeadMarket() {
-    const { user, isWorker } = useUser();
+    const { user } = useUser();
+    const isWorker = user?.organization?.role === 'worker';
     const navigate = useNavigate();
     const [leads, setLeads] = useState<any[]>([]);
     const [balance, setBalance] = useState<number>(0);
