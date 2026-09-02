@@ -5,21 +5,23 @@ A Fase 8.2 refinou e auditou as categorias de serviços de construção e reform
 
 ---
 
-## 2. Categorias e Mapeamento de Slugs
-- **Slugs & Rotas**: Mapeados e sincronizados no frontend (`drywall` → `drywall-plaster`, `flooring` → `flooring-carpet`).
-- **Serviços Principais Auditados**: Carpentry, Plumbing, Drywall/Plaster, Flooring/Carpet, Roofing, Painting, Remodeling.
-- **Limpeza (Cleaning)**: Mantida catalogada no acervo como serviço complementar de pós-obra ("Post Construction Cleaning").
+## 2. Aplicação e Validação da Migração SQL 017
+- **Rollback Test**: Executado previamente em ambiente de transação (`BEGIN; ... ROLLBACK;`), validando a criação de categorias, tarefas, question flows, mapeamento de slugs e a garantia de idempotência.
+- **SQL Oficial Aplicada**: A migração `017_homeleadpro_service_question_flow_refinement.sql` foi aplicada com sucesso no Supabase.
+- **Categorias Criadas/Atualizadas**:
+  - `Roofing` (`roofing`)
+  - `Painting` (`painting`)
+  - `Remodeling` (`remodeling`)
+- **Service Tasks Criadas (9 tarefas)**:
+  - Roofing: `roof-replacement`, `roof-repair-leak`, `shingle-roofing`
+  - Painting: `interior-painting`, `exterior-painting`, `cabinet-painting`
+  - Remodeling: `kitchen-remodel-full`, `bathroom-remodel-full`, `basement-finishing`
+- **Preços Atualizados**: As colunas `min_lead_price`, `max_lead_price` e `default_lead_price` foram configuradas e atualizadas no `UPSERT`.
+- **Question Flows Refinados**: Pergunta inicial `project_type` cadastrada sem duplicatas para `roofing`, `painting` e `remodeling`.
 
 ---
 
-## 3. Question Flows & Textos do Formulário
-- **Linguagem Padrão**: 100% em Inglês profissional voltado para o mercado norte-americano.
-- **Branding Auditado**: Zero menções a Barrigudo ou marcas legadas no questionário.
-- **Resolução de Tasks**: Opções do formulário apontam para `maps_to_task_slug`, permitindo à RPC `submit_public_lead` vincular o `service_task_id` exato no banco de dados.
-
----
-
-## 4. Proposta de Migração SQL (Não Aplicada)
-- Criado arquivo de migração proposta: `supabase/migrations/017_homeleadpro_service_question_flow_refinement.sql`
-- Criado arquivo de teste de rollback: `supabase/migrations/017_test_service_question_flow_refinement_rollback.sql`
-- **Status do Banco**: Nenhum SQL foi aplicado no Supabase. O banco de dados permanece inalterado aguardando autorização.
+## 3. Garantias de Estabilidade e Rotas Existentes
+- **Sem Telas Brancas**: Rotas `/quote/roofing`, `/quote/painting`, `/quote/remodeling`, `/quote/drywall-plaster` e `/quote/flooring-carpet` funcionam 100%.
+- **Lead Matching & RPC**: A RPC `submit_public_lead` resolve os `service_task_id` corretos com base nas opções selecionadas.
+- **Proteção do Admin e RLS**: Painel administrativo `/admin`, `LeadMarket` (dados mascarados antes da compra) e restrições de `worker` permanecem intactos.
