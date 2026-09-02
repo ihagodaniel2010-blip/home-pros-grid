@@ -1,95 +1,66 @@
 import { Link } from "@/lib/navigation-compat";
 import { motion } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ShieldCheck, CheckCircle2 } from "lucide-react";
 import ServicesShowcase from "./ServicesShowcase";
 import ServiceAreas from "./ServiceAreas";
-
-const testimonials = [
-  {
-    name: "Sarem S.",
-    photo: "/aEomQEx4Q2sZ.com/media/250x165/image0.jpg",
-    text: "That H-A Construction website was very handy. I'm glad that I came across the site and got the link to my estimate because their work was really, really good.",
-  },
-  {
-    name: "Cindy T.",
-    photo: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
-    text: "What I liked about H-A Construction is somebody called for a follow-up to see if a roofer had gotten in touch with me yet. That was really nice and helpful.",
-  },
-  {
-    name: "Jackie D.",
-    photo: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
-    text: "H-A Construction gave me great service. I spoke with a rep who was so nice and courteous and within less than an hour, I heard back.",
-  },
-];
+import GoogleReviews from "./GoogleReviews";
 
 const ArticlesSection = () => (
   <>
-    <section className="py-16 px-6 bg-slate-50 relative">
-      <div className="max-w-6xl mx-auto">
-        <div className="grid gap-6 md:grid-cols-3">
-          {testimonials.map((t, i) => (
-            <motion.div
-              key={t.name}
-              initial={{ opacity: 0, y: 18 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: i * 0.05 }}
-              className="bg-white rounded-xl p-6"
-              style={{ boxShadow: "0 2px 10px rgba(15,46,77,0.12)" }}
-            >
-              <div className="flex items-center gap-4 mb-4">
-                <img src={t.photo} alt={t.name} className="w-12 h-12 rounded-full object-cover" />
-                <span className="font-semibold text-slate-800">{t.name}</span>
-              </div>
-              <p className="text-sm text-slate-700 leading-6">{t.text}</p>
-            </motion.div>
-          ))}
+    {/* Clean Optional Google Reviews Component */}
+    <GoogleReviews />
+
+    {/* Services Showcase */}
+    <ServicesShowcase />
+
+    {/* Company Direct Mission & Commitment */}
+    <section className="py-16 px-6 bg-white relative">
+      <div className="max-w-4xl mx-auto text-center">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 text-primary mb-4">
+          <ShieldCheck className="w-6 h-6" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-4 tracking-tight">
+          H & A Construction LLC — Our Commitment to Quality
+        </h2>
+        <p className="text-slate-700 leading-relaxed max-w-3xl mx-auto text-base">
+          At H & A Construction LLC, our mission is to provide homeowners in Southern Maine with professional residential construction, remodeling, roofing, flooring, painting, carpentry, and finish work delivered on time and within budget.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 text-left">
+          <div className="p-5 bg-slate-50 rounded-xl border border-slate-100">
+            <div className="flex items-center gap-2 font-bold text-slate-900 text-sm mb-1.5">
+              <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+              <span>Direct Communication</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Work directly with our experienced project team from initial estimate to final walkthrough.
+            </p>
+          </div>
+
+          <div className="p-5 bg-slate-50 rounded-xl border border-slate-100">
+            <div className="flex items-center gap-2 font-bold text-slate-900 text-sm mb-1.5">
+              <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+              <span>Quality Craftsmanship</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Durable materials, precision carpentry, and meticulous finish work on every residential project.
+            </p>
+          </div>
+
+          <div className="p-5 bg-slate-50 rounded-xl border border-slate-100">
+            <div className="flex items-center gap-2 font-bold text-slate-900 text-sm mb-1.5">
+              <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+              <span>Southern Maine Local</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Proudly serving Saco, Old Orchard Beach, Biddeford, Scarborough, and surrounding coastal communities.
+            </p>
+          </div>
         </div>
       </div>
     </section>
 
-    <ServicesShowcase />
-
-    <section className="py-16 px-6 bg-white relative">
-      <div className="max-w-6xl mx-auto text-center">
-        <img
-          className="mx-auto w-28 mb-6"
-          src="/aEomQEx4Q2sZ.com/resources/images/networx/v2/UZP1Emv43ZoL.png"
-          alt="H-A Construction trust badge"
-        />
-        <p className="text-slate-700 leading-8 max-w-4xl mx-auto" style={{ fontSize: "24px", fontStyle: "italic" }}>
-          At H-A Construction, our mission is to provide homeowners and clients with high-quality general construction, remodeling, roofing, flooring, drywall, painting, and carpentry services.
-        </p>
-      </div>
-    </section>
-
-    <section className="py-20 px-6" style={{ background: "#f6f7f8" }}>
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6 }}
-        className="max-w-3xl mx-auto text-center"
-      >
-        <h3
-          className="text-3xl font-semibold mb-3 text-slate-900"
-          style={{ fontSize: "36px", fontWeight: 700, letterSpacing: "-0.01em" }}
-        >
-          Are you a Construction Partner?
-        </h3>
-        <p className="text-base text-slate-700 mb-8 leading-relaxed" style={{ fontSize: "16px", lineHeight: 1.6 }}>
-          Discover how H-A Construction can help expand your project capabilities across local service areas.
-        </p>
-        <Link
-          to="/join"
-          className="inline-flex items-center gap-2 px-9 py-3 bg-primary text-white font-semibold rounded-full hover:bg-primary/90 transition-all duration-250 hover:shadow-lg active:scale-[0.98]"
-          style={{ fontSize: "16px", fontWeight: 600, padding: "14px 36px" }}
-        >
-          Join us <ArrowRight className="h-4 w-4" />
-        </Link>
-      </motion.div>
-    </section>
-
+    {/* Service Areas Section */}
     <ServiceAreas />
   </>
 );

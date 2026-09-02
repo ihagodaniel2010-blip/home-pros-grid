@@ -7,7 +7,7 @@ import {
 } from "@/types/reviews";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
-const STORAGE_KEY = "barrigudo_reviews";
+const STORAGE_KEY = "ha_construction_reviews";
 
 export class LocalReviewsService implements ReviewsServiceInterface {
   private getAll(): Review[] {

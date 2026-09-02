@@ -1,80 +1,64 @@
 /**
- * Centralized site configuration
- * Update these values to quickly change business details across the site
+ * Centralized site configuration for H & A Construction LLC
  */
 
 export const siteConfig = {
   // Business Information
-  businessName: "H-A Construction",
-  businessTagline: "We proudly serve general construction, remodeling, roofing, flooring, drywall, painting & carpentry clients across the US.",
+  businessName: "H & A Construction LLC",
+  businessTagline: "Professional residential construction, remodeling, carpentry, flooring, painting, roofing, and finish work in Southern Maine.",
   
   // Contact Information
   contactEmail: "info@h-a-construction.com",
-  contactPhone: undefined, // Set to null/undefined if not available
+  primaryPhone: "978-398-2457",
+  secondaryPhone: "978-325-7324",
+  phones: ["978-398-2457", "978-325-7324"],
   
-  // Service Areas (Massachusetts communities)
+  // Primary Service Areas (Southern Maine)
   serviceAreas: [
-    "Wellesley",
-    "Newton",
-    "Burlington",
-    "Billerica",
-    "Arlington",
-    "Belmont",
-    "Lynnfield",
-    "Somerville",
-    "Peabody",
+    "Saco, ME",
+    "Old Orchard Beach, ME",
+    "Biddeford, ME",
+    "Scarborough, ME"
   ],
-  serviceAreasPlus: "And surrounding communities throughout Greater Boston",
+  serviceAreasPlus: "And surrounding areas in Southern Maine",
   
-  // Business Address
-  businessAddress: "Boston, Massachusetts",
-  businessRegion: "Greater Boston Area",
+  // Business Region
+  businessAddress: "Southern Maine",
+  businessRegion: "Southern Maine",
   
   // Navigation CTA destinations
-  ctaGetQuote: "/services", // "Get a Free Quote" button href
+  ctaGetQuote: "/#estimate-form",
   
-  // Maps Configuration
-  // Using a place query (no API key needed for basic embed)
-  googleMapsQuery: "Boston Massachusetts home services",
-  googleMapsEmbedId: "boston-ma", // For custom styling if needed
+  // Google Reviews URL (Set NEXT_PUBLIC_GOOGLE_REVIEWS_URL in environment)
+  googleReviewsUrl: typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_GOOGLE_REVIEWS_URL || "") : "",
+
+  // Canonical Domain
+  canonicalUrl: "https://www.h-a-construction.com/",
   
-  // Styling Tokens (reuse from your design system)
+  // Styling Tokens
   borderRadius: {
-    lg: "xl", // 20px
-    md: "lg", // 12px
+    lg: "xl",
+    md: "lg",
   },
   shadows: {
     sm: "0 2px 8px rgba(15,46,77,0.12)",
     md: "0 4px 16px rgba(15,46,77,0.15)",
   },
   colors: {
-    primary: "var(--primary, #0b6dbf)", // Update if different
+    primary: "var(--primary, #0b6dbf)",
     background: "var(--background)",
     foreground: "var(--foreground)",
   },
 };
 
-/**
- * Helper function to create Google Maps embed URL
- * No API key needed for basic place embed
- */
-export const getGoogleMapsEmbedUrl = (query: string = siteConfig.googleMapsQuery): string => {
-  const encoded = encodeURIComponent(query);
-  return `https://www.google.com/maps?q=${encoded}&output=embed`;
-};
-
-/**
- * Helper function to create Google Maps directions URL
- * Opens in Google Maps app or web
- */
-export const getGoogleMapsDirectionsUrl = (destination: string = siteConfig.businessAddress): string => {
-  const encoded = encodeURIComponent(destination);
-  return `https://www.google.com/maps/search/?api=1&query=${encoded}`;
-};
-
-/**
- * Helper function to create mailto link
- */
 export const getContactEmailLink = (email: string = siteConfig.contactEmail): string => {
   return `mailto:${email}`;
+};
+
+export const getPrimaryPhoneLink = (): string => {
+  return `tel:${siteConfig.primaryPhone.replace(/[^0-9]/g, '')}`;
+};
+
+export const getSecondaryPhoneLink = (): string => {
+  return `tel:${siteConfig.secondaryPhone.replace(/[^0-9]/g, '')}`;
 };

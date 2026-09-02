@@ -16,26 +16,21 @@ export type SiteSettings = {
 };
 
 export const defaultSiteSettings: SiteSettings = {
-  businessName: "H-A Construction",
-  contactEmail: "contact@h-a-construction.com",
-  contactPhone: "",
+  businessName: "H & A Construction LLC",
+  contactEmail: "info@h-a-construction.com",
+  contactPhone: "978-398-2457",
   whatsapp: "",
-  businessAddress: "Boston, Massachusetts",
-  mapsQuery: "Boston Massachusetts",
+  businessAddress: "Southern Maine",
+  mapsQuery: "Southern Maine",
   directionsUrl: "",
-  heroTitle: "Professional Home Services",
-  heroSubtitle: "Quality work, trusted professionals",
+  heroTitle: "Residential Construction & Remodeling in Southern Maine",
+  heroSubtitle: "H & A Construction LLC provides professional residential construction, remodeling, carpentry, flooring, painting, roofing, and finish work in Saco, Old Orchard Beach, Biddeford, Scarborough, and surrounding areas.",
   serviceAreas: [
-    "Wellesley",
-    "Newton",
-    "Burlington",
-    "Billerica",
-    "Arlington",
-    "Belmont",
-    "Lynnfield",
-    "Somerville",
-    "Peabody",
-    "Boston",
+    "Saco, ME",
+    "Old Orchard Beach, ME",
+    "Biddeford, ME",
+    "Scarborough, ME",
+    "Southern Maine"
   ],
 };
 

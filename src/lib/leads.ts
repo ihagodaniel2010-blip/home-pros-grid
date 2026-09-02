@@ -33,7 +33,7 @@ export interface Lead {
 }
 
 // ─── LOCAL STORAGE FALLBACK ──────────────────────────────
-const LEADS_KEY = "barrigudo_leads";
+const LEADS_KEY = "ha_construction_leads";
 
 const getLeadsLocal = (): Lead[] => {
   try {
