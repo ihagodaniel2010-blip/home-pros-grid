@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe, Building2, Store, Receipt, DollarSign, Calculator, Link2, Bell, PieChart, CreditCard } from "lucide-react";
+import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe, Building2, Store, Receipt, DollarSign, Calculator, Link2, Bell, PieChart, CreditCard, Mail } from "lucide-react";
 import { adminLogout, fetchAdminSession } from "@/lib/admin-auth";
 import { getLeads } from "@/lib/leads";
 import { useNotifications } from "@/lib/notifications";
@@ -40,6 +40,7 @@ const AdminLayout = () => {
       { label: "Leads", icon: Inbox, path: "/admin/inbox" },
       { label: "Lead Market", icon: Store, path: "/admin/lead-market" },
       { label: "Billing & Credits", icon: CreditCard, path: "/admin/billing" },
+      { label: "Communications", icon: Mail, path: "/admin/communications" },
       { label: "Estimate Assistant", icon: FileText, path: "/admin/estimate-assistant" },
       { label: t("admin.estimates"), icon: FileText, path: "/admin/estimates" },
       { label: "Client Receipts", icon: Receipt, path: "/admin/client-receipts" },

@@ -36,6 +36,7 @@ import LeadSettings from "./pages-spa/admin/LeadSettings";
 import CompanySettings from "./pages-spa/admin/CompanySettings";
 import LeadMarket from "./pages-spa/admin/LeadMarket";
 import AdminBilling from "./pages-spa/admin/Billing";
+import AdminCommunications from "./pages-spa/admin/Communications";
 import PublicView from "./pages-spa/PublicView";
 import PublicExtraView from "./pages-spa/PublicExtraView";
 import Pricing from "./pages-spa/Pricing";
@@ -91,6 +92,7 @@ const App = () => (
           <Route path="company" element={<CompanySettings />} />
           <Route path="lead-market" element={<LeadMarket />} />
           <Route path="billing" element={<AdminBilling />} />
+          <Route path="communications" element={<AdminCommunications />} />
         </Route>
         <Route path="/estimate/:token" element={<PublicView />} />
         <Route path="/extra/:token" element={<PublicExtraView />} />
