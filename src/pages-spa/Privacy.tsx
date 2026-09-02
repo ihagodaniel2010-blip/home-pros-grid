@@ -25,7 +25,7 @@ export default function Privacy() {
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">1. Information We Collect</h2>
           <p>
-            HomeLeadPro collects information you provide directly to us when requesting quotes, registering contractor accounts, or using our software. This includes:
+            H-A Construction collects information you provide directly to us when requesting quotes, registering partner accounts, or using our software. This includes:
           </p>
           <ul className="list-disc pl-6 space-y-1.5 text-slate-600">
             <li>Contact details (name, email address, phone number, physical address, ZIP code).</li>
@@ -38,12 +38,12 @@ export default function Privacy() {
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">2. How We Use Your Information</h2>
           <p>
-            We use collected information to operate, improve, and personalize HomeLeadPro, including:
+            We use collected information to operate, improve, and personalize H-A Construction, including:
           </p>
           <ul className="list-disc pl-6 space-y-1.5 text-slate-600">
-            <li>Connecting Homeowners with relevant local Contractors for quote requests.</li>
+            <li>Connecting Homeowners with relevant H-A Construction team members and partner Contractors for quote requests.</li>
             <li>Facilitating estimate creation, client receipt delivery, and status notifications.</li>
-            <li>Processing subscription accounts and customer support requests.</li>
+            <li>Processing project accounts and customer support requests.</li>
             <li>Maintaining platform security, preventing fraud, and ensuring technical reliability.</li>
           </ul>
         </section>
@@ -51,7 +51,7 @@ export default function Privacy() {
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">3. Lead Data Sharing</h2>
           <p>
-            When a Homeowner submits a quote request, project location and contact information are shared with participating Contractors in that service area so they can provide estimates. We do not sell your personal data to unauthorized third-party advertisers.
+            When a Homeowner submits a quote request, project location and contact information are shared with H-A Construction estimators and designated trade specialists in that service area so they can provide project quotes. We do not sell your personal data to unauthorized third-party advertisers.
           </p>
         </section>
 
@@ -72,7 +72,7 @@ export default function Privacy() {
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">6. Your Rights & Contact</h2>
           <p>
-            You may request access to, correction of, or deletion of your personal data at any time by contacting our privacy team at: <a href="mailto:info@homeleadpro.com" className="text-blue-600 font-semibold underline">info@homeleadpro.com</a>.
+            You may request access to, correction of, or deletion of your personal data at any time by contacting our privacy team at: <a href="mailto:info@h-a-construction.com" className="text-blue-600 font-semibold underline">info@h-a-construction.com</a>.
           </p>
         </section>
       </div>

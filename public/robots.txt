@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://homeleadpro.com/sitemap.xml
+Sitemap: https://h-a-construction.com/sitemap.xml

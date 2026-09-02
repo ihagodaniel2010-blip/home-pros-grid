@@ -51,12 +51,12 @@ const howItWorks = [
   {
     step: "01",
     title: "Homeowner Request",
-    desc: "Clients request local quotes for roofing, remodeling, carpentry, flooring, or painting.",
+    desc: "Clients request quotes for roofing, remodeling, carpentry, flooring, painting, drywall, or general construction.",
   },
   {
     step: "02",
-    title: "Instant Lead Match",
-    desc: "Qualified contractors receive detailed lead notifications in their HomeLeadPro portal.",
+    title: "Project Match",
+    desc: "Qualified contractors receive detailed lead notifications in their H-A Construction portal.",
   },
   {
     step: "03",
@@ -82,13 +82,13 @@ export default function ContractorFeaturesSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-24">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold bg-blue-500/10 text-blue-600 border border-blue-500/20 mb-4">
-            <Zap className="w-3.5 h-3.5" /> HOW HOMELEADPRO WORKS
+            <Zap className="w-3.5 h-3.5" /> HOW H-A CONSTRUCTION WORKS
           </span>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
-            From Local Lead to Paid Job & Tax Report
+            From Project Request to Approved Job & Receipt
           </h2>
           <p className="text-slate-600 text-lg">
-            A seamless 5-step operating workflow designed specifically for US construction and trade pros.
+            A seamless 5-step construction workflow designed for US general contractors, trade pros, and client satisfaction.
           </p>
         </div>
 

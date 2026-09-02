@@ -25,49 +25,49 @@ export default function Terms() {
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">1. Acceptance of Terms</h2>
           <p>
-            By accessing or using the HomeLeadPro website, mobile application, software, or services (collectively, the "Platform"), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the Platform.
+            By accessing or using the H-A Construction website, mobile application, software, or services (collectively, the "Platform"), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the Platform.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">2. Description of Platform</h2>
           <p>
-            HomeLeadPro operates an online software platform that connects homeowners ("Homeowners") seeking construction, remodeling, and home repair services with independent contractors and service professionals ("Contractors"). HomeLeadPro also provides business management software tools for Contractors to generate estimates, track expenses, record client receipts, and manage project workflows.
+            H-A Construction operates an online construction and software platform that connects homeowners ("Homeowners") seeking construction, remodeling, roofing, flooring, drywall, painting, and carpentry services with H-A Construction and partner service professionals ("Contractors"). H-A Construction also provides business management software tools for partner Contractors to generate estimates, track expenses, record client receipts, and manage project workflows.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">3. Independent Contractors & No Guarantee</h2>
           <p>
-            Contractors using HomeLeadPro are independent business owners and are not employees, partners, agents, or joint venturers of HomeLeadPro. HomeLeadPro does not perform construction services, does not guarantee job performance, pricing, or quality, and does not warrant that any homeowner will hire a contractor. Homeowners are solely responsible for evaluating contractors, inspecting licensing, verifying insurance, and approving estimates.
+            Contractors using H-A Construction are independent business owners and are not employees, partners, agents, or joint venturers of H-A Construction. H-A Construction does not perform illegal or unpermitted services, does not guarantee job performance, pricing, or quality, and does not warrant that any homeowner will hire a specific contractor. Homeowners are solely responsible for evaluating contractors, inspecting licensing, verifying insurance, and approving estimates.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">4. User Responsibilities & Conduct</h2>
           <p>
-            Users are responsible for maintaining the confidentiality of their account credentials and for all activities that occur under their account. You agree to provide accurate, truthful, and up-to-date information when submitting quote requests or creating contractor profiles. Fraudulent, deceptive, or abusive activity is strictly prohibited.
+            Users are responsible for maintaining the confidentiality of their account credentials and for all activities that occur under their account. You agree to provide accurate, truthful, and up-to-date information when submitting quote requests or creating partner profiles. Fraudulent, deceptive, or abusive activity is strictly prohibited.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">5. Subscriptions, Fees & Payment Terms</h2>
           <p>
-            HomeLeadPro offers subscription plans and lead acquisition services for Contractors. Subscription fees, features, and pricing structures are displayed on our Pricing page and are subject to change upon notice. All fee terms, billing cycles, and cancellation policies presented during onboarding govern contractor accounts.
+            H-A Construction offers subscription plans and lead acquisition services for Contractors. Subscription fees, features, and pricing structures are displayed on our Pricing page and are subject to change upon notice. All fee terms, billing cycles, and cancellation policies presented during onboarding govern contractor accounts.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">6. Limitation of Liability</h2>
           <p>
-            To the maximum extent permitted by applicable law, HomeLeadPro and its affiliates, officers, directors, and employees shall not be liable for any direct, indirect, incidental, consequential, or punitive damages arising from your use of the Platform or any interactions between Homeowners and Contractors.
+            To the maximum extent permitted by applicable law, H-A Construction and its affiliates, officers, directors, and employees shall not be liable for any direct, indirect, incidental, consequential, or punitive damages arising from your use of the Platform or any interactions between Homeowners and Contractors.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">7. Contact Information</h2>
           <p>
-            If you have any questions regarding these Terms of Service, please contact us at: <a href="mailto:info@homeleadpro.com" className="text-blue-600 font-semibold underline">info@homeleadpro.com</a>.
+            If you have any questions regarding these Terms of Service, please contact us at: <a href="mailto:info@h-a-construction.com" className="text-blue-600 font-semibold underline">info@h-a-construction.com</a>.
           </p>
         </section>
       </div>

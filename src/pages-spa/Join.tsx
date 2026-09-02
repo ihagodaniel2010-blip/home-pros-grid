@@ -55,10 +55,10 @@ const Join = () => {
               <Sparkles className="w-3.5 h-3.5" /> FOR US CONSTRUCTION CONTRACTORS
             </span>
             <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-4">
-              Grow Your Business with <span className="text-blue-500">HomeLeadPro</span>
+              Grow Your Business with <span className="text-blue-500">H-A Construction</span>
             </h1>
             <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto">
-              Join thousands of general contractors, remodelers, roofers, painters, and trade pros getting local leads and managing business operations in one place.
+              Join our network of general contractors, remodelers, roofers, painters, and trade pros getting local project requests and managing business operations.
             </p>
           </motion.div>
         </div>
@@ -69,7 +69,7 @@ const Join = () => {
           {/* Left Column - Benefits */}
           <div className="lg:col-span-6 space-y-8">
             <div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-4">Why Top Contractors Choose HomeLeadPro</h2>
+              <h2 className="text-2xl font-bold text-slate-900 mb-4">Why Top Contractors Partner with H-A Construction</h2>
               <p className="text-slate-600 leading-relaxed">
                 Everything you need to capture local job requests, send fast estimates, track client payments, log job expenses, and export tax-ready reports.
               </p>
@@ -128,7 +128,7 @@ const Join = () => {
                 </div>
                 <CardTitle className="text-2xl font-bold">Register Your Business</CardTitle>
                 <CardDescription className="text-slate-400">
-                  Fill out your business info to get instant access to the HomeLeadPro contractor platform.
+                  Fill out your business info to get instant access to the H-A Construction partner platform.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8">
@@ -137,7 +137,7 @@ const Join = () => {
                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
                       <ShieldCheck className="w-8 h-8" />
                     </div>
-                    <h3 className="text-2xl font-bold text-slate-900">Welcome to HomeLeadPro!</h3>
+                    <h3 className="text-2xl font-bold text-slate-900">Welcome to H-A Construction!</h3>
                     <p className="text-slate-600 max-w-sm mx-auto text-sm">
                       Your business profile has been registered. You can now access your contractor portal or log in to manage your operations.
                     </p>

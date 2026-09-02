@@ -74,10 +74,10 @@ export default function Pricing() {
               <Zap className="w-3.5 h-3.5" /> TRANSPARENT USD PRICING
             </span>
             <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white mb-4">
-              Simple, Predictable Plans for <span className="text-blue-500">Construction Pros</span>
+              Simple, Predictable Pricing for <span className="text-blue-500">H-A Construction Projects</span>
             </h1>
             <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-              Get local leads, send professional estimates, manage jobs, track expenses, and run tax-ready financial reports all in one platform.
+              Get transparent project estimates, partner contractor network plans, and complete project tracking in one place.
             </p>
           </motion.div>
         </div>

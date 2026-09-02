@@ -35,7 +35,7 @@ const ShareExperienceCTA = ({ onLoginClick }: ShareExperienceCTAProps) => {
             Review Eligibility
           </h3>
           <p className="text-gray-600 max-w-xl mx-auto">
-            Only customers with completed jobs can leave reviews. Complete a job through HomeLeadPro to share your experience.
+            Only customers with completed jobs can leave reviews. Complete a project with H-A Construction to share your experience.
           </p>
         </div>
       </motion.div>

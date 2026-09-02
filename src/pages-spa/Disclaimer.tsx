@@ -23,37 +23,37 @@ export default function Disclaimer() {
         </div>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-slate-900">1. Software Platform Services</h2>
+          <h2 className="text-xl font-bold text-slate-900">1. Construction & Software Services</h2>
           <p>
-            HomeLeadPro is an independent software technology platform. HomeLeadPro is not a licensed general contractor, architectural firm, engineering firm, legal advisor, Certified Public Accountant (CPA), tax advisory service, or insurance broker.
+            H-A Construction provides construction, remodeling, roofing, flooring, drywall, painting, and carpentry management services. H-A Construction is not a licensed legal advisor, Certified Public Accountant (CPA), tax advisory service, or insurance brokerage.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">2. Financial & Tax Tools Disclaimer</h2>
           <p>
-            All financial calculation features, tax center exports, expense tracking tools, and reporting metrics provided within HomeLeadPro are intended solely for organizational and business record-keeping purposes. They do not constitute formal accounting or tax advice. Contractors and business owners should consult a certified CPA or tax professional regarding state and federal tax filings.
+            All financial calculation features, tax center exports, expense tracking tools, and reporting metrics provided within H-A Construction software are intended solely for organizational and business record-keeping purposes. They do not constitute formal accounting or tax advice. Contractors and business owners should consult a certified CPA or tax professional regarding state and federal tax filings.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">3. Estimate & Pricing Disclaimer</h2>
           <p>
-            All line items, quantities, pricing totals, labor rates, and project scopes generated using HomeLeadPro software or the AI Estimate Assistant are the sole responsibility of the issuing Contractor. HomeLeadPro assumes no liability for estimate inaccuracies, price fluctuations, or contract disputes between Contractors and Homeowners.
+            All line items, quantities, pricing totals, labor rates, and project scopes generated using H-A Construction software or the AI Estimate Assistant are estimates subject to site inspection and signed project agreements. H-A Construction assumes no liability for estimate variations prior to final contract execution.
           </p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-slate-900">4. Verification of Contractor Licensing & Insurance</h2>
+          <h2 className="text-xl font-bold text-slate-900">4. Verification of Partner Licensing & Insurance</h2>
           <p>
-            Homeowners using HomeLeadPro are strongly advised to independently verify contractor state licensing, municipal permits, general liability insurance, and worker's compensation coverage before entering into any binding construction contract or issuing payments.
+            Homeowners using H-A Construction are advised to review licensing, municipal permits, general liability insurance, and worker's compensation coverage prior to issuing project deposits.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">5. Contact Information</h2>
           <p>
-            For questions regarding this Legal Disclaimer, please contact us at: <a href="mailto:info@homeleadpro.com" className="text-blue-600 font-semibold underline">info@homeleadpro.com</a>.
+            For questions regarding this Legal Disclaimer, please contact us at: <a href="mailto:info@h-a-construction.com" className="text-blue-600 font-semibold underline">info@h-a-construction.com</a>.
           </p>
         </section>
       </div>

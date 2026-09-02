@@ -5,11 +5,11 @@
 
 export const siteConfig = {
   // Business Information
-  businessName: "HomeLeadPro",
-  businessTagline: "We proudly serve construction & home service professionals across the US.",
+  businessName: "H-A Construction",
+  businessTagline: "We proudly serve general construction, remodeling, roofing, flooring, drywall, painting & carpentry clients across the US.",
   
   // Contact Information
-  contactEmail: "info@homeleadpro.com",
+  contactEmail: "info@h-a-construction.com",
   contactPhone: undefined, // Set to null/undefined if not available
   
   // Service Areas (Massachusetts communities)

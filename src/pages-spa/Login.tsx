@@ -60,7 +60,7 @@ const Login = () => {
         <Card className="w-full max-w-md border-gray-200 shadow-lg">
           <CardHeader className="space-y-3 text-center pb-8 pt-8">
             <CardTitle className="text-3xl font-bold tracking-tight">
-              Sign in to HomeLeadPro
+              Sign in to H-A Construction
             </CardTitle>
             <CardDescription className="text-base text-gray-600">
               Use your Google account to leave a review and track your requests.

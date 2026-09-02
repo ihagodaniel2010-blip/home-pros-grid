@@ -10,20 +10,20 @@ import Providers from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-    title: "HomeLeadPro — Construction Leads & Contractor Business Management",
-    description: "Get local construction leads, send estimates, manage jobs, track payments, receipts, expenses, reimbursements and tax-ready reports with HomeLeadPro.",
+    title: "H-A Construction — Construction, Remodeling & Home Improvement Services",
+    description: "H-A Construction provides construction, remodeling, roofing, flooring, drywall, painting and carpentry services with online estimates, project management and client receipts.",
     openGraph: {
-        title: "HomeLeadPro — Construction Leads & Contractor Business Management",
-        description: "Get local construction leads, send estimates, manage jobs, track payments, receipts, expenses, reimbursements and tax-ready reports with HomeLeadPro.",
-        url: "https://homeleadpro.com",
-        siteName: "HomeLeadPro",
+        title: "H-A Construction — Construction, Remodeling & Home Improvement Services",
+        description: "H-A Construction provides construction, remodeling, roofing, flooring, drywall, painting and carpentry services with online estimates, project management and client receipts.",
+        url: "https://h-a-construction.com",
+        siteName: "H-A Construction",
         locale: "en_US",
         type: "website",
     },
     twitter: {
         card: "summary_large_image",
-        title: "HomeLeadPro — Construction Leads & Contractor Business Management",
-        description: "Get local construction leads, send estimates, manage jobs, track payments, receipts, expenses, reimbursements and tax-ready reports with HomeLeadPro.",
+        title: "H-A Construction — Construction, Remodeling & Home Improvement Services",
+        description: "H-A Construction provides construction, remodeling, roofing, flooring, drywall, painting and carpentry services with online estimates, project management and client receipts.",
     },
 };
 

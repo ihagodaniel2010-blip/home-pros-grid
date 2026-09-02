@@ -16,8 +16,8 @@ export type SiteSettings = {
 };
 
 export const defaultSiteSettings: SiteSettings = {
-  businessName: "HomeLeadPro",
-  contactEmail: "contact@homeleadpro.com",
+  businessName: "H-A Construction",
+  contactEmail: "contact@h-a-construction.com",
   contactPhone: "",
   whatsapp: "",
   businessAddress: "Boston, Massachusetts",
