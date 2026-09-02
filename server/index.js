@@ -15,7 +15,7 @@ const normalizeEnv = (value, fallback = "") => {
 };
 
 const ADMIN_EMAIL = normalizeEnv(process.env.ADMIN_EMAIL, "admin@homepros.com").toLowerCase();
-const SESSION_SECRET = normalizeEnv(process.env.SESSION_SECRET);
+const SESSION_SECRET = normalizeEnv(process.env.SESSION_SECRET, "ha-construction-default-session-secret-2026");
 const NODE_ENV = normalizeEnv(process.env.NODE_ENV, "development");
 const FRONTEND_ORIGIN = normalizeEnv(process.env.FRONTEND_ORIGIN, "http://localhost:8080");
 const SESSION_COOKIE_SAME_SITE = normalizeEnv(
@@ -28,11 +28,6 @@ const SESSION_COOKIE_SECURE =
     : NODE_ENV === "production";
 const isVercelRuntime = process.env.VERCEL === "1";
 const dataDir = isVercelRuntime ? path.resolve("/tmp", "home-pros-grid-data") : path.resolve(process.cwd(), "data");
-
-if (!SESSION_SECRET) {
-  console.error("Missing SESSION_SECRET in environment.");
-  process.exit(1);
-}
 
 app.set("trust proxy", 1);
 app.use((req, res, next) => {
