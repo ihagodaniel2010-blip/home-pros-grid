@@ -30,10 +30,10 @@ const translations: Record<Language, Record<string, string>> = {
         "nav.language": "Language",
 
         // Hero
-        "hero.title": "Your Home. Happier.",
-        "hero.subtitle": "Finding the right contractor is fast, easy and free!",
-        "hero.search_placeholder": "What type of pro are you looking for?",
-        "hero.start": "Start",
+        "hero.title": "Local Construction Leads & Contractor OS",
+        "hero.subtitle": "Get high-intent quote requests, send smart estimates, track job expenses and receipts in one place.",
+        "hero.search_placeholder": "Search service (Roofing, Carpentry, Flooring, Remodeling...)",
+        "hero.start": "Request Quote",
 
         // Navigation
         "nav.back": "Back",

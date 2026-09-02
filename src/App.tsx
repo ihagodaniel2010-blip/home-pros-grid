@@ -37,6 +37,10 @@ import CompanySettings from "./pages-spa/admin/CompanySettings";
 import LeadMarket from "./pages-spa/admin/LeadMarket";
 import PublicView from "./pages-spa/PublicView";
 import PublicExtraView from "./pages-spa/PublicExtraView";
+import Pricing from "./pages-spa/Pricing";
+import Terms from "./pages-spa/Terms";
+import Privacy from "./pages-spa/Privacy";
+import Disclaimer from "./pages-spa/Disclaimer";
 import NotFound from "./pages-spa/NotFound";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -49,6 +53,7 @@ const App = () => (
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/services" element={<Services />} />
+        <Route path="/pricing" element={<Pricing />} />
         <Route path="/quote/:serviceSlug" element={<Quote />} />
         <Route path="/success" element={<Success />} />
         <Route path="/login" element={<Login />} />
@@ -57,6 +62,9 @@ const App = () => (
         <Route path="/blog" element={<Blog />} />
         <Route path="/cost-guide" element={<CostGuide />} />
         <Route path="/experiences" element={<Experiences />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/disclaimer" element={<Disclaimer />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<ErrorBoundary><AdminLayout /></ErrorBoundary>}>
           <Route index element={<Dashboard />} />
@@ -84,6 +92,7 @@ const App = () => (
         </Route>
         <Route path="/estimate/:token" element={<PublicView />} />
         <Route path="/extra/:token" element={<PublicExtraView />} />
+        <Route path="/public/receipt/:token" element={<PublicReceipt />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

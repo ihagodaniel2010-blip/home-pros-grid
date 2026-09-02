@@ -5,11 +5,11 @@
 
 export const siteConfig = {
   // Business Information
-  businessName: "Barrigudo",
-  businessTagline: "We proudly serve these Massachusetts communities.",
+  businessName: "H-A Construction",
+  businessTagline: "We proudly serve general construction, remodeling, roofing, flooring, drywall, painting & carpentry clients across the US.",
   
   // Contact Information
-  contactEmail: "info@barrigudo.com",
+  contactEmail: "info@h-a-construction.com",
   contactPhone: undefined, // Set to null/undefined if not available
   
   // Service Areas (Massachusetts communities)

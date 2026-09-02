@@ -151,7 +151,7 @@ const AdminLogin = () => {
                     required
                     value={devEmail}
                     onChange={(e) => setDevEmail(e.target.value)}
-                    placeholder="owner-a@homeleadpro.com"
+                    placeholder="owner-a@h-a-construction.com"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                   />
                 </div>

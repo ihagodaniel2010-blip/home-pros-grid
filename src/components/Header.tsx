@@ -110,7 +110,7 @@ const Header = () => {
       <div className="max-w-7xl mx-auto px-6 h-[72px] flex items-center justify-between">
         <Link to="/" className={`text-xl font-bold tracking-tight ${isHeroPage ? "text-white" : "text-primary"
           }`}>
-          Barrigudo
+          H-A Construction
         </Link>
 
         <nav className={`hidden lg:flex items-center gap-8 ml-auto mr-8 ${isHeroPage ? "text-white" : ""}`}>
@@ -205,6 +205,7 @@ const Header = () => {
 
           {[
             { to: "/about", label: t("nav.about") },
+            { to: "/pricing", label: "Pricing" },
             { to: "/cost-guide", label: t("nav.portfolio") },
             { to: "/experiences", label: t("nav.experiences") },
           ].map((link) => (

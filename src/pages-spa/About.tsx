@@ -33,10 +33,10 @@ const About = () => {
             transition={{ duration: 0.6 }}
           >
             <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
-              About Barrigudo
+              About H-A Construction
             </h1>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-              Connecting homeowners with trusted local home service professionals to build, protect, and improve their homes.
+              Delivering high-quality general construction, remodeling, roofing, flooring, drywall, painting, and carpentry services with trusted craftsmanship.
             </p>
           </motion.div>
         </div>
@@ -81,11 +81,10 @@ const About = () => {
           <img
             className="mx-auto w-28 mb-6"
             src="/aEomQEx4Q2sZ.com/resources/images/networx/v2/UZP1Emv43ZoL.png"
-            alt="Barrigudo trust badge"
+            alt="H-A Construction trust badge"
           />
           <p className="text-slate-700 leading-8 text-lg italic max-w-3xl mx-auto">
-            At Barrigudo, our mission is to connect homeowners with qualified local and national home service professionals and products they can trust.
-            We help people build, protect, and invest in their homes while growing the businesses that serve them, every single day.
+            At H-A Construction, our mission is to deliver exceptional construction, remodeling, and home improvement craftsmanship with transparency, clear project estimates, and reliable execution.
           </p>
         </div>
       </section>

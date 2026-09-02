@@ -8,17 +8,17 @@ const testimonials = [
   {
     name: "Sarem S.",
     photo: "/aEomQEx4Q2sZ.com/media/250x165/image0.jpg",
-    text: "That Barrigudo website was very handy. I'm glad that I came across the site and got the link to my pro because their work was really, really good.",
+    text: "That H-A Construction website was very handy. I'm glad that I came across the site and got the link to my estimate because their work was really, really good.",
   },
   {
     name: "Cindy T.",
     photo: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/J6GlJ7ytlpit.jpg",
-    text: "What I liked about Barrigudo is somebody called for a follow-up to see if a roofer had gotten in touch with me yet. That was really nice and helpful.",
+    text: "What I liked about H-A Construction is somebody called for a follow-up to see if a roofer had gotten in touch with me yet. That was really nice and helpful.",
   },
   {
     name: "Jackie D.",
     photo: "/aEomQEx4Q2sZ.com/resources/images/networx/v2/UqEBesZNaAi1.jpg",
-    text: "Barrigudo gave me great service. I spoke with a rep who was so nice and courteous and within less than an hour, I heard from the pro.",
+    text: "H-A Construction gave me great service. I spoke with a rep who was so nice and courteous and within less than an hour, I heard back.",
   },
 ];
 
@@ -55,11 +55,10 @@ const ArticlesSection = () => (
         <img
           className="mx-auto w-28 mb-6"
           src="/aEomQEx4Q2sZ.com/resources/images/networx/v2/UZP1Emv43ZoL.png"
-          alt="Barrigudo trust badge"
+          alt="H-A Construction trust badge"
         />
         <p className="text-slate-700 leading-8 max-w-4xl mx-auto" style={{ fontSize: "24px", fontStyle: "italic" }}>
-          At Barrigudo, our mission is to connect homeowners with qualified local and national home service professionals and products they can trust.
-          We help people build, protect, and invest in their homes while growing the businesses that serve them, every single day.
+          At H-A Construction, our mission is to provide homeowners and clients with high-quality general construction, remodeling, roofing, flooring, drywall, painting, and carpentry services.
         </p>
       </div>
     </section>
@@ -76,11 +75,10 @@ const ArticlesSection = () => (
           className="text-3xl font-semibold mb-3 text-slate-900"
           style={{ fontSize: "36px", fontWeight: 700, letterSpacing: "-0.01em" }}
         >
-          Are you a Pro?
+          Are you a Construction Partner?
         </h3>
         <p className="text-base text-slate-700 mb-8 leading-relaxed" style={{ fontSize: "16px", lineHeight: 1.6 }}>
-          Get real-time updates about local jobs for home improvement professionals.
-          Discover how Barrigudo can help your business grow, as it has for many successful local contractors.
+          Discover how H-A Construction can help expand your project capabilities across local service areas.
         </p>
         <Link
           to="/join"
