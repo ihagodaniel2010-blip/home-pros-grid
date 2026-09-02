@@ -36,7 +36,7 @@ const TopProjects = () => (
           letterSpacing: '-0.01em',
           lineHeight: 1.15
         }}>
-          Our Top Projects
+          Featured Construction Services
         </h2>
       </motion.div>
 
