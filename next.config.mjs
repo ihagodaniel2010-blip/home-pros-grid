@@ -7,7 +7,6 @@ const nextConfig = {
     typescript: {
         ignoreBuildErrors: true,
     },
-    // Port configuration handled via CLI or environment
     images: {
         remotePatterns: [
             {
