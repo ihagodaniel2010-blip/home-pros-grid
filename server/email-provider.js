@@ -1,5 +1,3 @@
-import { COMMUNICATION_TEMPLATES } from "../src/lib/communicationTemplates.js";
-
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validateEmailRecipient(email) {
@@ -16,7 +14,7 @@ export function renderTemplateText(templateText, variables = {}) {
   return result;
 }
 
-export async function sendTransactionalEmail({ templateId, toEmail, variables = {}, customSubject, customReplyTo }) {
+export async function sendTransactionalEmail({ templateId, toEmail, variables = {}, customSubject, customBodyText, customBodyHtml, customReplyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL || "H&A Construction <no-reply@h-a-construction.com>";
   const replyToEmail = customReplyTo || process.env.RESEND_REPLY_TO_EMAIL;
@@ -37,26 +35,17 @@ export async function sendTransactionalEmail({ templateId, toEmail, variables = 
     };
   }
 
-  const template = (COMMUNICATION_TEMPLATES || []).find((t) => t.id === templateId);
-  if (!template) {
-    return {
-      success: false,
-      configured: true,
-      message: `Template ID '${templateId}' is not allowed or unrecognized.`
-    };
-  }
-
-  const renderedSubject = customSubject || renderTemplateText(template.subject, variables);
-  const renderedBodyText = renderTemplateText(template.bodyText, variables);
-  const renderedBodyHtml = renderTemplateText(template.bodyHtml, variables);
+  const subject = customSubject || `H&A Construction Notification (${templateId || 'General'})`;
+  const bodyText = customBodyText ? renderTemplateText(customBodyText, variables) : `H&A Construction Notification: ${templateId}`;
+  const bodyHtml = customBodyHtml ? renderTemplateText(customBodyHtml, variables) : `<p>H&A Construction Notification: <strong>${templateId}</strong></p>`;
 
   try {
     const resendBody = {
       from: fromEmail,
       to: [toEmail.trim()],
-      subject: renderedSubject,
-      text: renderedBodyText,
-      html: renderedBodyHtml
+      subject,
+      text: bodyText,
+      html: bodyHtml
     };
 
     if (replyToEmail) {
