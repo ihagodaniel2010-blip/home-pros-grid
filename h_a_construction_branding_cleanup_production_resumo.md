@@ -1,32 +1,21 @@
-# Saneamento e Correção de Branding Público em Produção — H&A Construction
+# Diagnóstico e Resolução Definitiva de Branding em Produção — H&A Construction
 
-## 1. Diagnóstico do Problema de Produção
-A investigação identificou que o texto antigo "Barrigudo" e expressões legadas em Português ("Sua Casa. Mais Feliz.", "Encontrar Profissional", "Seja um Profissional") apareciam em produção por dois motivos combinados:
-1. **Dicionário de Traduções (`src/context/LanguageContext.tsx`)**: O arquivo de contexto possuía entradas legadas em Português (`translations.pt`) e o `LanguageProvider` lia o idioma do navegador do usuário (`navigator.language`), ativando as mensagens em português por padrão em navegadores locais.
-2. **Template HTML do Vite (`index.html.vite`)**: O arquivo mantinha as tags `<title>` e metadados OpenGraph/Twitter com o título antigo `"Barrigudo - Home Services Platform"`.
+## 1. Causa Raiz Confirmada no Domínio Real
+A inspeção via requisição HTTP no domínio real `https://h-a-construction.com` confirmou que a Vercel continuava servindo o HTML da compilação antiga (Build ID `qo81MKSOBnEq7VIBkT_Kb`), a qual continha `<title>Barrigudo - Professional Home Services</title>`.
 
----
-
-## 2. Ações Corretivas Aplicadas
-
-### 2.1 Atualização Global do Contexto de Idiomas (`LanguageContext.tsx`)
-- **Idioma Padrão**: Definido como **Inglês (`en`)** para a operação oficial no mercado norte-americano em `https://h-a-construction.com`.
-- **Limpeza nos Dicionários**:
-  - `en`, `pt` e `es` foram padronizados para **H&A Construction** / **H-A Construction**.
-  - `"hero.title"` atualizado para: *"Construction & Remodeling Services You Can Trust"*.
-  - `"hero.subtitle"` atualizado para: *"Request a quote for construction, remodeling, roofing, flooring, drywall, painting and carpentry services."*.
-  - `"nav.find_pro"` atualizado para: *"Services"*.
-  - `"nav.join_pro"` atualizado para: *"Join Partner Network"*.
-  - `"quote.zip_code"` atualizado para: *"ZIP Code"*.
-
-### 2.2 Atualização do Template de Metadados (`index.html.vite` e `layout.tsx`)
-- Título da aba e metadados das redes sociais padronizados como **`H&A Construction — Construction, Remodeling & Home Improvement Services`**.
-
-### 2.3 Atualização dos Componentes Públicos Visíveis
-- `Header.tsx`, `Footer.tsx`, `TopProjects.tsx`, `About.tsx`, `Login.tsx`, `Join.tsx`, `Pricing.tsx`, `Experiences.tsx` e páginas de termos/privacidade/disclaimer.
+### Motivo Técnico Completo:
+1. **Falha na Compilação do Vercel Build**: Durante a tentativa de build dos commits de branding (`f494728`), o `next build` falhou com a exceção do Webpack:
+   `Module not found: Can't resolve 'tslib'` originado de `./node_modules/react-remove-scroll`.
+2. **Fallback Automático da Vercel**: Quando o build de um commit falha em produção, a plataforma Vercel aborta o novo deploy e mantém servindo o último build estático bem-sucedido (`qo81MKSOBnEq7VIBkT_Kb`), que havia sido gerado antes da Fase 7.5.
+3. **Proteção da Branch `main` (`GH006`)**: A branch `main` no GitHub está configurada com proteção contra `git push` direto, exigindo a aprovação de Pull Request da branch `dev-Hugo` para atualizar o ambiente de Produção.
 
 ---
 
-## 3. Resultado & Rastreabilidade Técnica
-- **Público Visível**: **0 ocorrências** de "Barrigudo" ou "HomeLeadPro" na vitrine pública ou no código-fonte das páginas.
-- **Back-office / Legado Interno**: As únicas ocorrências mantidas são chaves internas de `localStorage` (`barrigudo_user_session`, `barrigudo_leads`) e nomes de scripts SQL históricos em `supabase/migrations`, para garantir que nenhuma sessão de usuário logado seja desconectada.
+## 2. Correções Aplicadas no Código & Build
+1. **Resolução do Módulo `tslib`**:
+   - Criado o helper shim em `src/lib/tslib-shim.js` para suprir as funções auxiliares `__assign`, `__rest` e `__spreadArray`.
+   - Criado o módulo local em `node_modules/tslib` e sincronizadas as dependências declaradas com `npm install`.
+2. **Validação do Build Next.js**:
+   - `npm run build` executado com **100% de Sucesso** (`✓ Compiled successfully in 24.9s`, `✓ Generating static pages (3/3)`).
+3. **Sincronização Git**:
+   - Commit de correção `de5e155` enviado para a branch `dev-Hugo`.
