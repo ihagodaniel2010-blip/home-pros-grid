@@ -24,7 +24,7 @@ begin
     select id into v_painting_id from public.service_categories where slug = 'painting';
     select id into v_remodeling_id from public.service_categories where slug = 'remodeling';
 
-    -- 2. Insert or update Tasks for Roofing, Painting, Remodeling (UPSERT by unique slug)
+    -- 2. Insert or update Tasks for Roofing, Painting, Remodeling (UPSERT by unique slug including price updates)
     -- Roofing
     insert into public.service_tasks (category_id, slug, name, min_lead_price, max_lead_price, default_lead_price, active) values
     (v_roofing_id, 'roof-replacement', 'Roof Replacement or Complete Overhaul', 40, 150, 80, true),
@@ -33,6 +33,9 @@ begin
     on conflict (slug) do update set
         name = EXCLUDED.name,
         category_id = EXCLUDED.category_id,
+        min_lead_price = EXCLUDED.min_lead_price,
+        max_lead_price = EXCLUDED.max_lead_price,
+        default_lead_price = EXCLUDED.default_lead_price,
         active = true;
 
     -- Painting
@@ -43,6 +46,9 @@ begin
     on conflict (slug) do update set
         name = EXCLUDED.name,
         category_id = EXCLUDED.category_id,
+        min_lead_price = EXCLUDED.min_lead_price,
+        max_lead_price = EXCLUDED.max_lead_price,
+        default_lead_price = EXCLUDED.default_lead_price,
         active = true;
 
     -- Remodeling
@@ -53,6 +59,9 @@ begin
     on conflict (slug) do update set
         name = EXCLUDED.name,
         category_id = EXCLUDED.category_id,
+        min_lead_price = EXCLUDED.min_lead_price,
+        max_lead_price = EXCLUDED.max_lead_price,
+        default_lead_price = EXCLUDED.default_lead_price,
         active = true;
 
     -- 3. Idempotent question flows management (delete only target category flows before re-inserting)

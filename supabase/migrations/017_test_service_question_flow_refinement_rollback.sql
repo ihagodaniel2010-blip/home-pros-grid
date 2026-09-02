@@ -30,19 +30,37 @@ begin
     (v_roofing_id, 'roof-replacement', 'Roof Replacement or Complete Overhaul', 40, 150, 80, true),
     (v_roofing_id, 'roof-repair-leak', 'Roof Repair or Leak Inspection', 20, 65, 35, true),
     (v_roofing_id, 'shingle-roofing', 'Shingle Roof Installation / Repair', 25, 75, 45, true)
-    on conflict (slug) do update set name = EXCLUDED.name, category_id = EXCLUDED.category_id, active = true;
+    on conflict (slug) do update set
+        name = EXCLUDED.name,
+        category_id = EXCLUDED.category_id,
+        min_lead_price = EXCLUDED.min_lead_price,
+        max_lead_price = EXCLUDED.max_lead_price,
+        default_lead_price = EXCLUDED.default_lead_price,
+        active = true;
 
     insert into public.service_tasks (category_id, slug, name, min_lead_price, max_lead_price, default_lead_price, active) values
     (v_painting_id, 'interior-painting', 'Interior Painting - Rooms or Whole House', 20, 70, 40, true),
     (v_painting_id, 'exterior-painting', 'Exterior Painting - House Siding or Trim', 30, 90, 55, true),
     (v_painting_id, 'cabinet-painting', 'Cabinet Painting or Refinishing', 25, 80, 45, true)
-    on conflict (slug) do update set name = EXCLUDED.name, category_id = EXCLUDED.category_id, active = true;
+    on conflict (slug) do update set
+        name = EXCLUDED.name,
+        category_id = EXCLUDED.category_id,
+        min_lead_price = EXCLUDED.min_lead_price,
+        max_lead_price = EXCLUDED.max_lead_price,
+        default_lead_price = EXCLUDED.default_lead_price,
+        active = true;
 
     insert into public.service_tasks (category_id, slug, name, min_lead_price, max_lead_price, default_lead_price, active) values
     (v_remodeling_id, 'kitchen-remodel-full', 'Full Kitchen Remodel & Custom Cabinets', 50, 200, 100, true),
     (v_remodeling_id, 'bathroom-remodel-full', 'Full Bathroom Remodel & Tile', 40, 160, 85, true),
     (v_remodeling_id, 'basement-finishing', 'Basement Finishing or Conversion', 45, 180, 90, true)
-    on conflict (slug) do update set name = EXCLUDED.name, category_id = EXCLUDED.category_id, active = true;
+    on conflict (slug) do update set
+        name = EXCLUDED.name,
+        category_id = EXCLUDED.category_id,
+        min_lead_price = EXCLUDED.min_lead_price,
+        max_lead_price = EXCLUDED.max_lead_price,
+        default_lead_price = EXCLUDED.default_lead_price,
+        active = true;
 
     delete from public.service_question_flows where category_slug in ('roofing', 'painting', 'remodeling');
 
@@ -96,19 +114,37 @@ begin
     (v_roofing_id, 'roof-replacement', 'Roof Replacement or Complete Overhaul', 40, 150, 80, true),
     (v_roofing_id, 'roof-repair-leak', 'Roof Repair or Leak Inspection', 20, 65, 35, true),
     (v_roofing_id, 'shingle-roofing', 'Shingle Roof Installation / Repair', 25, 75, 45, true)
-    on conflict (slug) do update set name = EXCLUDED.name, category_id = EXCLUDED.category_id, active = true;
+    on conflict (slug) do update set
+        name = EXCLUDED.name,
+        category_id = EXCLUDED.category_id,
+        min_lead_price = EXCLUDED.min_lead_price,
+        max_lead_price = EXCLUDED.max_lead_price,
+        default_lead_price = EXCLUDED.default_lead_price,
+        active = true;
 
     insert into public.service_tasks (category_id, slug, name, min_lead_price, max_lead_price, default_lead_price, active) values
     (v_painting_id, 'interior-painting', 'Interior Painting - Rooms or Whole House', 20, 70, 40, true),
     (v_painting_id, 'exterior-painting', 'Exterior Painting - House Siding or Trim', 30, 90, 55, true),
     (v_painting_id, 'cabinet-painting', 'Cabinet Painting or Refinishing', 25, 80, 45, true)
-    on conflict (slug) do update set name = EXCLUDED.name, category_id = EXCLUDED.category_id, active = true;
+    on conflict (slug) do update set
+        name = EXCLUDED.name,
+        category_id = EXCLUDED.category_id,
+        min_lead_price = EXCLUDED.min_lead_price,
+        max_lead_price = EXCLUDED.max_lead_price,
+        default_lead_price = EXCLUDED.default_lead_price,
+        active = true;
 
     insert into public.service_tasks (category_id, slug, name, min_lead_price, max_lead_price, default_lead_price, active) values
     (v_remodeling_id, 'kitchen-remodel-full', 'Full Kitchen Remodel & Custom Cabinets', 50, 200, 100, true),
     (v_remodeling_id, 'bathroom-remodel-full', 'Full Bathroom Remodel & Tile', 40, 160, 85, true),
     (v_remodeling_id, 'basement-finishing', 'Basement Finishing or Conversion', 45, 180, 90, true)
-    on conflict (slug) do update set name = EXCLUDED.name, category_id = EXCLUDED.category_id, active = true;
+    on conflict (slug) do update set
+        name = EXCLUDED.name,
+        category_id = EXCLUDED.category_id,
+        min_lead_price = EXCLUDED.min_lead_price,
+        max_lead_price = EXCLUDED.max_lead_price,
+        default_lead_price = EXCLUDED.default_lead_price,
+        active = true;
 
     delete from public.service_question_flows where category_slug in ('roofing', 'painting', 'remodeling');
 
@@ -143,7 +179,6 @@ declare
     v_flows_count integer;
     v_invalid_slugs_count integer;
 begin
-    -- Validate categories
     select count(*) into v_categories_count
     from public.service_categories
     where slug in ('roofing', 'painting', 'remodeling');
@@ -152,7 +187,6 @@ begin
         raise exception 'Validation failed: expected 3 categories, found %', v_categories_count;
     end if;
 
-    -- Validate tasks
     select count(*) into v_tasks_count
     from public.service_tasks
     where slug in (
@@ -165,16 +199,14 @@ begin
         raise exception 'Validation failed: expected 9 tasks, found %', v_tasks_count;
     end if;
 
-    -- Validate question flows (checking idempotency - exact count after running twice)
     select count(*) into v_flows_count
     from public.service_question_flows
     where category_slug in ('roofing', 'painting', 'remodeling');
 
     if v_flows_count <> 3 then
-        raise exception 'Validation failed: expected 3 question flows (no duplicates), found %', v_flows_count;
+        raise exception 'Validation failed: expected 3 question flows, found %', v_flows_count;
     end if;
 
-    -- Validate options contain valid maps_to_task_slug
     select count(*) into v_invalid_slugs_count
     from (
         select jsonb_array_elements(options)->>'maps_to_task_slug' as task_slug
