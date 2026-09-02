@@ -7,6 +7,14 @@
     {
       "source": "/api/:path*",
       "destination": "/api/index?path=:path*"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/"
+    },
+    {
+      "source": "/((?!api|_next|favicon.ico|sitemap.xml|robots.txt).*)",
+      "destination": "/"
     }
   ],
   "functions": {
