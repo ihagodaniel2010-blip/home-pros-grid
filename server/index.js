@@ -4,6 +4,7 @@ import session from "express-session";
 import fs from "fs/promises";
 import path from "path";
 import { readSiteSettings, writeSiteSettings } from "./site-settings.store.js";
+import { sendTransactionalEmail } from "./email-provider.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 8787);
@@ -357,7 +358,6 @@ app.post("/api/admin/send-test-email", async (req, res) => {
   }
 
   try {
-    const { sendTransactionalEmail } = await import("../src/lib/server/emailProvider.js");
     const result = await sendTransactionalEmail({
       templateId,
       toEmail: String(toEmail).trim(),
