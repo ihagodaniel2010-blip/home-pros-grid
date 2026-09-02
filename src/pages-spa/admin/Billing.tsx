@@ -23,7 +23,8 @@ interface LedgerItem {
 }
 
 export default function Billing() {
-  const { user, isWorker } = useUser();
+  const { user } = useUser();
+  const isWorker = user?.organization?.role === 'worker';
   const navigate = useNavigate();
   const currentOrganization = user?.organization;
 

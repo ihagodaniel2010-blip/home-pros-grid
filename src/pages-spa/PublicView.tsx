@@ -62,7 +62,7 @@ const PublicView = () => {
         setIsApproving(true);
         const success = await rejectEstimate(estimate.id, token);
         if (success) {
-            setEstimate({ ...estimate, status: 'Declined' });
+            setEstimate({ ...estimate, status: 'Rejected' });
             toast.success("Estimate declined.");
         } else {
             toast.error("Failed to decline estimate.");
@@ -76,7 +76,8 @@ const PublicView = () => {
             case 'sent': return 'bg-blue-100 text-blue-700 border-blue-200';
             case 'viewed': return 'bg-purple-100 text-purple-700 border-purple-200';
             case 'approved': return 'bg-green-100 text-green-700 border-green-200';
-            case 'declined': return 'bg-red-100 text-red-700 border-red-200';
+            case 'declined':
+            case 'rejected': return 'bg-red-100 text-red-700 border-red-200';
             case 'paid': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
             default: return 'bg-gray-100 text-gray-700 border-gray-200';
         }
@@ -101,7 +102,7 @@ const PublicView = () => {
         );
     }
 
-    const isDeclined = estimate.status === 'Declined' || estimate.status === 'Rejected';
+    const isDeclined = estimate.status === 'Rejected';
 
     return (
         <div className="min-h-screen bg-gray-50 py-12 px-4">

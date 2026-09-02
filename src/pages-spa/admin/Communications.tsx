@@ -9,7 +9,8 @@ import {
 import { useNavigate } from "react-router-dom";
 
 export default function Communications() {
-  const { user, isWorker } = useUser();
+  const { user } = useUser();
+  const isWorker = user?.organization?.role === 'worker';
   const navigate = useNavigate();
 
   const [selectedTemplate, setSelectedTemplate] = useState<CommunicationTemplate>(COMMUNICATION_TEMPLATES[0]);
