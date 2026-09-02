@@ -13,9 +13,9 @@ A Fase 8.5 criou e validou a nova central de faturamento e créditos em `/admin/
   - Tabela com listagem cronológica de transações de `organization_credit_ledger`.
   - Exibição de débitos de leads (`lead_debit`) e depósitos manuais (`manual_credit`).
 - **Ações de Gestão**:
-  - Modal para inclusão de **Créditos Manuais** para proprietários e administradores.
-  - **Exportação para CSV** de todo o histórico contábil.
-  - **Cópia do Resumo de Faturamento** para a área de transferência.
+  - Modal para inclusão de **Créditos Manuais** reais gravados na tabela `organization_credit_ledger`.
+  - **Exportação para CSV** funcional de todo o histórico contábil.
+  - **Cópia do Resumo de Faturamento** funcional para a área de transferência.
 - **Preparação Futura (Pagamentos Online)**:
   - Painel informativo de prontidão para recarga automática via cartão/assinatura no futuro (sem Stripe nem dependências instaladas).
 - **Segurança de Acesso**:
