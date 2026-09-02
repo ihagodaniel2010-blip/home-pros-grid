@@ -314,6 +314,66 @@ app.get("/api/admin/login-attempts", requireAdmin, async (req, res) => {
   res.json(filtered.slice(0, limit));
 });
 
+// =============================
+// RESEND EMAIL DISPATCH (FASE 9.1)
+// =============================
+app.get("/api/admin/email-provider-status", (req, res) => {
+  const isConfigured = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim());
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "H&A Construction <no-reply@h-a-construction.com>";
+  res.json({
+    configured: isConfigured,
+    provider: "Resend",
+    fromEmail
+  });
+});
+
+app.post("/api/admin/send-test-email", async (req, res) => {
+  const apiKey = process.env.RESEND_API_KEY;
+  const { templateId, toEmail, variables } = req.body || {};
+
+  if (!apiKey || !apiKey.trim()) {
+    return res.json({
+      success: false,
+      configured: false,
+      message: "RESEND_API_KEY is not configured in environment variables. Real email dispatch disabled."
+    });
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!toEmail || !emailRegex.test(String(toEmail).trim())) {
+    return res.status(400).json({
+      success: false,
+      configured: true,
+      message: "Invalid recipient email address format."
+    });
+  }
+
+  if (!templateId || typeof templateId !== "string") {
+    return res.status(400).json({
+      success: false,
+      configured: true,
+      message: "templateId parameter is required."
+    });
+  }
+
+  try {
+    const { sendTransactionalEmail } = await import("../src/lib/server/emailProvider.js");
+    const result = await sendTransactionalEmail({
+      templateId,
+      toEmail: String(toEmail).trim(),
+      variables: variables || {}
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error("Error sending test email route:", err);
+    return res.status(500).json({
+      success: false,
+      configured: true,
+      message: err.message || "Failed to dispatch test email."
+    });
+  }
+});
+
 if (NODE_ENV === "production") {
   const distPath = path.resolve(process.cwd(), "dist");
   app.use("/admin", (req, res, next) => {
