@@ -31,7 +31,7 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-const USER_STORAGE_KEY = "barrigudo_user_session";
+const USER_STORAGE_KEY = "ha_construction_user_session";
 
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserSession | null>(null);

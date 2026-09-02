@@ -21,14 +21,14 @@ export interface AppNotification {
 
 const getLocalState = (): Record<string, { read?: boolean, dismissed?: boolean }> => {
   try {
-    return JSON.parse(localStorage.getItem('barrigudo_notifications') || '{}');
+    return JSON.parse(localStorage.getItem('ha_construction_notifications') || '{}');
   } catch {
     return {};
   }
 };
 
 const saveLocalState = (state: Record<string, { read?: boolean, dismissed?: boolean }>) => {
-  localStorage.setItem('barrigudo_notifications', JSON.stringify(state));
+  localStorage.setItem('ha_construction_notifications', JSON.stringify(state));
 };
 
 let globalState = {

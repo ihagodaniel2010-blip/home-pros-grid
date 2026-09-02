@@ -55,10 +55,10 @@ const Join = () => {
               <Sparkles className="w-3.5 h-3.5" /> FOR US CONSTRUCTION CONTRACTORS
             </span>
             <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-4">
-              Grow Your Business with <span className="text-blue-500">H-A Construction</span>
+              Partner with <span className="text-primary">H &amp; A Construction LLC</span>
             </h1>
             <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto">
-              Join our network of general contractors, remodelers, roofers, painters, and trade pros getting local project requests and managing business operations.
+              Join our team of general contractors, remodelers, roofers, painters, and trade pros managing residential construction projects across Southern Maine.
             </p>
           </motion.div>
         </div>
@@ -69,7 +69,7 @@ const Join = () => {
           {/* Left Column - Benefits */}
           <div className="lg:col-span-6 space-y-8">
             <div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-4">Why Top Contractors Partner with H-A Construction</h2>
+              <h2 className="text-2xl font-bold text-slate-900 mb-4">Partner with H &amp; A Construction LLC</h2>
               <p className="text-slate-600 leading-relaxed">
                 Everything you need to capture local job requests, send fast estimates, track client payments, log job expenses, and export tax-ready reports.
               </p>

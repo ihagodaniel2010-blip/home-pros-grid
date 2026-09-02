@@ -110,7 +110,7 @@ const Header = () => {
       <div className="max-w-7xl mx-auto px-6 h-[72px] flex items-center justify-between">
         <Link to="/" className={`text-xl font-bold tracking-tight ${isHeroPage ? "text-white" : "text-primary"
           }`}>
-          H-A Construction
+          H &amp; A Construction LLC
         </Link>
 
         <nav className={`hidden lg:flex items-center gap-8 ml-auto mr-8 ${isHeroPage ? "text-white" : ""}`}>
@@ -437,10 +437,16 @@ const Header = () => {
           </Button>
         </div>
 
-        <button className={`lg:hidden p-2 rounded-lg transition-colors ${isHeroPage
-          ? "text-white hover:bg-white/10"
-          : "text-foreground hover:bg-accent"
-          }`} onClick={() => setMobileOpen(!mobileOpen)}>
+        <button 
+          className={`lg:hidden p-2 rounded-lg transition-colors ${isHeroPage
+            ? "text-white hover:bg-white/10"
+            : "text-foreground hover:bg-accent"
+          }`} 
+          onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-navigation-menu"
+        >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
@@ -449,6 +455,7 @@ const Header = () => {
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
+            id="mobile-navigation-menu"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
