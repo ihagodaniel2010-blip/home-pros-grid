@@ -69,7 +69,10 @@ export default function Communications() {
         body: JSON.stringify({
           templateId: selectedTemplate.id,
           toEmail: testEmail,
-          variables: testVars
+          variables: testVars,
+          subject: selectedTemplate.subject,
+          bodyText: selectedTemplate.bodyText,
+          bodyHtml: selectedTemplate.bodyHtml
         })
       });
 

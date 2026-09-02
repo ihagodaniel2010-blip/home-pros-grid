@@ -330,7 +330,7 @@ app.get("/api/admin/email-provider-status", (req, res) => {
 
 app.post("/api/admin/send-test-email", async (req, res) => {
   const apiKey = process.env.RESEND_API_KEY;
-  const { templateId, toEmail, variables } = req.body || {};
+  const { templateId, toEmail, variables, subject, bodyText, bodyHtml } = req.body || {};
 
   if (!apiKey || !apiKey.trim()) {
     return res.json({
@@ -361,7 +361,10 @@ app.post("/api/admin/send-test-email", async (req, res) => {
     const result = await sendTransactionalEmail({
       templateId,
       toEmail: String(toEmail).trim(),
-      variables: variables || {}
+      variables: variables || {},
+      customSubject: subject,
+      customBodyText: bodyText,
+      customBodyHtml: bodyHtml
     });
     return res.json(result);
   } catch (err) {
