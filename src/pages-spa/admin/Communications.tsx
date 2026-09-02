@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUser } from "@/context/UserContext";
 import { COMMUNICATION_TEMPLATES, CommunicationTemplate } from "@/lib/communicationTemplates";
 import { toast } from "sonner";
 import { 
   Mail, Copy, Check, Eye, AlertCircle, Info, Sparkles, Code2, 
-  Send, Users, Building, ShieldCheck
+  Send, Users, Building, ShieldCheck, Loader2, CheckCircle2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -15,13 +15,80 @@ export default function Communications() {
 
   const [selectedTemplate, setSelectedTemplate] = useState<CommunicationTemplate>(COMMUNICATION_TEMPLATES[0]);
   const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState<"text" | "html" | "vars">("text");
+  const [activeTab, setActiveTab] = useState<"text" | "html" | "vars" | "test">("text");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Resend Provider State (Fase 9.1)
+  const [providerStatus, setProviderStatus] = useState<{ configured: boolean; provider: string; fromEmail: string }>({
+    configured: false,
+    provider: "Resend",
+    fromEmail: "H&A Construction <no-reply@h-a-construction.com>"
+  });
+  const [testEmail, setTestEmail] = useState(user?.email || "");
+  const [testVars, setTestVars] = useState<Record<string, string>>({});
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/email-provider-status")
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data.configured === 'boolean') {
+          setProviderStatus(data);
+        }
+      })
+      .catch(err => {
+        console.warn("Provider status check failed:", err);
+      });
+  }, []);
+
+  useEffect(() => {
+    // Populate default test variables when template changes
+    const initialVars: Record<string, string> = {};
+    selectedTemplate.variables.forEach(v => {
+      initialVars[v] = `[Sample ${v}]`;
+    });
+    setTestVars(initialVars);
+  }, [selectedTemplate]);
 
   if (isWorker) {
     navigate("/admin");
     return null;
   }
+
+  const handleSendTestEmail = async () => {
+    if (!testEmail || !testEmail.includes("@")) {
+      toast.error("Please enter a valid recipient email address.");
+      return;
+    }
+
+    setIsSendingTest(true);
+    try {
+      const response = await fetch("/api/admin/send-test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId: selectedTemplate.id,
+          toEmail: testEmail,
+          variables: testVars
+        })
+      });
+
+      const result = await response.json();
+
+      if (!result.configured) {
+        toast.warning(result.message || "RESEND_API_KEY is not configured in environment variables.");
+      } else if (result.success) {
+        toast.success(`Test email sent successfully! Message ID: ${result.messageId || 'OK'}`);
+      } else {
+        toast.error(result.message || "Failed to send test email.");
+      }
+    } catch (err: any) {
+      console.error("Test email dispatch error:", err);
+      toast.error(err.message || "Network error dispatching test email.");
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
 
   const filteredTemplates = COMMUNICATION_TEMPLATES.filter(t => {
     if (filterCategory === "all") return true;
@@ -49,9 +116,22 @@ export default function Communications() {
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200/80 px-4 py-2 rounded-xl text-blue-800 text-xs font-semibold">
-          <Info className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>Real email/SMS dispatch is currently disabled (Coming Soon)</span>
+        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border ${
+          providerStatus.configured 
+            ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
+            : "bg-amber-50 text-amber-800 border-amber-200"
+        }`}>
+          {providerStatus.configured ? (
+            <>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Resend Provider Active ({providerStatus.fromEmail})</span>
+            </>
+          ) : (
+            <>
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Resend Provider Not Configured (RESEND_API_KEY needed)</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -201,6 +281,15 @@ export default function Communications() {
               >
                 Variables ({selectedTemplate.variables.length})
               </button>
+              <button
+                onClick={() => setActiveTab("test")}
+                className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                  activeTab === "test" ? "border-primary text-primary" : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <Send className="w-3.5 h-3.5" />
+                Send Test Email
+              </button>
             </div>
 
             {/* Tab Contents */}
@@ -258,16 +347,73 @@ export default function Communications() {
               </div>
             )}
 
+            {activeTab === "test" && (
+              <div className="space-y-6">
+                <div className="p-4 bg-blue-50/60 border border-blue-200/80 rounded-xl text-xs text-blue-900 leading-relaxed font-medium flex items-start gap-2">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <span>
+                    Send a manual test email for <strong>{selectedTemplate.name}</strong> using Resend. Real email sending is enabled only when <code className="bg-blue-100 px-1 py-0.5 rounded text-blue-950 font-bold">RESEND_API_KEY</code> is configured on Vercel/server.
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Recipient Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. test@example.com"
+                      value={testEmail}
+                      onChange={(e) => setTestEmail(e.target.value)}
+                      className="w-full h-11 px-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 outline-none text-slate-900 text-xs font-medium"
+                    />
+                  </div>
+
+                  {selectedTemplate.variables.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Sample Variable Overrides</label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {selectedTemplate.variables.map(v => (
+                          <div key={v} className="space-y-1">
+                            <span className="text-[11px] font-mono text-slate-400">{`{{${v}}}`}</span>
+                            <input
+                              type="text"
+                              value={testVars[v] || ""}
+                              onChange={(e) => setTestVars({ ...testVars, [v]: e.target.value })}
+                              className="w-full h-9 px-3 rounded-lg border border-slate-200 text-xs font-medium text-slate-800"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400">
+                      Sender: {providerStatus.fromEmail}
+                    </span>
+                    <button
+                      onClick={handleSendTestEmail}
+                      disabled={isSendingTest}
+                      className="px-5 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-md shadow-primary/20 disabled:opacity-50 inline-flex items-center gap-2"
+                    >
+                      {isSendingTest ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      Send Test Email
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Provider Readiness Card */}
           <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg space-y-3">
             <div className="flex items-center gap-2 text-primary">
               <Sparkles className="w-5 h-5" />
-              <h4 className="font-bold text-sm">Future Email & SMS Provider Support</h4>
+              <h4 className="font-bold text-sm">Resend Transactional Email Setup</h4>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              When email integration is enabled in a future release, these templates can be wired directly to providers like Resend, SendGrid, Postmark, or Twilio via environment variables without changing the core template definitions.
+              Resend is configured for server-side transactional dispatch via <code className="text-primary font-mono font-bold">process.env.RESEND_API_KEY</code>. Automatic triggers in real lead flows remain disabled until explicitly activated.
             </p>
           </div>
 
