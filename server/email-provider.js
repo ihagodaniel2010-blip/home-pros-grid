@@ -14,6 +14,23 @@ export function renderTemplateText(templateText, variables = {}) {
   return result;
 }
 
+const ALLOWED_TEMPLATES = [
+  "quote_request_received_customer",
+  "new_lead_available_company",
+  "lead_purchased_company",
+  "estimate_sent_customer",
+  "estimate_approved_company",
+  "estimate_rejected_company",
+  "service_extra_sent_customer",
+  "service_extra_approved_company",
+  "payment_received_customer_receipt",
+  "client_receipt_viewed_company",
+  "expense_missing_receipt_company",
+  "reimbursement_pending_company",
+  "low_credit_balance_company",
+  "job_status_update_customer"
+];
+
 export async function sendTransactionalEmail({ templateId, toEmail, variables = {}, customSubject, customBodyText, customBodyHtml, customReplyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL || "H&A Construction <no-reply@h-a-construction.com>";
@@ -32,6 +49,14 @@ export async function sendTransactionalEmail({ templateId, toEmail, variables = 
       success: false,
       configured: true,
       message: "Invalid recipient email address format."
+    };
+  }
+
+  if (templateId && !ALLOWED_TEMPLATES.includes(templateId)) {
+    return {
+      success: false,
+      configured: true,
+      message: `Template ID '${templateId}' is not allowed or unrecognized.`
     };
   }
 
