@@ -1,40 +1,56 @@
--- Migration 021: Auditable Sandbox Test Credit Reversal
+-- Migration 021: Auditable Sandbox Test Credit Reversal (Strict Multi-Guard Automated Resolution)
 -- Target Project: Carpentry (ozhjvprhhsdglxokfwze / https://ozhjvprhhsdglxokfwze.supabase.co)
--- Status: PROPOSAL ONLY (DO NOT APPLY WITHOUT EXPLICIT USER AUTHORIZATION)
+-- Status: MANUAL EXECUTION PROPOSAL (DO NOT EXECUTE AUTOMATICALLY)
 
 SET search_path = public;
 
 DO $$
 DECLARE
+    v_match_count INT := 0;
     v_test_entry RECORD;
     v_reversal_count INT := 0;
     v_new_ledger_id UUID;
     v_new_balance NUMERIC;
 BEGIN
-    -- 1. Find latest Stripe sandbox test credit entry
-    SELECT id, organization_id, amount, reference_id
+    -- 1. Check matching count for original sandbox test credit
+    SELECT COUNT(*) INTO v_match_count
+    FROM public.organization_credit_ledger
+    WHERE reference_type = 'stripe_checkout_session'
+      AND amount = 50.00
+      AND transaction_type = 'credit_added'
+      AND description ILIKE '%Stripe Online Top-Up (credit_50)%';
+
+    -- Guard 1: Abort if 0 matching sandbox credit entries found
+    IF v_match_count = 0 THEN
+        RAISE EXCEPTION 'ABORTADO: Nenhum credito sandbox de $50.00 com os criterios estritos foi encontrado no ledger.';
+    END IF;
+
+    -- Guard 2: Abort if more than 1 matching sandbox credit entry found
+    IF v_match_count > 1 THEN
+        RAISE EXCEPTION 'ABORTADO: Encontrados % creditos de teste no ledger. Reversao automatica exige exatamente 1 registro.', v_match_count;
+    END IF;
+
+    -- 2. Fetch the exact single matching test credit entry
+    SELECT id, organization_id, amount, reference_id, description, created_at
     INTO v_test_entry
     FROM public.organization_credit_ledger
     WHERE reference_type = 'stripe_checkout_session'
       AND amount = 50.00
-    ORDER BY created_at DESC
+      AND transaction_type = 'credit_added'
+      AND description ILIKE '%Stripe Online Top-Up (credit_50)%'
     LIMIT 1;
 
-    IF v_test_entry.id IS NULL THEN
-        RAISE EXCEPTION 'ABORTED: No Stripe sandbox test credit entry ($50.00) found in ledger.';
-    END IF;
-
-    -- 2. Check if reversal has already been executed for this reference_id
+    -- Guard 3: Abort if reversal entry already exists for this exact reference_id
     SELECT COUNT(*) INTO v_reversal_count
     FROM public.organization_credit_ledger
     WHERE reference_type = 'stripe_sandbox_cleanup'
       AND reference_id = v_test_entry.reference_id;
 
     IF v_reversal_count > 0 THEN
-        RAISE EXCEPTION 'ABORTED: Sandbox test credit for session % has already been reversed.', v_test_entry.reference_id;
+        RAISE EXCEPTION 'ABORTADO: O credito de teste da sessao % ja possui registro de reversao no ledger.', v_test_entry.reference_id;
     END IF;
 
-    -- 3. Insert auditable adjustment entry (-50.00)
+    -- 3. Insert auditable adjustment entry (-50.00) using original organization_id and reference_id (NO DELETE / NO UPDATE)
     INSERT INTO public.organization_credit_ledger (
         organization_id,
         amount,
@@ -52,11 +68,11 @@ BEGIN
     )
     RETURNING id INTO v_new_ledger_id;
 
-    -- 4. Calculate updated balance
+    -- 4. Calculate updated balance for the organization
     SELECT COALESCE(SUM(amount), 0) INTO v_new_balance
     FROM public.organization_credit_ledger
     WHERE organization_id = v_test_entry.organization_id;
 
-    RAISE NOTICE 'Auditable Reversal Recorded Successfully. Ledger ID: %, New Balance: $%', v_new_ledger_id, v_new_balance;
+    RAISE NOTICE 'Reversao Auditavel Concluida com Sucesso! Ledger ID: %, Reference ID: %, Novo Saldo: $%', v_new_ledger_id, v_test_entry.reference_id, v_new_balance;
 END;
 $$;
