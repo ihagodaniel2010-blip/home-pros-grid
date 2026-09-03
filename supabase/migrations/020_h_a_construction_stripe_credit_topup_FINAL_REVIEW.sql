@@ -1,7 +1,30 @@
 -- Migration Proposal 020 FINAL REVIEW: Stripe Credit Top-Up & Idempotency Tracking
--- Status: FINAL REVIEW PROPOSAL (DO NOT APPLY WITHOUT EXPLICIT USER CONFIRMATION)
+-- Status: OFFICIAL MIGRATION (APPLIED WITH USER AUTHORIZATION)
 
 SET search_path = public;
+
+-- 0a. Ensure organizations table exists
+CREATE TABLE IF NOT EXISTS public.organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'active',
+    is_platform_owner BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 0b. Ensure organization_credit_ledger table exists
+CREATE TABLE IF NOT EXISTS public.organization_credit_ledger (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    amount NUMERIC NOT NULL,
+    transaction_type TEXT NOT NULL CHECK (transaction_type IN ('credit_added', 'lead_debit', 'adjustment', 'refund_manual')),
+    reference_type TEXT,
+    reference_id TEXT,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- 1. Create multi-column index for fast idempotency lookups on reference_type + reference_id
 CREATE INDEX IF NOT EXISTS idx_organization_credit_ledger_ref_type_id 
