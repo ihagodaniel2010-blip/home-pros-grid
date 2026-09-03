@@ -3,6 +3,7 @@ import express from "express";
 import session from "express-session";
 import fs from "fs/promises";
 import path from "path";
+import { createClient } from "@supabase/supabase-js";
 import { readSiteSettings, writeSiteSettings } from "./site-settings.store.js";
 import { sendTransactionalEmail } from "./email-provider.js";
 
@@ -437,7 +438,7 @@ app.post("/api/billing/create-checkout-session", async (req, res) => {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey.trim()}`,
-        "Content-Type": "application/x-www-form-parse"
+        "Content-Type": "application/x-www-form-urlencoded"
       },
       body: params.toString()
     });
@@ -467,7 +468,7 @@ app.post("/api/billing/create-checkout-session", async (req, res) => {
   }
 });
 
-app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), (req, res) => {
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
   const sig = req.headers["stripe-signature"];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -476,8 +477,76 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), (req,
     return res.json({ received: true, processed: false, reason: "Webhook secret unconfigured" });
   }
 
-  // Idempotent webhook processing logic
-  return res.json({ received: true, processed: true });
+  let event;
+  try {
+    const rawBody = typeof req.body === "string" || Buffer.isBuffer(req.body)
+      ? req.body.toString("utf8")
+      : JSON.stringify(req.body);
+
+    event = JSON.parse(rawBody);
+  } catch (err) {
+    console.error("Stripe Webhook Parsing Error:", err.message);
+    return res.status(400).json({ error: "Webhook Error: Invalid payload format" });
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data?.object || {};
+    const paymentStatus = session.payment_status;
+    const metadata = session.metadata || {};
+    const organizationId = metadata.organization_id;
+    const packageId = metadata.package_id;
+
+    if (paymentStatus !== "paid") {
+      console.log(`Stripe Webhook Notice: Session ${session.id} payment status is ${paymentStatus}. Skipping credit.`);
+      return res.json({ received: true, processed: false, reason: "Payment status not paid" });
+    }
+
+    const pkg = ALLOWED_CREDIT_PACKAGES[packageId];
+    if (!pkg) {
+      console.error(`Stripe Webhook Error: Invalid package_id '${packageId}' in session ${session.id}.`);
+      return res.status(400).json({ error: "Invalid package_id in session metadata" });
+    }
+
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ozhjvprhhsdglxokfwze.supabase.co";
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!serviceRoleKey || !serviceRoleKey.trim()) {
+      console.warn("Stripe Webhook Notice: SUPABASE_SERVICE_ROLE_KEY missing server-side.");
+      return res.json({ received: true, processed: false, reason: "SUPABASE_SERVICE_ROLE_KEY unconfigured" });
+    }
+
+    try {
+      const supabaseAdmin = createClient(supabaseUrl.trim(), serviceRoleKey.trim(), {
+        auth: { persistSession: false }
+      });
+
+      const { data: rpcResult, error: rpcErr } = await supabaseAdmin.rpc("record_stripe_credit_topup", {
+        p_organization_id: organizationId,
+        p_amount: pkg.credits,
+        p_stripe_session_id: session.id,
+        p_package_id: pkg.id
+      });
+
+      if (rpcErr) {
+        console.error("Stripe Webhook RPC Error:", rpcErr.message);
+        return res.status(500).json({ error: "Failed to record credit topup via RPC" });
+      }
+
+      console.log(`Stripe Webhook Success: Session ${session.id} credited. Result:`, rpcResult);
+      return res.json({
+        received: true,
+        processed: true,
+        duplicate: Boolean(rpcResult?.duplicate),
+        ledger_id: rpcResult?.ledger_id,
+        new_balance: rpcResult?.new_balance
+      });
+    } catch (err) {
+      console.error("Stripe Webhook Execution Error:", err.message);
+      return res.status(500).json({ error: "Internal webhook processing error" });
+    }
+  }
+
+  return res.json({ received: true, processed: true, event: event.type });
 });
 
 if (NODE_ENV === "production") {
