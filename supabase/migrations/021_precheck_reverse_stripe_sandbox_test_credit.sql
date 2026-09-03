@@ -32,7 +32,13 @@ SELECT
 FROM public.organization_credit_ledger
 WHERE reference_type = 'stripe_sandbox_cleanup';
 
--- 3. Check current total balance vs expected balance after -50.00 adjustment
+-- 3. Verify transaction_type 'adjustment' is permitted by constraint
+SELECT conname, pg_get_constraintdef(oid) AS constraint_definition
+FROM pg_constraint
+WHERE conrelid = 'public.organization_credit_ledger'::regclass
+AND contype = 'c';
+
+-- 4. Check current total balance vs expected balance after -50.00 adjustment
 SELECT 
     COALESCE(SUM(amount), 0) AS current_balance,
     COALESCE(SUM(amount), 0) - 50.00 AS expected_balance_after_reversal
