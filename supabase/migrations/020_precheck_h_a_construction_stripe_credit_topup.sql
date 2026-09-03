@@ -16,13 +16,19 @@ WHERE table_schema = 'public'
 AND table_name = 'organization_credit_ledger'
 ORDER BY ordinal_position;
 
--- 3. Check if function record_stripe_credit_topup already exists
+-- 3. Inspect CHECK constraints on organization_credit_ledger (e.g. transaction_type values)
+SELECT conname, pg_get_constraintdef(oid) AS constraint_definition
+FROM pg_constraint
+WHERE conrelid = 'public.organization_credit_ledger'::regclass
+AND contype = 'c';
+
+-- 4. Check if function record_stripe_credit_topup already exists
 SELECT routine_name
 FROM information_schema.routines
 WHERE routine_schema = 'public'
 AND routine_name = 'record_stripe_credit_topup';
 
--- 4. Check if index idx_organization_credit_ledger_ref_type_id already exists
+-- 5. Check if index idx_organization_credit_ledger_ref_type_id already exists
 SELECT indexname, indexdef
 FROM pg_indexes
 WHERE schemaname = 'public'
