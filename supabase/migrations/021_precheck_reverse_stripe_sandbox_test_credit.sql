@@ -1,10 +1,10 @@
--- Pre-Check Script for Auditable Sandbox Credit Reversal (Migration 021)
+-- Pre-Check 021 Complementar: Full Untruncated Session ID Inspection
 -- Target Project: Carpentry (ozhjvprhhsdglxokfwze / https://ozhjvprhhsdglxokfwze.supabase.co)
--- Status: PRE-CHECK ONLY (RUN MANUALLY IN SUPABASE SQL EDITOR BEFORE APPLYING MIGRATION 021)
+-- Status: MANUAL SELECT QUERY ONLY (DO NOT APPLY MIGRATION 021 YET)
 
 SET search_path = public;
 
--- 1. Inspect original Stripe sandbox test credit entry
+-- 1. Inspect original Stripe sandbox test credit entry with full reference_id
 SELECT 
     id AS test_credit_id,
     organization_id,
@@ -17,9 +17,11 @@ SELECT
 FROM public.organization_credit_ledger
 WHERE reference_type = 'stripe_checkout_session'
   AND amount = 50.00
+  AND transaction_type = 'credit_added'
+  AND description ILIKE '%Stripe Online Top-Up%'
 ORDER BY created_at DESC;
 
--- 2. Check if a reversal/cleanup entry already exists
+-- 2. Check for existing reversal using stripe_sandbox_cleanup
 SELECT 
     id AS existing_reversal_id,
     organization_id,
@@ -31,15 +33,3 @@ SELECT
     created_at
 FROM public.organization_credit_ledger
 WHERE reference_type = 'stripe_sandbox_cleanup';
-
--- 3. Verify transaction_type 'adjustment' is permitted by constraint
-SELECT conname, pg_get_constraintdef(oid) AS constraint_definition
-FROM pg_constraint
-WHERE conrelid = 'public.organization_credit_ledger'::regclass
-AND contype = 'c';
-
--- 4. Check current total balance vs expected balance after -50.00 adjustment
-SELECT 
-    COALESCE(SUM(amount), 0) AS current_balance,
-    COALESCE(SUM(amount), 0) - 50.00 AS expected_balance_after_reversal
-FROM public.organization_credit_ledger;
