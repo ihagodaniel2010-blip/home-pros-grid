@@ -63,6 +63,25 @@ const RegisterPaymentModal = ({
 
             if (success) {
                 toast.success("Payment registered successfully.");
+                // Non-blocking receipt email dispatch (Fase 9.2)
+                try {
+                    await fetch("/api/admin/send-test-email", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            toEmail: "info@h-a-construction.com",
+                            templateId: "payment_received_customer_receipt",
+                            variables: {
+                                customer_name: "Valued Client",
+                                amount: `$${parseFloat(amount).toFixed(2)}`,
+                                receipt_link: "https://www.h-a-construction.com/",
+                                date: date
+                            }
+                        })
+                    });
+                } catch (emailErr) {
+                    console.warn("Receipt email dispatch notice:", emailErr);
+                }
                 onSuccess();
                 onClose();
             } else {
