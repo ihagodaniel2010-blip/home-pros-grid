@@ -201,6 +201,36 @@ Total Ledger Entries: ${ledger.length}
 
   const isPaused = settings?.lead_status === "paused";
   const isLowBalance = balance <= 0;
+  const handleStripeCheckout = async (packageId: string) => {
+    if (isWorker) {
+      toast.error("Workers are restricted from acquiring lead credits.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/billing/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          packageId,
+          organizationId: currentOrganization?.id,
+          userRole: user?.organization?.role
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && data.url) {
+        window.location.href = data.url;
+      } else if (!data.configured) {
+        toast.info("Stripe Test Mode Ready. Add STRIPE_SECRET_KEY in Vercel to activate sandbox checkout.");
+      } else {
+        toast.error(data.message || "Checkout session error.");
+      }
+    } catch (err) {
+      console.error("Stripe Checkout Error:", err);
+      toast.error("Error creating Stripe checkout session.");
+    }
+  };
 
   return (
     <div className="p-8 max-w-6xl mx-auto pb-32">
@@ -217,21 +247,21 @@ Total Ledger Entries: ${ledger.length}
         <div className="flex items-center gap-3">
           <button
             onClick={copySummary}
-            className="inline-flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
           >
             <Copy className="h-3.5 w-3.5 text-slate-500" />
             Copy Summary
           </button>
           <button
             onClick={exportCSV}
-            className="inline-flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-semibold text-xs rounded-xl hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
           >
             <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
             Export CSV
           </button>
           <button
             onClick={() => setIsManualModalOpen(true)}
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-md shadow-primary/20"
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-md shadow-primary/20 cursor-pointer"
           >
             <PlusCircle className="h-4 w-4" />
             Add Manual Credit
@@ -261,7 +291,7 @@ Total Ledger Entries: ${ledger.length}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
-                  <CheckCircle2 className="h-3 w-3" /> Active & Eligible
+                  <CheckCircle2 className="h-3 w-3" /> Active & Receiving
                 </span>
               )}
             </div>
@@ -270,22 +300,22 @@ Total Ledger Entries: ${ledger.length}
 
         <div className="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Monthly Budget</span>
+            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Max Lead Budget</span>
             <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
               <Activity className="h-5 w-5 text-blue-600" />
             </div>
           </div>
           <div>
-            <span className="text-3xl font-black text-slate-900">${(settings?.monthly_lead_budget || 0).toFixed(2)}</span>
-            <p className="text-xs text-slate-400 mt-2 font-medium">Max per lead: ${(settings?.max_lead_price || 0).toFixed(2)}</p>
+            <span className="text-3xl font-black text-slate-900">${(settings?.max_lead_price || 0).toFixed(2)}</span>
+            <p className="text-xs text-slate-400 mt-2 font-medium">Per lead maximum cap</p>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Credits Added</span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
-              <ArrowUpRight className="h-5 w-5 text-indigo-600" />
+            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Credits Added</span>
+            <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center">
+              <ArrowUpRight className="h-5 w-5 text-purple-600" />
             </div>
           </div>
           <div>
@@ -308,25 +338,54 @@ Total Ledger Entries: ${ledger.length}
         </div>
       </div>
 
-      {/* Future Payments Readiness Banner */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 mb-10 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 opacity-10 flex items-center pointer-events-none pr-8">
-          <Sparkles className="w-64 h-64 text-white" />
-        </div>
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 bg-primary/20 border border-primary/30 text-primary-foreground px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-3">
-            <Sparkles className="w-3.5 h-3.5" /> Online Payments Coming Soon
+      {/* Stripe Credit Top-Up Section (Test Mode Readiness - Fase 9.3) */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-8 mb-10 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100">
+          <div>
+            <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 border border-blue-200/60">
+              <Sparkles className="w-3.5 h-3.5" /> Stripe Sandbox / Test Mode
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">Add Lead Credits with Stripe</h3>
+            <p className="text-xs text-slate-500 mt-1">Select a credit top-up package. Real client charging remains disabled until live keys are configured.</p>
           </div>
-          <h3 className="text-xl font-bold mb-2">Automated Credit Top-Up & Subscriptions</h3>
-          <p className="text-sm text-slate-300 leading-relaxed mb-6">
-            In the upcoming release, your company will be able to save payment methods, auto-recharge credits when balance runs low, and manage active recurring subscriptions directly from this portal.
-          </p>
-          <button 
-            disabled 
-            className="px-6 py-2.5 bg-white/10 text-white/50 border border-white/10 font-semibold text-xs rounded-xl cursor-not-allowed inline-flex items-center gap-2"
-          >
-            Instant Online Top-Up (Coming Soon)
-          </button>
+          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+            Subscriptions Coming Soon
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { id: "credit_50", name: "$50 Credits", amount: "$50", credits: "50 Credits", badge: null },
+            { id: "credit_100", name: "$100 Credits", amount: "$100", credits: "100 Credits", badge: "MOST POPULAR" },
+            { id: "credit_250", name: "$250 Credits", amount: "$250", credits: "250 Credits", badge: null },
+            { id: "credit_500", name: "$500 Credits", amount: "$500", credits: "500 Credits", badge: "BEST VALUE" }
+          ].map((pkg) => (
+            <div
+              key={pkg.id}
+              className={`relative bg-slate-50 rounded-2xl p-6 border transition-all flex flex-col justify-between ${
+                pkg.badge ? "border-primary/50 shadow-md ring-1 ring-primary/20" : "border-slate-200"
+              }`}
+            >
+              {pkg.badge && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-black uppercase px-3 py-0.5 rounded-full tracking-wider shadow-sm">
+                  {pkg.badge}
+                </span>
+              )}
+              <div className="mb-6 text-center">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{pkg.name}</p>
+                <p className="text-3xl font-black text-slate-900">{pkg.amount}</p>
+                <p className="text-xs text-emerald-600 font-bold mt-1">{pkg.credits}</p>
+              </div>
+              <button
+                onClick={() => handleStripeCheckout(pkg.id)}
+                disabled={isWorker}
+                className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+                <span>Buy Credits (Test Mode)</span>
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
