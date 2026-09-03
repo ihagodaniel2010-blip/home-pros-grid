@@ -75,6 +75,29 @@ export default function DirectEstimateForm() {
         // Silent fallback
       }
 
+      // 3. Controlled Confirmation Email Dispatch (Fase 9.2)
+      if (formData.email.trim() && formData.email.includes("@")) {
+        try {
+          await fetch("/api/admin/send-test-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              toEmail: formData.email.trim(),
+              templateId: "quote_request_received_customer",
+              variables: {
+                customer_name: formData.fullName.trim(),
+                project_type: formData.serviceType,
+                city: formData.location.trim() || "Southern Maine",
+                estimate_link: "https://www.h-a-construction.com/"
+              }
+            })
+          });
+        } catch (emailErr) {
+          // Non-blocking: Catch email error silently so user flow is never disrupted
+          console.warn("Quote confirmation email notice:", emailErr);
+        }
+      }
+
       // Mark success
       setIsSuccess(true);
       toast.success("Estimate request sent successfully!");

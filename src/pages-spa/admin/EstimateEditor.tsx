@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer, Copy, Wrench, Wand2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer, Copy, Wrench, Wand2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -31,6 +31,7 @@ const EstimateEditor = () => {
     const draftId = searchParams.get("draftId");
     const navigate = useNavigate();
     const { user } = useUser();
+    const userRole = user?.organization?.role;
     const { t } = useLanguage();
 
     const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +39,52 @@ const EstimateEditor = () => {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+    const handleSendEstimateEmail = async () => {
+        if (userRole === 'worker') {
+            toast.error("Workers are restricted from sending transactional emails.");
+            return;
+        }
+
+        const email = formData.client_email || "";
+        if (!email || !email.includes("@")) {
+            toast.error("Please provide a valid customer email address in the estimate details.");
+            return;
+        }
+
+        setIsSendingEmail(true);
+        try {
+            const res = await fetch("/api/admin/send-test-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    toEmail: email.trim(),
+                    templateId: "estimate_sent_customer",
+                    variables: {
+                        customer_name: formData.client_name || "Valued Client",
+                        project_type: formData.project_type || "Residential Construction Project",
+                        total_amount: `$${(formData.total_amount || 0).toLocaleString()}`,
+                        estimate_link: formData.public_token
+                            ? `${window.location.origin}/estimate/${formData.public_token}`
+                            : "https://www.h-a-construction.com/"
+                    }
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                toast.success(`Estimate email sent successfully! (${data.messageId || "Dispatched"})`);
+            } else {
+                toast.error(`Email dispatch failed: ${data.message || "Provider unconfigured"}`);
+            }
+        } catch (err: any) {
+            console.error("Estimate email dispatch error:", err);
+            toast.error("Error sending estimate email. Please check server logs.");
+        } finally {
+            setIsSendingEmail(false);
+        }
+    };
 
     const [formData, setFormData] = useState<Partial<Estimate>>({
         status: 'Draft',
@@ -381,6 +428,16 @@ const EstimateEditor = () => {
                             >
                                 <Copy className="h-4 w-4" />
                                 Copy public link
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="h-10 gap-2 border-blue-200 text-blue-800 hover:bg-blue-50"
+                                onClick={handleSendEstimateEmail}
+                                disabled={isSendingEmail || userRole === 'worker'}
+                                title={userRole === 'worker' ? "Worker role restricted" : "Send Estimate Email"}
+                            >
+                                {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : <Mail className="h-4 w-4 text-blue-600" />}
+                                Send Estimate Email
                             </Button>
                             <Button
                                 variant="outline"
