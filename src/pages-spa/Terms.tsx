@@ -1,7 +1,18 @@
+import { useEffect } from "react";
 import Layout from "@/components/Layout";
 import { siteConfig } from "@/config/site";
 
 export default function Terms() {
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="robots"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "robots");
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute("content", "noindex, follow");
+  }, []);
+
   return (
     <Layout>
       <div className="bg-slate-950 text-white py-16 px-4 sm:px-6 lg:px-8 border-b border-slate-800">

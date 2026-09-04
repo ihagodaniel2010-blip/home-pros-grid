@@ -1,38 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://www.h-a-construction.com/</loc>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
+    <lastmod>2026-09-03</lastmod>
   </url>
   <url>
-    <loc>https://www.h-a-construction.com/services</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <loc>https://www.h-a-construction.com/services/</loc>
+    <lastmod>2026-09-03</lastmod>
   </url>
   <url>
-    <loc>https://www.h-a-construction.com/about</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <loc>https://www.h-a-construction.com/about/</loc>
+    <lastmod>2026-09-03</lastmod>
   </url>
   <url>
-    <loc>https://www.h-a-construction.com/cost-guide</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <loc>https://www.h-a-construction.com/cost-guide/</loc>
+    <lastmod>2026-09-03</lastmod>
   </url>
   <url>
-    <loc>https://www.h-a-construction.com/terms</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
+    <loc>https://www.h-a-construction.com/pricing/</loc>
+    <lastmod>2026-09-03</lastmod>
   </url>
   <url>
-    <loc>https://www.h-a-construction.com/privacy</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://www.h-a-construction.com/disclaimer</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
+    <loc>https://www.h-a-construction.com/experiences/</loc>
+    <lastmod>2026-09-03</lastmod>
   </url>
 </urlset>

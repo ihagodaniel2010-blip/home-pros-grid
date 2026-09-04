@@ -1,6 +1,6 @@
 import React from "react";
 import { Phone, ArrowRight, ShieldCheck, MapPin } from "lucide-react";
-import heroBg from "@/assets/hero-bg.jpg";
+import heroBg from "@/assets/hero-bg.webp";
 import { siteConfig, getPrimaryPhoneLink } from "@/config/site";
 
 const HeroSection = () => {

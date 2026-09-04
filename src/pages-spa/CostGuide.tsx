@@ -240,7 +240,7 @@ const CostGuide = () => {
       <section className="relative overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url(/media/250x165/portifolio.png)" }}
+          style={{ backgroundImage: "url(/images/projects/portfolio-hero.webp)" }}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-900/70 via-slate-900/40 to-slate-900/20" />
         <div className="relative max-w-6xl mx-auto px-6 py-24 text-white">
