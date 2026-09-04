@@ -3,15 +3,15 @@ import { motion } from "framer-motion";
 import { ArrowRight, ShieldCheck, CheckCircle2 } from "lucide-react";
 import ServicesShowcase from "./ServicesShowcase";
 import ServiceAreas from "./ServiceAreas";
-import GoogleReviews from "./GoogleReviews";
+import GoogleReviewsSection from "./GoogleReviewsSection";
 
 const ArticlesSection = () => (
   <>
-    {/* Clean Optional Google Reviews Component */}
-    <GoogleReviews />
-
     {/* Services Showcase */}
     <ServicesShowcase />
+
+    {/* Real Google Reviews Section */}
+    <GoogleReviewsSection />
 
     {/* Company Direct Mission & Commitment */}
     <section className="py-16 px-6 bg-white relative">

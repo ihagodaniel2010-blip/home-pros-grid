@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import DevLoginSimulator from "@/components/DevLoginSimulator";
 import Index from "./pages-spa/Index";
 import Services from "./pages-spa/Services";
@@ -10,7 +10,7 @@ import Join from "./pages-spa/Join";
 import About from "./pages-spa/About";
 import Blog from "./pages-spa/Blog";
 import CostGuide from "./pages-spa/CostGuide";
-import Experiences from "./pages-spa/Experiences";
+import ReviewsPage from "./pages-spa/ReviewsPage";
 import Pricing from "./pages-spa/Pricing";
 import Terms from "./pages-spa/Terms";
 import Privacy from "./pages-spa/Privacy";
@@ -78,7 +78,8 @@ const App = () => (
           <Route path="/contact" element={<Contact />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/cost-guide" element={<CostGuide />} />
-          <Route path="/experiences" element={<Experiences />} />
+          <Route path="/reviews" element={<ReviewsPage />} />
+          <Route path="/experiences" element={<Navigate to="/reviews" replace />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/disclaimer" element={<Disclaimer />} />
