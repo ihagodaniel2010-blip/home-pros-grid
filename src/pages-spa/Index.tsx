@@ -15,25 +15,26 @@ const Index = () => {
         "url": siteConfig.canonicalUrl,
         "name": siteConfig.businessName,
         "description": siteConfig.businessTagline,
-        "inLanguage": "en-US"
-      },
-      {
-        "@type": "Organization",
-        "@id": `${siteConfig.canonicalUrl}#organization`,
-        "name": siteConfig.businessName,
-        "url": siteConfig.canonicalUrl,
-        "telephone": siteConfig.phones[0],
-        "email": siteConfig.contactEmail,
-        "areaServed": siteConfig.serviceAreas
+        "inLanguage": "en-US",
+        "publisher": {
+          "@id": `${siteConfig.canonicalUrl}#business`
+        }
       },
       {
         "@type": "HomeAndConstructionBusiness",
-        "@id": `${siteConfig.canonicalUrl}#localbusiness`,
+        "@id": `${siteConfig.canonicalUrl}#business`,
         "name": siteConfig.businessName,
         "url": siteConfig.canonicalUrl,
         "telephone": siteConfig.phones[0],
         "email": siteConfig.contactEmail,
         "priceRange": "$$",
+        "image": `${siteConfig.canonicalUrl}favicon.ico`,
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Saco",
+          "addressRegion": "ME",
+          "addressCountry": "US"
+        },
         "areaServed": [
           { "@type": "City", "name": "Saco", "addressRegion": "ME" },
           { "@type": "City", "name": "Old Orchard Beach", "addressRegion": "ME" },

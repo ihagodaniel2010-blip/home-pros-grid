@@ -1,6 +1,8 @@
--- Migration 021: Auditable Sandbox Test Credit Reversal (Strict Multi-Guard Automated Resolution)
+-- Migration 021: Auditable Sandbox Test Credit Reversal (CANCELED / OBSOLETE)
 -- Target Project: Carpentry (ozhjvprhhsdglxokfwze / https://ozhjvprhhsdglxokfwze.supabase.co)
--- Status: MANUAL EXECUTION PROPOSAL (DO NOT EXECUTE AUTOMATICALLY)
+-- Status: CANCELED / OBSOLETE - DO NOT EXECUTE
+-- Reason: Audit confirmed 0 Stripe test credits in ledger because reference_id was UUID in database.
+-- No reversal is needed or permitted.
 
 SET search_path = public;
 
