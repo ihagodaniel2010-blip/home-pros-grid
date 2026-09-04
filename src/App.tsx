@@ -16,6 +16,7 @@ import Terms from "./pages-spa/Terms";
 import Privacy from "./pages-spa/Privacy";
 import Disclaimer from "./pages-spa/Disclaimer";
 import RefundPolicy from "./pages-spa/RefundPolicy";
+import Contact from "./pages-spa/Contact";
 import NotFound from "./pages-spa/NotFound";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -74,6 +75,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/join" element={<Join />} />
           <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/cost-guide" element={<CostGuide />} />
           <Route path="/experiences" element={<Experiences />} />
