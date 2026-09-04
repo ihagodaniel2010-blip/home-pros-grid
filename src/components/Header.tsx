@@ -207,7 +207,7 @@ const Header = () => {
             { to: "/about", label: t("nav.about") },
             { to: "/pricing", label: "Pricing" },
             { to: "/cost-guide", label: t("nav.portfolio") },
-            { to: "/experiences", label: t("nav.experiences") },
+            { to: "/reviews", label: t("nav.reviews") },
           ].map((link) => (
             <Link
               key={link.to}
@@ -477,10 +477,10 @@ const Header = () => {
               ? "text-white/80 hover:text-white"
               : "text-foreground/80 hover:text-primary"
               }`} onClick={() => setMobileOpen(false)}>{t("nav.portfolio")}</Link>
-            <Link to="/experiences" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
+            <Link to="/reviews" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
               ? "text-white/80 hover:text-white"
               : "text-foreground/80 hover:text-primary"
-              }`} onClick={() => setMobileOpen(false)}>{t("nav.experiences")}</Link>
+              }`} onClick={() => setMobileOpen(false)}>{t("nav.reviews")}</Link>
             <div className="flex gap-3 pt-4">
               <Button variant="outline" size="sm" className={`flex-1 rounded-full ${isHeroPage ? "border-white text-white hover:bg-white/10" : ""
                 }`} onClick={() => { navigate("/admin/login"); setMobileOpen(false); }}>{t("nav.pros_login")}</Button>

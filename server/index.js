@@ -301,6 +301,70 @@ app.put("/api/admin/site-settings", requireAdmin, async (req, res) => {
   res.json(next);
 });
 
+app.get("/api/reviews", async (req, res) => {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY?.trim();
+  const placeId = process.env.GOOGLE_PLACE_ID?.trim();
+
+  if (!apiKey || !placeId) {
+    return res.json({
+      configured: false,
+      rating: null,
+      userRatingCount: null,
+      reviews: []
+    });
+  }
+
+  try {
+    const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "displayName,rating,userRatingCount,reviews,googleMapsUri",
+        "Accept": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      return res.json({
+        configured: false,
+        rating: null,
+        userRatingCount: null,
+        reviews: []
+      });
+    }
+
+    const data = await response.json();
+    const mappedReviews = Array.isArray(data.reviews)
+      ? data.reviews.slice(0, 5).map((rev) => ({
+          authorName: rev.authorAttribution?.displayName || "Google Customer",
+          authorPhotoUri: rev.authorAttribution?.photoUri || undefined,
+          authorUri: rev.authorAttribution?.uri || undefined,
+          rating: typeof rev.rating === "number" ? rev.rating : 5,
+          text: rev.text?.text || "",
+          relativePublishTimeDescription: rev.relativePublishTimeDescription || "",
+          publishTime: rev.publishTime || undefined
+        }))
+      : [];
+
+    return res.json({
+      configured: true,
+      businessName: data.displayName?.text || "H & A Construction LLC",
+      rating: typeof data.rating === "number" ? Math.round(data.rating * 10) / 10 : null,
+      userRatingCount: typeof data.userRatingCount === "number" ? data.userRatingCount : null,
+      reviews: mappedReviews,
+      googleMapsUri: data.googleMapsUri || undefined
+    });
+  } catch (err) {
+    return res.json({
+      configured: false,
+      rating: null,
+      userRatingCount: null,
+      reviews: []
+    });
+  }
+});
+
 app.get("/api/admin/login-attempts", requireAdmin, async (req, res) => {
   const attempts = await readLoginAttempts();
   const status = String(req.query.status || "").toLowerCase();

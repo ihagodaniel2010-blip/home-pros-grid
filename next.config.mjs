@@ -15,6 +15,20 @@ const nextConfig = {
             },
         ],
     },
+    async redirects() {
+        return [
+            {
+                source: '/experiences',
+                destination: '/reviews/',
+                permanent: true,
+            },
+            {
+                source: '/experiences/',
+                destination: '/reviews/',
+                permanent: true,
+            },
+        ];
+    },
 };
 
 export default nextConfig;
