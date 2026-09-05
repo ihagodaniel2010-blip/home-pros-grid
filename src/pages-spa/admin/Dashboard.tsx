@@ -2,9 +2,10 @@ import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "@/lib/navigation-compat";
 import { useUser } from "@/context/UserContext";
 import { getLeads, type Lead } from "@/lib/leads";
-import { Users, TrendingUp, Calendar, Clock, DollarSign, FileText, CheckCircle2, AlertCircle, Play, ClipboardList, Plus, Sparkles, Check, Loader2 } from "lucide-react";
+import { Users, TrendingUp, Calendar, Clock, DollarSign, FileText, CheckCircle2, AlertCircle, Play, ClipboardList, Plus, Sparkles, Check, Loader2, Wrench, ChevronDown, ChevronUp } from "lucide-react";
 import { fetchLoginAttempts, type LoginAttempt } from "@/lib/admin-auth";
 import { getEstimates, type Estimate } from "@/lib/estimates";
+import { getServiceJobs } from "@/lib/service-jobs";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -34,8 +35,10 @@ const Dashboard = () => {
   const { user } = useUser();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [activeJobs, setActiveJobs] = useState<any[]>([]);
   const [loginAttempts, setLoginAttempts] = useState<LoginAttempt[]>([]);
   const [attemptFilter, setAttemptFilter] = useState<"all" | "success" | "fail">("all");
+  const [showLoginAttempts, setShowLoginAttempts] = useState(false);
 
   const userRole = user?.organization?.role;
 
@@ -46,7 +49,8 @@ const Dashboard = () => {
   useEffect(() => {
     if (user?.organization?.id) {
       getLeads(user.organization.id).then(setLeads);
-      getEstimates().then(setEstimates); // Assumes getEstimates handles its own RLS/org filtering
+      getEstimates().then(setEstimates);
+      getServiceJobs(user.organization.id).then(setActiveJobs);
     } else {
       getLeads().then(setLeads);
       getEstimates().then(setEstimates);
@@ -116,6 +120,10 @@ const Dashboard = () => {
     ];
   }, [estimates]);
 
+  const unpaidEstimates = useMemo(() => {
+    return estimates.filter(e => (e.status === 'Approved' || e.status === 'Sent' || e.status === 'Viewed') && ((e.balance_due ?? e.total_amount) > 0));
+  }, [estimates]);
+
   useEffect(() => {
     let active = true;
     const status = attemptFilter === "all" ? undefined : attemptFilter;
@@ -134,184 +142,274 @@ const Dashboard = () => {
   }, [attemptFilter]);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-600 mt-1">Overview of all leads and metrics</p>
+    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Dashboard</h1>
+        <p className="text-xs sm:text-sm text-gray-600 mt-1">H&A Construction Operations & Overview</p>
       </div>
 
-      {/* Financial Overview */}
-      <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-        <DollarSign className="h-5 w-5 text-gray-400" />
-        Financial Insights
-      </h2>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
-        {financialKpis.map((k) => (
-          <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-6 hover:border-gray-300 transition-all duration-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">{k.label}</span>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${k.color}15` }}>
-                <k.icon className="h-4 w-4" style={{ color: k.color }} strokeWidth={1.5} />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-gray-900 tracking-tight">
-              {k.isCurrency && "$"}
-              {k.isCurrency ? k.value.toLocaleString() : <AnimatedNumber value={k.value} />}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-        <TrendingUp className="h-5 w-5 text-gray-400" />
-        Leads & Performance
-      </h2>
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        {kpis.map((k) => (
-          <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-6 hover:border-gray-300 transition-all duration-200">
-            <div style={{ borderTop: `3px solid ${k.color}` }} className="mb-4" />
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-semibold text-gray-600 uppercase tracking-widest">{k.label}</span>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${k.color}15` }}>
-                <k.icon className="h-4 w-4" style={{ color: k.color }} strokeWidth={1.5} />
-              </div>
-            </div>
-            <p className="text-3xl font-bold text-gray-900 tracking-tight"><AnimatedNumber value={k.value} /></p>
-          </div>
-        ))}
-      </div>
-
-      {/* Charts */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="font-semibold text-sm text-gray-900 mb-6">Leads per Day (30 days)</h3>
-          {dailyData.length > 0 && (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#6b7280" }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} />
-                <Tooltip contentStyle={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "12px" }} />
-                <Line type="monotone" dataKey="count" stroke="#2563eb" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="font-semibold text-sm text-gray-900 mb-6">Top Services</h3>
-          {serviceData.length > 0 && (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={serviceData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} />
-                <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11, fill: "#6b7280" }} />
-                <Tooltip contentStyle={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "12px" }} />
-                <Bar dataKey="count" fill="#2563eb" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      {locationData.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8 max-w-md">
-          <h3 className="font-semibold text-sm text-gray-900 mb-6">Location Type</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={locationData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={40} label>
-                {locationData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "12px" }} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-8">
-        <div className="p-6 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="font-semibold text-sm text-gray-900">Login Attempts</h3>
-            <p className="text-xs text-gray-500 mt-1">Latest 50 attempts</p>
-          </div>
-          <select
-            value={attemptFilter}
-            onChange={(event) => setAttemptFilter(event.target.value as "all" | "success" | "fail")}
-            className="rounded-lg border border-gray-200 py-2 px-3 text-xs uppercase tracking-widest text-gray-600"
+      {/* Mobile-First Quick Actions */}
+      <div>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-blue-600" />
+          Quick Actions
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5 sm:gap-3">
+          <button
+            onClick={() => navigate("/admin/estimates/new")}
+            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-all text-center group"
           >
-            <option value="all">All</option>
-            <option value="success">Success</option>
-            <option value="fail">Fail</option>
-          </select>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">Time</th>
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">Email</th>
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">IP</th>
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">Outcome</th>
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">Reason</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loginAttempts.map((attempt) => (
-                <tr key={`${attempt.timestamp}-${attempt.email}`} className="border-t border-gray-200">
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                    {new Date(attempt.timestamp).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 text-gray-900 font-medium">{attempt.email}</td>
-                  <td className="px-6 py-4 text-gray-600">{attempt.ip}</td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${attempt.outcome === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                      }`}>{attempt.outcome}</span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">{attempt.reason}</td>
-                </tr>
-              ))}
-              {loginAttempts.length === 0 && (
-                <tr><td colSpan={5} className="px-6 py-16 text-center text-gray-600">No login attempts logged yet.</td></tr>
-              )}
-            </tbody>
-          </table>
+            <Plus className="h-5 w-5 mb-1 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold">+ New Estimate</span>
+          </button>
+          <button
+            onClick={() => navigate("/admin/inbox")}
+            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-sm transition-all text-center group"
+          >
+            <Users className="h-5 w-5 mb-1 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold">+ Client Request</span>
+          </button>
+          <button
+            onClick={() => navigate("/admin/client-receipts")}
+            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition-all text-center group"
+          >
+            <DollarSign className="h-5 w-5 mb-1 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold">+ Record Payment</span>
+          </button>
+          <button
+            onClick={() => navigate("/admin/expenses")}
+            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-sm transition-all text-center group"
+          >
+            <FileText className="h-5 w-5 mb-1 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold">+ New Expense</span>
+          </button>
+          <button
+            onClick={() => navigate("/admin/estimates")}
+            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 rounded-xl shadow-sm transition-all text-center group"
+          >
+            <ClipboardList className="h-5 w-5 text-amber-600 mb-1 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold">Pending Estimates</span>
+          </button>
+          <button
+            onClick={() => navigate("/admin/client-receipts")}
+            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 rounded-xl shadow-sm transition-all text-center group"
+          >
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 mb-1 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold">Client Receipts</span>
+          </button>
+          <button
+            onClick={() => navigate("/admin/reimbursements")}
+            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 rounded-xl shadow-sm transition-all text-center group col-span-2 sm:col-span-1"
+          >
+            <TrendingUp className="h-5 w-5 text-blue-600 mb-1 group-hover:scale-110 transition-transform" />
+            <span className="text-xs font-bold">Reimbursements</span>
+          </button>
         </div>
       </div>
 
-      {/* Recent leads */}
+      {/* Financial Overview Cards */}
+      <div>
+        <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <DollarSign className="h-5 w-5 text-gray-400" />
+          Financial Insights
+        </h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+          {financialKpis.map((k) => (
+            <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 hover:border-gray-300 transition-all duration-200 shadow-sm">
+              <div className="flex items-center justify-between mb-2 sm:mb-4">
+                <span className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-widest">{k.label}</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center" style={{ background: `${k.color}15` }}>
+                  <k.icon className="h-4 w-4" style={{ color: k.color }} strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+                {k.isCurrency && "$"}
+                {k.isCurrency ? k.value.toLocaleString() : <AnimatedNumber value={k.value} />}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Active Jobs / Obras em Andamento */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Wrench className="h-5 w-5 text-blue-600" />
+            Active Jobs / Obras em Andamento
+          </h2>
+          <span className="text-xs font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full">
+            {activeJobs.length} active
+          </span>
+        </div>
+
+        {activeJobs.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-xs sm:text-sm text-gray-500">
+            No active jobs registered yet. Convert an approved estimate to start a job.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeJobs.slice(0, 6).map((job) => (
+              <div key={job.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:border-blue-300 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                      job.status === "completed" ? "bg-green-100 text-green-800" :
+                      job.status === "in_progress" ? "bg-blue-100 text-blue-800" :
+                      "bg-amber-100 text-amber-800"
+                    }`}>
+                      {job.status?.replace("_", " ")}
+                    </span>
+                    <span className="text-xs text-gray-400 font-mono">#{job.id.slice(0, 8)}</span>
+                  </div>
+                  <h3 className="font-bold text-gray-900 text-base">{job.title}</h3>
+                </div>
+                <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
+                  <button
+                    onClick={() => navigate(job.lead_id ? `/admin/leads/${job.lead_id}` : '/admin/estimates')}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    View Details & Progress →
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Saldos a Receber / Outstanding Receivables */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-orange-500" />
+            Saldos a Receber / Outstanding Balances
+          </h2>
+          <span className="text-xs font-bold bg-orange-100 text-orange-800 px-2.5 py-1 rounded-full">
+            {unpaidEstimates.length} pending
+          </span>
+        </div>
+
+        {unpaidEstimates.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-xs sm:text-sm text-gray-500">
+            All estimates are fully paid! No outstanding balances.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {unpaidEstimates.slice(0, 6).map((est) => (
+              <div key={est.id} className="bg-white rounded-2xl border border-gray-200 border-l-4 border-l-orange-500 p-5 shadow-sm hover:border-gray-300 transition-all flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-gray-900">{est.client_name}</span>
+                    <span className="text-[10px] uppercase font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full">{est.status}</span>
+                  </div>
+                  <div className="mt-2 flex items-baseline justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Total</p>
+                      <p className="text-sm font-bold text-gray-700">${est.total_amount.toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase tracking-wider text-orange-600 font-bold">Balance Due</p>
+                      <p className="text-lg font-black text-orange-600">${(est.balance_due ?? est.total_amount).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
+                  <button
+                    onClick={() => navigate(`/admin/estimates/${est.id}`)}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all text-center flex items-center justify-center gap-1"
+                  >
+                    <DollarSign className="h-3.5 w-3.5" /> Register Payment
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Leads KPIs & Charts */}
+      <div>
+        <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-gray-400" />
+          Leads & Performance
+        </h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-8">
+          {kpis.map((k) => (
+            <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 hover:border-gray-300 transition-all duration-200">
+              <div style={{ borderTop: `3px solid ${k.color}` }} className="mb-3 sm:mb-4" />
+              <div className="flex items-center justify-between mb-2 sm:mb-4">
+                <span className="text-[10px] sm:text-xs font-semibold text-gray-600 uppercase tracking-widest">{k.label}</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center" style={{ background: `${k.color}15` }}>
+                  <k.icon className="h-4 w-4" style={{ color: k.color }} strokeWidth={1.5} />
+                </div>
+              </div>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight"><AnimatedNumber value={k.value} /></p>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts */}
+        <div className="grid lg:grid-cols-2 gap-6 mb-8">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+            <h3 className="font-semibold text-xs sm:text-sm text-gray-900 mb-4">Leads per Day (30 days)</h3>
+            {dailyData.length > 0 && (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={dailyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#6b7280" }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#6b7280" }} />
+                  <Tooltip contentStyle={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "12px" }} />
+                  <Line type="monotone" dataKey="count" stroke="#2563eb" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+            <h3 className="font-semibold text-xs sm:text-sm text-gray-900 mb-4">Top Services</h3>
+            {serviceData.length > 0 && (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={serviceData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: "#6b7280" }} />
+                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10, fill: "#6b7280" }} />
+                  <Tooltip contentStyle={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "12px" }} />
+                  <Bar dataKey="count" fill="#2563eb" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Leads Section */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="font-semibold text-sm text-gray-900">Recent Leads</h3>
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <h3 className="font-semibold text-xs sm:text-sm text-gray-900">Recent Leads / Client Requests</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs sm:text-sm">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">Date</th>
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">Service</th>
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">ZIP</th>
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">Name</th>
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">Email</th>
-                <th className="text-left px-6 py-4 font-semibold text-gray-900 text-xs uppercase tracking-wider">Status</th>
+              <tr className="border-b border-gray-200 bg-gray-50/50">
+                <th className="text-left px-4 sm:px-6 py-3 font-semibold text-gray-900 text-[10px] uppercase tracking-wider">Date</th>
+                <th className="text-left px-4 sm:px-6 py-3 font-semibold text-gray-900 text-[10px] uppercase tracking-wider">Service</th>
+                <th className="text-left px-4 sm:px-6 py-3 font-semibold text-gray-900 text-[10px] uppercase tracking-wider">Name</th>
+                <th className="text-left px-4 sm:px-6 py-3 font-semibold text-gray-900 text-[10px] uppercase tracking-wider">Status</th>
               </tr>
             </thead>
             <tbody>
-              {leads.slice(0, 20).map((l) => (
+              {leads.slice(0, 10).map((l) => (
                 <tr
                   key={l.id}
-                  className="border-t border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors duration-150"
+                  className="border-t border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => navigate(`/admin/leads/${l.id}`)}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">{new Date(l.createdAt).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 text-gray-900 font-medium">{l.serviceSlug}</td>
-                  <td className="px-6 py-4 text-gray-600">{l.zip}</td>
-                  <td className="px-6 py-4 text-gray-900 font-semibold">{l.fullName}</td>
-                  <td className="px-6 py-4 text-gray-600">{l.email}</td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${l.status === "New" ? "bg-blue-100 text-blue-700" :
+                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-gray-600">{new Date(l.createdAt).toLocaleDateString()}</td>
+                  <td className="px-4 sm:px-6 py-3 text-gray-900 font-medium">{l.serviceSlug}</td>
+                  <td className="px-4 sm:px-6 py-3 text-gray-900 font-semibold">{l.fullName}</td>
+                  <td className="px-4 sm:px-6 py-3">
+                    <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold ${l.status === "New" ? "bg-blue-100 text-blue-700" :
                       l.status === "Contacted" ? "bg-orange-100 text-orange-700" :
                         l.status === "Approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                       }`}>{l.status}</span>
@@ -319,15 +417,59 @@ const Dashboard = () => {
                 </tr>
               ))}
               {leads.length === 0 && (
-                <tr><td colSpan={6} className="px-6 py-16 text-center text-gray-600">No leads yet. Submit a quote to see data here.</td></tr>
+                <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500">No leads logged yet.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Collapsible Security & System Logs */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <button
+          onClick={() => setShowLoginAttempts(!showLoginAttempts)}
+          className="w-full p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between hover:bg-gray-50/80 transition-colors"
+        >
+          <div className="text-left">
+            <h3 className="font-semibold text-xs sm:text-sm text-gray-900">Security & Login Logs</h3>
+            <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5">Click to expand recent system authentication attempts</p>
+          </div>
+          {showLoginAttempts ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
+        </button>
+
+        {showLoginAttempts && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/50">
+                  <th className="text-left px-4 py-3 font-semibold text-gray-900 text-[10px] uppercase">Time</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-900 text-[10px] uppercase">Email</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-900 text-[10px] uppercase">IP</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-900 text-[10px] uppercase">Outcome</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loginAttempts.slice(0, 15).map((attempt) => (
+                  <tr key={`${attempt.timestamp}-${attempt.email}`} className="border-t border-gray-200">
+                    <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{new Date(attempt.timestamp).toLocaleTimeString()}</td>
+                    <td className="px-4 py-2.5 text-gray-900 font-medium">{attempt.email}</td>
+                    <td className="px-4 py-2.5 text-gray-600">{attempt.ip}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${attempt.outcome === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        {attempt.outcome}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
+
 
 const WorkerDashboard = () => {
   const { user } = useUser();

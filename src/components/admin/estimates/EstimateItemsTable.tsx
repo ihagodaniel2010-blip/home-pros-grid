@@ -55,8 +55,8 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                 </Button>
             </div>
 
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full text-left">
+            <div className="border border-gray-200 rounded-lg overflow-x-auto">
+                <table className="w-full text-left min-w-[500px]">
                     <thead className="bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
                         <tr>
                             <th className="px-4 py-3">Description</th>

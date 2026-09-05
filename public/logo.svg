@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" width="400" height="100">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="navyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b2a4a"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
+    </linearGradient>
+  </defs>
+  <!-- Roof Badge Icon -->
+  <g transform="translate(10, 10)">
+    <path d="M 40 5 L 75 35 L 65 35 L 40 14 L 15 35 L 5 35 Z" fill="url(#goldGrad)" />
+    <path d="M 40 22 L 62 42 L 54 42 L 40 29 L 26 42 L 18 42 Z" fill="#0b2a4a" />
+    <rect x="22" y="44" width="36" height="32" rx="4" fill="url(#navyGrad)" />
+    <text x="40" y="67" font-family="'Inter', 'Helvetica Neue', sans-serif" font-weight="900" font-size="20" fill="#ffffff" text-anchor="middle">H&amp;A</text>
+  </g>
+  <!-- Brand Text -->
+  <text x="100" y="52" font-family="'Inter', 'Helvetica Neue', sans-serif" font-weight="900" font-size="32" fill="#0b2a4a" letter-spacing="-0.5">H&amp;A</text>
+  <text x="175" y="52" font-family="'Inter', 'Helvetica Neue', sans-serif" font-weight="800" font-size="32" fill="#2563eb" letter-spacing="-0.5">CONSTRUCTION</text>
+  <text x="101" y="74" font-family="'Inter', 'Helvetica Neue', sans-serif" font-weight="700" font-size="12" fill="#64748b" letter-spacing="4">RESIDENTIAL REMODELING LLC</text>
+</svg>

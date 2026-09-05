@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "@/lib/navigation-compat";
-import { Menu, X, ChevronDown, LogIn, Home, User, LogOut, LayoutDashboard, Check } from "lucide-react";
+import { Menu, X, ChevronDown, LogIn, Home, User, LogOut, LayoutDashboard, Check, ChevronRight, Wrench, Building2, DollarSign, Images, Star, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { topServices } from "@/data/services";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,6 +29,18 @@ const Header = () => {
   const isHeroPage = location.pathname === "/";
   const isNavLinkActive = (path: string) => location.pathname === path || (path === "/" && location.pathname === "/");
 
+  // Prevent scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [mobileOpen]);
+
   // Handle click outside to close dropdowns
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -49,13 +61,13 @@ const Header = () => {
       if (e.key === "Escape") {
         setFindProOpen(false);
         setLoginOpen(false);
+        setMobileOpen(false);
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  // Find Pro dropdown handlers with robust hover
   const handleFindProEnter = () => {
     if (findProTimerRef.current) clearTimeout(findProTimerRef.current);
     setFindProOpen(true);
@@ -67,7 +79,6 @@ const Header = () => {
     }, 320);
   };
 
-  // Login dropdown handlers with robust hover
   const handleLoginEnter = () => {
     if (loginTimerRef.current) clearTimeout(loginTimerRef.current);
     setLoginOpen(true);
@@ -79,7 +90,6 @@ const Header = () => {
     }, 320);
   };
 
-  // Navigate and close dropdown
   const handleFindProClick = (slug: string) => {
     navigate(`/quote/${slug}`);
     setTimeout(() => setFindProOpen(false), 80);
@@ -91,7 +101,6 @@ const Header = () => {
   };
 
   useEffect(() => {
-    // Cleanup on unmount
     return () => {
       if (findProTimerRef.current) clearTimeout(findProTimerRef.current);
       if (loginTimerRef.current) clearTimeout(loginTimerRef.current);
@@ -101,20 +110,26 @@ const Header = () => {
   return (
     <header className={`relative z-50 transition-all duration-300 ${isHeroPage
       ? "bg-transparent"
-      : "bg-white shadow-sm border-b border-slate-100/30"
+      : "bg-white shadow-sm border-b border-slate-100/80"
       }`} style={
         isHeroPage ? {} : {
-          boxShadow: '0 2px 8px rgba(11,42,74,0.04)'
+          boxShadow: '0 2px 12px rgba(11,42,74,0.06)'
         }
       }>
-      <div className="max-w-7xl mx-auto px-6 h-[72px] flex items-center justify-between">
-        <Link to="/" className={`text-xl font-bold tracking-tight ${isHeroPage ? "text-white" : "text-primary"
-          }`}>
-          H &amp; A Construction LLC
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[72px] flex items-center justify-between">
+        {/* Brand Logo Header */}
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="flex items-center gap-2">
+            <img
+              src={isHeroPage ? "/logo-light.svg" : "/logo.svg"}
+              alt="H&A Construction LLC"
+              className="h-10 sm:h-12 w-auto object-contain transition-transform group-hover:scale-105"
+            />
+          </div>
         </Link>
 
+        {/* Desktop Nav */}
         <nav className={`hidden lg:flex items-center gap-8 ml-auto mr-8 ${isHeroPage ? "text-white" : ""}`}>
-          {/* Find a Pro Dropdown */}
           <div
             ref={findProRef}
             className="relative"
@@ -134,17 +149,13 @@ const Header = () => {
               {t("nav.find_pro")} <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${findProOpen ? "rotate-180" : ""}`} />
             </button>
 
-            {/* Invisible bridge to prevent hover gap */}
             {findProOpen && (
-              <div className="absolute top-full left-0 right-0 h-3 pointer-events-auto" style={{
-                background: 'transparent'
-              }} />
+              <div className="absolute top-full left-0 right-0 h-3 pointer-events-auto" style={{ background: 'transparent' }} />
             )}
 
             <AnimatePresence>
               {findProOpen && (
                 <>
-                  {/* Pointer Arrow */}
                   <motion.div
                     initial={{ opacity: 0, translateY: -10 }}
                     animate={{ opacity: 1, translateY: 0 }}
@@ -164,7 +175,6 @@ const Header = () => {
                     />
                   </motion.div>
 
-                  {/* Dropdown Panel */}
                   <motion.div
                     initial={{ opacity: 0, y: -10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -234,7 +244,6 @@ const Header = () => {
         </nav>
 
         <div className={`hidden lg:flex items-center gap-3 ${isHeroPage ? "text-white" : ""}`}>
-          {/* Language Selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -254,16 +263,8 @@ const Header = () => {
             >
               {[
                 { code: "en", label: "English", local: "English" },
-                { code: "pt", label: "Portuguese", local: "Português" },
                 { code: "es", label: "Spanish", local: "Español" },
-                { code: "zh", label: "Chinese", local: "中文" },
-                { code: "fr", label: "French", local: "Français" },
-                { code: "ht", label: "Haitian Creole", local: "Kreyòl" },
-                { code: "vi", label: "Vietnamese", local: "Việt" },
-                { code: "ar", label: "Arabic", local: "العربية" },
-                { code: "ru", label: "Russian", local: "Русский" },
-                { code: "hi", label: "Hindi", local: "हिन्दी" },
-                { code: "it", label: "Italiano", local: "Italiano" },
+                { code: "pt", label: "Portuguese", local: "Português" },
               ].map((lang) => (
                 <DropdownMenuItem
                   key={lang.code}
@@ -282,7 +283,6 @@ const Header = () => {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Login Dropdown */}
           <div
             ref={loginRef}
             className="relative"
@@ -292,7 +292,7 @@ const Header = () => {
             <Button
               size="sm"
               className={`rounded-full px-5 transition-all duration-200 cursor-pointer ${isHeroPage
-                ? "bg-white text-[#0b2a4a] border border-white hover:bg-slate-100"
+                ? "bg-white text-[#0b2a4a] border border-white hover:bg-slate-100 font-bold"
                 : `border border-border/60 text-foreground ${loginOpen ? "bg-primary/5 border-primary/40 text-primary" : "hover:border-primary/40"}`
                 }`}
               onClick={() => setLoginOpen(!loginOpen)}
@@ -315,17 +315,13 @@ const Header = () => {
               <ChevronDown className={`h-3.5 w-3.5 ml-1 transition-transform duration-200 ${loginOpen ? "rotate-180" : ""}`} />
             </Button>
 
-            {/* Invisible bridge */}
             {loginOpen && (
-              <div className="absolute top-full left-0 right-0 h-3 pointer-events-auto" style={{
-                background: 'transparent'
-              }} />
+              <div className="absolute top-full left-0 right-0 h-3 pointer-events-auto" style={{ background: 'transparent' }} />
             )}
 
             <AnimatePresence>
               {loginOpen && (
                 <>
-                  {/* Pointer Arrow */}
                   <motion.div
                     initial={{ opacity: 0, translateY: -10 }}
                     animate={{ opacity: 1, translateY: 0 }}
@@ -345,7 +341,6 @@ const Header = () => {
                     />
                   </motion.div>
 
-                  {/* Dropdown Panel */}
                   <motion.div
                     initial={{ opacity: 0, y: -10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -367,14 +362,6 @@ const Header = () => {
                             </p>
                             <p className="text-sm font-medium truncate">{user.email}</p>
                           </div>
-
-                          <button
-                            onClick={() => handleNavigate("/experiences")}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground/80 hover:text-primary hover:bg-primary/5 transition-all duration-150 text-left"
-                          >
-                            <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
-                            <span>{t("nav.my_projects")}</span>
-                          </button>
 
                           <button
                             onClick={() => handleNavigate("/admin")}
@@ -427,94 +414,131 @@ const Header = () => {
 
           <Button
             size="sm"
-            onClick={() => navigate("/join")}
-            className={`rounded-full px-5 transition-all duration-200 font-semibold ${isHeroPage
-              ? "bg-[#0b2a4a] text-white hover:bg-[#0a1f35] border border-[#0b2a4a]"
-              : "bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg"
-              }`}
+            onClick={() => navigate("/quote/remodeling")}
+            className="rounded-full px-5 bg-blue-600 text-white hover:bg-blue-700 shadow-md font-bold"
           >
-            {t("nav.join_pro")}
+            Get Free Quote
           </Button>
         </div>
 
+        {/* Mobile Hamburger Toggle */}
         <button 
-          className={`lg:hidden p-2 rounded-lg transition-colors ${isHeroPage
-            ? "text-white hover:bg-white/10"
-            : "text-foreground hover:bg-accent"
+          className={`lg:hidden p-2.5 rounded-xl transition-all ${isHeroPage
+            ? "text-white bg-white/10 hover:bg-white/20"
+            : "text-slate-900 bg-slate-100 hover:bg-slate-200"
           }`} 
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
           aria-expanded={mobileOpen}
-          aria-controls="mobile-navigation-menu"
         >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile Drawer Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[90] lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile Premium Menu Drawer */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
             id="mobile-navigation-menu"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25 }}
-            className={`lg:hidden border-t transition-colors ${isHeroPage
-              ? "border-white/10 bg-black/10 backdrop-blur-xl"
-              : "border-border/50 bg-background/95 backdrop-blur-xl"
-              } px-6 py-5 space-y-1 overflow-y-auto max-h-[calc(100vh-80px)]`}
+            initial={{ opacity: 0, x: "100%" }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed inset-y-0 right-0 w-full max-w-sm bg-[#0b2a4a] text-white z-[100] lg:hidden flex flex-col justify-between shadow-2xl overflow-y-auto"
           >
-            <Link to="/services" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
-              ? "text-white/80 hover:text-white"
-              : "text-foreground/80 hover:text-primary"
-              }`} onClick={() => setMobileOpen(false)}>{t("nav.find_pro")}</Link>
-            <Link to="/about" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
-              ? "text-white/80 hover:text-white"
-              : "text-foreground/80 hover:text-primary"
-              }`} onClick={() => setMobileOpen(false)}>{t("nav.about")}</Link>
-            <Link to="/cost-guide" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
-              ? "text-white/80 hover:text-white"
-              : "text-foreground/80 hover:text-primary"
-              }`} onClick={() => setMobileOpen(false)}>{t("nav.portfolio")}</Link>
-            <Link to="/reviews" className={`block py-3 text-sm font-medium transition-colors ${isHeroPage
-              ? "text-white/80 hover:text-white"
-              : "text-foreground/80 hover:text-primary"
-              }`} onClick={() => setMobileOpen(false)}>{t("nav.reviews")}</Link>
-            <div className="flex gap-3 pt-4">
-              <Button variant="outline" size="sm" className={`flex-1 rounded-full ${isHeroPage ? "border-white text-white hover:bg-white/10" : ""
-                }`} onClick={() => { navigate("/admin/login"); setMobileOpen(false); }}>{t("nav.pros_login")}</Button>
-              <Button variant="outline" size="sm" className={`flex-1 rounded-full ${isHeroPage ? "border-white text-white hover:bg-white/10" : ""
-                }`} onClick={() => { navigate("/login"); setMobileOpen(false); }}>{t("nav.login")}</Button>
-            </div>
-            <Button size="sm" className={`w-full rounded-full ${isHeroPage ? "" : ""
-              }`} onClick={() => { navigate("/join"); setMobileOpen(false); }}>{t("nav.join_pro")}</Button>
+            <div className="p-6">
+              {/* Drawer Header with Logo & Close Button */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-5 mb-6">
+                <Link to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-2">
+                  <img src="/logo-light.svg" alt="H&A Construction Logo" className="h-10 w-auto" />
+                </Link>
+                <button
+                  onClick={() => setMobileOpen(false)}
+                  className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all focus:outline-none"
+                  aria-label="Close menu"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
 
-            {/* Mobile Language Selector */}
-            <div className={`pt-6 border-t mt-6 box-border pb-4 ${isHeroPage ? "border-white/10" : "border-slate-100"}`}>
-              <div className="grid grid-cols-4 gap-2">
+              {/* Navigation Links */}
+              <nav className="space-y-2">
                 {[
-                  { code: "en", label: "EN" },
-                  { code: "pt", label: "PT" },
-                  { code: "es", label: "ES" },
-                  { code: "zh", label: "ZH" },
-                  { code: "fr", label: "FR" },
-                  { code: "ht", label: "HT" },
-                  { code: "vi", label: "VI" },
-                  { code: "ar", label: "AR" },
-                  { code: "ru", label: "RU" },
-                  { code: "hi", label: "HI" },
-                  { code: "it", label: "IT" },
+                  { to: "/services", label: t("nav.find_pro"), icon: Wrench },
+                  { to: "/about", label: t("nav.about"), icon: Building2 },
+                  { to: "/pricing", label: "Pricing", icon: DollarSign },
+                  { to: "/cost-guide", label: t("nav.portfolio"), icon: Images },
+                  { to: "/reviews", label: t("nav.reviews"), icon: Star },
+                  { to: "/contact", label: "Contact Us", icon: Mail },
+                ].map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center justify-between px-4 py-3.5 rounded-xl text-base font-semibold text-white/90 hover:text-white hover:bg-white/10 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <link.icon className="h-5 w-5 text-blue-400" />
+                      <span>{link.label}</span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-white/40" />
+                  </Link>
+                ))}
+              </nav>
+
+              {/* Primary Call To Action */}
+              <div className="mt-8 pt-6 border-t border-white/10 space-y-3">
+                <Button
+                  onClick={() => { navigate("/quote/remodeling"); setMobileOpen(false); }}
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white h-13 rounded-xl text-base font-bold shadow-lg shadow-blue-900/40"
+                >
+                  Request Free Estimate
+                </Button>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => { navigate("/login"); setMobileOpen(false); }}
+                    className="border-white/20 text-white hover:bg-white/10 rounded-xl h-11 text-xs font-semibold"
+                  >
+                    {t("nav.login")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { navigate("/admin/login"); setMobileOpen(false); }}
+                    className="border-white/20 text-white hover:bg-white/10 rounded-xl h-11 text-xs font-semibold"
+                  >
+                    {t("nav.admin_login")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile Compact Language Selector */}
+            <div className="p-6 bg-slate-950/50 border-t border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Language</p>
+              <div className="flex items-center gap-2">
+                {[
+                  { code: "en", label: "English 🇺🇸" },
+                  { code: "es", label: "Español 🇪🇸" },
+                  { code: "pt", label: "Português 🇧🇷" },
                 ].map((lang) => (
                   <button
                     key={lang.code}
                     onClick={() => setLanguage(lang.code as any)}
-                    className={`text-[10px] font-bold py-2 rounded-lg transition-all ${language === lang.code
-                      ? 'bg-primary text-white scale-105 shadow-lg'
-                      : isHeroPage
-                        ? 'text-white/60 border border-white/20 hover:bg-white/10'
-                        : 'text-foreground/60 border border-slate-200 hover:bg-slate-50'
-                      }`}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
+                      language === lang.code
+                        ? "bg-blue-600 text-white shadow-md"
+                        : "bg-white/10 text-white/80 hover:bg-white/20"
+                    }`}
                   >
                     {lang.label}
                   </button>
@@ -529,3 +553,4 @@ const Header = () => {
 };
 
 export default Header;
+
