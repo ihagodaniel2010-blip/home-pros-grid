@@ -348,7 +348,7 @@ const EstimateEditor = () => {
     };
 
     return (
-        <div className="p-8 max-w-5xl mx-auto">
+        <div className="p-4 sm:p-8 max-w-5xl mx-auto">
             <div className="mb-8 flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="flex items-start gap-4">
                     <Button
@@ -487,7 +487,7 @@ const EstimateEditor = () => {
 
             <div className="space-y-8 pb-32">
                 {/* Main Form Section */}
-                <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+                <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-8">
                     <EstimateForm
                         formData={formData}
                         onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
@@ -495,7 +495,7 @@ const EstimateEditor = () => {
                 </section>
 
                 {/* Items Section */}
-                <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+                <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-8">
                     <div className="flex items-center gap-2 mb-6">
                         <FileText className="h-5 w-5 text-gray-400" />
                         <h2 className="text-lg font-bold text-gray-900">Line Items</h2>

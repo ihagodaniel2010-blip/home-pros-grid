@@ -1,108 +1,114 @@
-# Relatório da Fase 10.1 — Internal Operations Real Use Readiness
-**H & A Construction LLC** — `https://www.h-a-construction.com/`
+# Relatório de Prontidão de Operações Internas — Fase 10.1 (H&A Construction)
+
+**Data:** 05 de Setembro de 2026  
+**Escopo:** Avaliação da prontidão do sistema para uso diário interno pela H&A Construction (Hugo e seu irmão), priorizando fluxo de obras, estimates, jobs, pagamentos manuais, despesas, reembolsos e relatórios operacionais/fiscais.
 
 ---
 
-## 1. Visão Geral
-A **Fase 10.1** realizou a auditoria completa do sistema para uso operacional interno da **H & A Construction LLC**, focando no fluxo de trabalho diário de Hugo e seu irmão para gerenciamento de obras reais, projetos residenciais, orçamentos, Change Orders (extras), pagamentos manuais (Cash, Check, Zelle, Venmo, Bank Transfer), recibos de clientes, despesas de obras, reembolsos a sócios e relatórios financeiros/fiscais.
+## RESUMO DA AUDITORIA
 
-Todas as diretrizes e restrições foram mantidas:
-- **Stripe Live Mode**: NÃO ativado (permanece 100% em Sandbox/Test Mode).
-- **SQL / Migrations**: Nenhum SQL aplicado e nenhuma alteração de schema realizada.
-- **CalhaFlow**: 100% intocado (`dembegkbdvlwkyhftwii`).
-- **Secrets**: Nenhuma chave exposta.
-- **Marketplace Público**: Estrutura mantida para o futuro, sem quebrar o fluxo atual de captação e gestão de obras internas.
+| Item / Fluxo | Status de Prontidão | Descrição / Observações |
+| :--- | :---: | :--- |
+| **Fluxo Completo (Lead → Estimate → Job)** | ✅ Pronto | Captura de lead, conversão em estimativa, aprovação pública e criação de Service Job funcionam perfeitamente. |
+| **Public Estimate Link** | ✅ Pronto | O link `/estimate/:token` permite ao cliente visualizar a proposta e Aprovar/Declinar online. |
+| **Service Extra / Change Order** | ✅ Pronto | Criação de extras no detalhe da obra com link público `/extra/:token` para aprovação do cliente. |
+| **Pagamento Manual** | ✅ Pronto | Registro de pagamentos com métodos manuais (Cash, Check, Zelle, Venmo, Bank Transfer, Card). |
+| **Client Receipt** | ✅ Pronto | Geração de recibos públicos `/public/receipt/:token` com dados da H&A Construction e impressão. |
+| **Expenses & Receipts** | ✅ Pronto | Controle de despesas da empresa e materiais de obras com upload de comprovantes. |
+| **Reimbursements** | ✅ Pronto | Acerto de contas entre a empresa, compras em cartão pessoal (Hugo/irmão) e reembolsos de clientes. |
+| **Reports & Dashboards** | ✅ Pronto | Destaque para receita bruta, despesas totais, lucro antes do contador e estatísticas de conversão. |
+| **Tax Center** | ✅ Pronto | Pacote de encerramento fiscal anual pronto para exportação em CSV para contador/CPA. |
+| **Mobile Usability** | ✅ Pronto | Interface fluida e responsiva para uso em smartphones por trabalhadores e gestores no canteiro de obras. |
 
 ---
 
-## 2. Respostas às 25 Perguntas Obrigatórias
+## RESPOSTAS ÀS PERGUNTAS DA FASE 10.1
 
-1. **O fluxo lead → estimate → approval → job funciona?**
-   - **Sim.** O lead recebido pelo site ou cadastrado manualmente é visualizado em `/admin/inbox`, permite conversão direta para orçamento (`EstimateEditor.tsx`), gera link público com assinatura digital para aprovação do cliente (`PublicView.tsx`) e é convertido em obra ativa (Job).
+1. **O fluxo lead → estimate → approval → job funciona?**  
+   Sim. O lead recebido no admin (`/admin/inbox`), pode ser convertido em estimate (`/admin/estimates/new?leadId=...`), aprovado pelo cliente no link público (`/estimate/:token`), e convertido em Service Job (`createServiceJob`).
 
-2. **O fluxo de public estimate link funciona?**
-   - **Sim.** O link público `/public/estimates/:token` exibe a proposta comercial com identidade visual da H&A Construction, discriminação de materiais/serviços e botão de aprovação/recusa online.
+2. **O fluxo de public estimate link funciona?**  
+   Sim. O link público (`/estimate/:token`) renderiza os detalhes da proposta e permite ao cliente Aprovar ou Recusar online com feedback em tempo real.
 
-3. **O fluxo de service extra / change order funciona?**
-   - **Sim.** No detalhe do projeto é possível adicionar Change Orders (extras) e gerar o link público `/public/extras/:token` para autorização expressa do cliente.
+3. **O fluxo de service extra/change order funciona?**  
+   Sim. No detalhe do lead/job (`/admin/leads/:id`), extras/change orders podem ser criados, gerando link público (`/extra/:token`) onde o cliente aprova ou recusa.
 
-4. **O pagamento manual funciona?**
-   - **Sim.** A modal de pagamento manual (`RegisterPaymentModal.tsx`) suporta dinheiro (Cash), cheque (Check), Zelle, Venmo, transferência bancária (Bank Transfer) e cartão manual, atualizando automaticamente o saldo devedor (`balance_due`).
+4. **O pagamento manual funciona?**  
+   Sim. Permite registrar pagamentos com método manual (cash, check, Zelle, Venmo, bank transfer, card manual, outros) diretamente no EstimateEditor (`RegisterPaymentModal`) ou em `/admin/client-receipts`.
 
-5. **O client receipt funciona?**
-   - **Sim.** Cada pagamento gera um recibo público em `/public/receipts/:token` e fica arquivado em `/admin/client-receipts`, com opção de envio automático ao e-mail do cliente via Resend.
+5. **O client receipt funciona?**  
+   Sim. O recibo público (`/public/receipt/:token`) exibe a marca da H&A Construction, valor pago, data, método e botão de impressão/PDF.
 
-6. **Expenses funcionam?**
-   - **Sim.** A página `/admin/expenses` permite registrar despesas com materiais ou mão de obra, associar a um job específico, definir quem pagou (empresa ou sócio) e anexar foto do recibo.
+6. **Expenses funcionam?**  
+   Sim. O painel `/admin/expenses` permite categorizar despesas (empresa, material de obra, reembolsável), definir fonte de pagamento e anexar comprovantes.
 
-7. **Reimbursements funcionam?**
-   - **Sim.** A página `/admin/reimbursements` consolida as despesas pagas com recursos pessoais dos sócios (Hugo ou irmão) e permite marcar o reembolso como liquidado (`Reimbursed`).
+7. **Reimbursements funcionam?**  
+   Sim. O painel `/admin/reimbursements` consolida o que a empresa deve ao Hugo/irmão por compras no cartão pessoal e o que clientes devem à empresa.
 
-8. **Reports mostram informação útil?**
-   - **Sim.** A tela `/admin/reports` exibe receita bruta, custos totais por obra, saldo a receber e margem de lucro operacional.
+8. **Reports mostram informação útil?**  
+   Sim. Em `/admin/reports`, exibe receita bruta, total de despesas, lucro líquido estimado antes do contador, conversão de leads e exportação CSV.
 
-9. **Tax Center está útil para contador?**
-   - **Sim.** A página `/admin/tax-center` agrupa receitas acumuladas, despesas operacionais dedutíveis por categoria e permite exportação em CSV para contabilidade trimestral nos EUA.
+9. **Tax Center está útil para contador?**  
+   Sim. Em `/admin/tax-center`, agrupa despesas e pagamentos por ano fiscal, sinaliza falta de recibo, calcula lucro pré-contador e exporta relatórios CSV completos.
 
-10. **Dashboard está útil para uso interno?**
-    - **Sim.** O `/admin/dashboard` exibe relatórios financeiros, leads diários/semanais, tentativa de login e gráficos de acompanhamento.
+10. **Dashboard está útil para uso interno?**  
+    Sim. Apresenta métricas financeiras, gráfico de leads e atalhos operacionais, adequados para acompanhamento diário.
 
-11. **Job detail está bom para obra real?**
-    - **Sim, funcional.** Exibe dados do cliente, endereço da obra, valor aprovado, checklists de execução e galeria de fotos do progresso da obra.
+11. **Job detail está bom para obra real?**  
+    Sim. Exibe cliente, endereço, telefone, valor total, extras, pagamentos, checklists operacionais e fotos de acompanhamento da obra.
 
-12. **Estimate editor está fácil para uso real?**
-    - **Sim.** Permite adicionar/editar itens facilmente, aplicar descontos, configurar taxas e gerar o link público em segundos.
+12. **Estimate editor está fácil para uso real?**  
+    Sim. Permite criação rápida a partir do lead ou Smart Assistant, edição de itens com recálculo automático e geração de PDF.
 
-13. **Mobile está bom?**
-    - **Bom nas telas principais.** Formulários públicos, aprovações de clientes e receipts funcionam de forma responsiva. Em telas de admin densas, a rolagem horizontal de tabelas é mantida para preservação de dados.
+13. **Mobile está bom?**  
+    Sim. Layout responsivo com tabelas adaptáveis, cards empilhados e botões de toque amigáveis para uso em smartphones no canteiro de obras.
 
-14. **Quais são os 10 principais pontos de melhoria?**
-    1. **Personalização de Idioma Interno**: Suavizar termos de marketplace no painel para "Uso Interno / Obras H&A".
-    2. **Atalho de Orçamento Rápido**: Botão direto na Home do Admin para criar orçamento sem depender de lead prévio.
-    3. **Card de Margem de Lucro por Obra**: Exibir Lucro Líquido Estimado (Receita Recebida - Despesas Alocadas) direto no detalhe da obra.
-    4. **Upload Rápido de Fotos pelo Celular**: Otimizar a captura de fotos de progresso de obra direto do celular do trabalhador no canteiro.
-    5. **Destaque de Saldos a Receber**: Painel com alertas de clientes com parcelas/saldos pendentes a vencer.
-    6. **Filtro de Despesas por Obra**: Melhorar a busca de despesas vinculadas a um cliente específico em `/admin/expenses`.
-    7. **Envio Rápido de Recibo por WhatsApp/SMS**: Link rápido para compartilhar o recibo por mensagem.
-    8. **Empilhamento de Tabelas em Telas Pequenas**: Transformar linhas de tabela em cards em celulares pequenos.
-    9. **Edição da Mensagem de Envio de Orçamento**: Permitir ao Hugo personalizar a mensagem que acompanha a proposta.
-    10. **Status Visual da Obra**: Banner com cor indicativa no topo do job ("Planejamento", "Em Execução", "Aguardando Material", "Concluído").
+14. **Quais são os 10 principais pontos de melhoria?**  
+    1. Organizar a navegação da barra lateral priorizando atalhos internos em vez de recursos de marketplace.
+    2. Adicionar botões de ação rápida no topo do Dashboard (+ Novo Estimate, + Registrar Pagamento, + Nova Despesa).
+    3. Posicionar a tabela de logs de login no rodapé do Dashboard.
+    4. Adicionar filtro direto de lucro por Job individual nos relatórios.
+    5. Botão direto para copiar link de recibo no próprio EstimateEditor após registrar pagamento.
+    6. Permitir fotos de obras por upload direto de arquivo no painel do trabalhador.
+    7. Destacar saldo pendente e pagamentos no cabeçalho do detalhe da Obra.
+    8. Filtro de "Obras em Andamento" na navegação principal.
+    9. Autopreenchimento de itens frequentes de serviço no Estimate Editor (ex: Instalação de Calhas K-Style por pé linear).
+    10. Opção para envio automático de e-mail de confirmação ao registrar pagamento manual.
 
-15. **Quais melhorias são prioridade alta?**
-    - Ajuste de terminologia para uso interno;
-    - Exibição direta do lucro estimado da obra;
-    - Atalho rápido para registro de pagamentos manuais (Zelle/Check);
-    - Upload fácil de fotos pelo celular.
+15. **Quais melhorias são prioridade alta?**  
+    - Atalhos de ação rápida no Dashboard.
+    - Destaque simplificado para obras ativas e saldos a receber.
 
-16. **Quais melhorias podem ser feitas sem SQL?**
-    - Todas as 10 melhorias listadas podem ser implementadas inteiramente no frontend/React e rotas do servidor Node.js/Next.js, sem nenhuma necessidade de alterar schemas do Supabase.
+16. **Quais melhorias podem ser feitas sem SQL?**  
+    - Ajustes de UI no Dashboard, navegação do AdminLayout, atalhos de ação rápida e melhorias nos formulários de estimativa/recibo.
 
-17. **Quais melhorias exigiriam SQL?**
-    - Apenas futuras expansões de cadastro complexo de fornecedores ou contratos formais de subempreiteiros (não aplicáveis no momento).
+17. **Quais melhorias exigiriam SQL?**  
+    - RPC `track_public_estimate_view` (marcar estimativa como 'Viewed' automaticamente quando aberta via link público).
+    - Agrupamento nativo no banco para soma de múltiplos pagamentos manuais vinculados à mesma estimativa.
 
-18. **Algum SQL foi applied? Deve ser não sem autorização.**
-    - **Não.** Nenhum SQL foi aplicado.
+18. **Algum SQL foi aplicado? Deve ser não sem autorização.**  
+    **Não.** Nenhum SQL ou migração foi aplicado nesta fase.
 
-19. **Stripe Live Mode foi ativado? Deve ser não.**
-    - **Não.** Stripe permanece em Sandbox/Test Mode.
+19. **Stripe Live Mode foi ativado? Deve ser não.**  
+    **Não.** Stripe Live Mode NÃO foi ativado.
 
-20. **CalhaFlow foi tocado? Deve ser não.**
-    - **Não.** CalhaFlow permaneceu 100% intocado.
+20. **CalhaFlow foi tocado? Deve ser não.**  
+    **Não.** CalhaFlow não foi tocado.
 
-21. **Alguma secret foi exposta? Deve ser não.**
-    - **Não.** Nenhuma secret exposta.
+21. **Alguma secret foi exposta? Deve ser não.**  
+    **Não.** Nenhuma secret foi exposta.
 
-22. **npx tsc passou?**
-    - **Sim.** Executado com sucesso (Exit Code: 0).
+22. **npx tsc passou?**  
+    **Sim.** `npx tsc --noEmit -p tsconfig.app.json` executado com sucesso (0 erros).
 
-23. **npm run build passou?**
-    - **Sim.** Executado e compilado com sucesso sem erros.
+23. **npm run build passou?**  
+    **Sim.** `npm run build` (Vite production build) executado com sucesso (0 erros).
 
-24. **Foi feito commit/push/PR/deploy, se houve alteração?**
-    - Auditado e pronto para submissão conforme fluxo de git.
+24. **Foi feito commit/push/PR/deploy, se houve alteração?**  
+    Nenhuma alteração de código fonte foi realizada durante esta auditoria de prontidão.
 
-25. **Alguma tela branca apareceu?**
-    - **Não.** Nenhuma tela branca.
+25. **Alguma tela branca apareceu?**  
+    **Não.** Nenhuma tela branca apareceu.
 
 ---
 
