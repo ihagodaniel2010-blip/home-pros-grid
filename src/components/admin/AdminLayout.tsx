@@ -11,7 +11,7 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
-  const { user } = useUser();
+  const { user, isLoading: userLoading } = useUser();
   const { unreadCount, loadNotifications } = useNotifications();
   const [newLeads, setNewLeads] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -105,23 +105,41 @@ const AdminLayout = () => {
 
   useEffect(() => {
     let active = true;
+
+    // If UserContext has an authenticated user, authorize immediately
+    if (user) {
+      setIsAuthed(true);
+      setIsLoading(false);
+      return;
+    }
+
+    // Wait for UserContext to finish initial loading before checking fallback session
+    if (userLoading) return;
+
     fetchAdminSession()
       .then((session) => {
         if (!active) return;
-        if (!session) {
+        if (session?.email) {
+          setIsAuthed(true);
+        } else {
           setIsAuthed(false);
-          navigate("/admin/login");
-          return;
+          navigate("/admin/login", { replace: true });
         }
-        setIsAuthed(true);
+      })
+      .catch((err) => {
+        console.error("Auth check error in AdminLayout:", err);
+        if (!active) return;
+        setIsAuthed(false);
+        navigate("/admin/login", { replace: true });
       })
       .finally(() => {
         if (active) setIsLoading(false);
       });
+
     return () => {
       active = false;
     };
-  }, [navigate]);
+  }, [user, userLoading, navigate]);
 
   // Restrict direct URL access for worker
   useEffect(() => {

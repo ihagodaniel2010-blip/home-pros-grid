@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getClientPayments, ClientPayment, createClientPayment, updateClientPayment, PaymentMethod } from "@/lib/client-payments";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -38,7 +38,7 @@ export default function ClientReceipts() {
   }, [user]);
 
   async function fetchData() {
-    const orgId = user?.organization?.id || "org_ha_construction";
+    const orgId = user?.organization?.id || DEFAULT_ORG_ID;
     setIsLoading(true);
     try {
       const [fetchedPayments, fetchedJobs, fetchedEstimates] = await Promise.all([

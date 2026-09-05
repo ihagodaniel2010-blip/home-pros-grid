@@ -33,6 +33,15 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 const USER_STORAGE_KEY = "ha_construction_user_session";
 
+export const DEFAULT_ORG_ID = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+
+export const DEFAULT_ORGANIZATION: Organization = {
+  id: DEFAULT_ORG_ID,
+  name: "H&A Construction LLC",
+  slug: "ha-construction",
+  role: "owner"
+};
+
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,13 +81,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return [];
     }
   };
-
-const DEFAULT_ORGANIZATION: Organization = {
-  id: "org_ha_construction",
-  name: "H&A Construction LLC",
-  slug: "ha-construction",
-  role: "owner"
-};
 
   const mapSupabaseUser = async (authUser: User): Promise<UserSession> => {
     const orgs = await fetchUserOrganizations(authUser.id);

@@ -4,7 +4,7 @@ import { getEstimates, Estimate } from "@/lib/estimates";
 import { getClientPayments, ClientPayment } from "@/lib/client-payments";
 import { getExpenses, Expense } from "@/lib/expenses";
 import { getServiceJobs } from "@/lib/service-jobs";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,7 +27,7 @@ export default function Reports() {
 
   useEffect(() => {
     async function loadData() {
-      const orgId = user?.organization?.id || "org_ha_construction";
+      const orgId = user?.organization?.id || DEFAULT_ORG_ID;
       setIsLoading(true);
       try {
         const [lData, eData, pData, expData, jData] = await Promise.all([

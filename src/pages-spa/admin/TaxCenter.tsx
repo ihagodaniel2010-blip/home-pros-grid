@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { getExpenses, Expense } from "@/lib/expenses";
 import { getClientPayments, ClientPayment } from "@/lib/client-payments";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { Calculator, Download, Printer, AlertTriangle, FileText, CheckCircle2, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ export default function TaxCenter() {
 
   useEffect(() => {
     async function loadData() {
-      const orgId = user?.organization?.id || "org_ha_construction";
+      const orgId = user?.organization?.id || DEFAULT_ORG_ID;
       setIsLoading(true);
       try {
         const [expData, payData] = await Promise.all([

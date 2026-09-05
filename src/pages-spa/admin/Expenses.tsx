@@ -12,7 +12,7 @@ import {
   getReceiptFileUrl,
   uploadReceiptFile
 } from "@/lib/expenses";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,7 +68,7 @@ export default function Expenses() {
   }, [user]);
 
   async function fetchData() {
-    const orgId = user?.organization?.id || "org_ha_construction";
+    const orgId = user?.organization?.id || DEFAULT_ORG_ID;
     setIsLoading(true);
     try {
       const [fetchedExpenses, fetchedJobs] = await Promise.all([
