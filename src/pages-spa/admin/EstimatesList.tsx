@@ -6,20 +6,29 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
+
 const EstimatesList = () => {
+    const { user } = useUser();
     const [estimates, setEstimates] = useState<Estimate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
         loadEstimates();
-    }, []);
+    }, [user]);
 
     const loadEstimates = async () => {
         setIsLoading(true);
-        const data = await getEstimates();
-        setEstimates(data);
-        setIsLoading(false);
+        const orgId = user?.organization?.id || DEFAULT_ORG_ID;
+        try {
+            const data = await getEstimates(orgId);
+            setEstimates(data || []);
+        } catch (err) {
+            console.error("Error loading estimates:", err);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const filteredEstimates = estimates.filter(est =>

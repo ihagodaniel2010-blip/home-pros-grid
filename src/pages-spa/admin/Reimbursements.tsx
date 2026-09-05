@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getExpenses, Expense, updateExpense, ExpenseCategory, PaymentSource, ReimbursementStatus, ClientReimbursementStatus } from "@/lib/expenses";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +36,7 @@ export default function Reimbursements() {
   }, [user]);
 
   async function fetchData() {
-    const orgId = user?.organization?.id || "org_ha_construction";
+    const orgId = user?.organization?.id || DEFAULT_ORG_ID;
     setIsLoading(true);
     try {
       const [fetchedExpenses, fetchedJobs] = await Promise.all([

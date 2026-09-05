@@ -48,13 +48,14 @@ export interface Estimate {
     files?: any[];
 }
 
-export const getEstimates = async (): Promise<Estimate[]> => {
+export const getEstimates = async (organizationId?: string): Promise<Estimate[]> => {
     if (!supabase) return [];
 
-    const { data, error } = await supabase
-        .from('estimates')
-        .select('*')
-        .order('created_at', { ascending: false });
+    let query = supabase.from('estimates').select('*');
+    if (organizationId) {
+        query = query.eq('organization_id', organizationId);
+    }
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
         console.error('Error fetching estimates:', error);
@@ -96,7 +97,7 @@ export const createEstimate = async (
 
     if (estimateError) {
         console.error('Error creating estimate:', estimateError);
-        return null;
+        throw estimateError;
     }
 
     // 2. Insert Items Linked to the Estimate

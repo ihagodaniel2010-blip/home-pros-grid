@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer, Copy, Wrench, Wand2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { useLanguage } from "@/context/LanguageContext";
 import {
     getEstimateById,
@@ -270,10 +270,7 @@ const EstimateEditor = () => {
     };
 
     const handleSave = async () => {
-        if (!user?.organization?.id) {
-            toast.error("Organization context missing.");
-            return;
-        }
+        const orgId = user?.organization?.id || DEFAULT_ORG_ID;
 
         if (!formData.client_name) {
             toast.error("Client name is required.");
@@ -282,9 +279,10 @@ const EstimateEditor = () => {
 
         setIsSaving(true);
         try {
+            const { client_address, ...cleanFormData } = formData as any;
             const payload = {
-                ...formData,
-                organization_id: user.organization.id,
+                ...cleanFormData,
+                organization_id: orgId,
             } as Omit<Estimate, 'id' | 'created_at' | 'updated_at'>;
 
             if (id) {
@@ -292,17 +290,20 @@ const EstimateEditor = () => {
                 toast.success("Estimate updated successfully.");
             } else {
                 const created = await createEstimate(payload, items);
+                if (!created) {
+                    throw new Error("Supabase insert returned null record.");
+                }
                 toast.success("Estimate created successfully.");
                 
                 // If it came from a draft, mark draft as converted
-                if (draftId && created) {
-                    await saveAssistantDraft({ id: draftId, status: 'converted', organization_id: user.organization.id, input: {} as any, output: {} as any, service_type: 'converted' });
+                if (draftId) {
+                    await saveAssistantDraft({ id: draftId, status: 'converted', organization_id: orgId, input: {} as any, output: {} as any, service_type: 'converted' }).catch(() => {});
                 }
             }
             navigate("/admin/estimates");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Save error:", error);
-            toast.error("Failed to save estimate.");
+            toast.error(`Failed to save estimate: ${error?.message || "Database insert error"}`);
         } finally {
             setIsSaving(false);
         }
