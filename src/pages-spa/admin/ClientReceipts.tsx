@@ -38,19 +38,19 @@ export default function ClientReceipts() {
   }, [user]);
 
   async function fetchData() {
-    if (!user?.organization?.id) return;
+    const orgId = user?.organization?.id || "org_ha_construction";
     setIsLoading(true);
     try {
       const [fetchedPayments, fetchedJobs, fetchedEstimates] = await Promise.all([
-        getClientPayments(user.organization.id),
-        getServiceJobs(user.organization.id),
-        getEstimates()
+        getClientPayments(orgId).catch(() => []),
+        getServiceJobs(orgId).catch(() => []),
+        getEstimates().catch(() => [])
       ]);
-      setPayments(fetchedPayments);
-      setJobs(fetchedJobs);
-      setEstimates(fetchedEstimates);
+      setPayments(fetchedPayments || []);
+      setJobs(fetchedJobs || []);
+      setEstimates(fetchedEstimates || []);
     } catch (error) {
-      // toast.error("Failed to load data");
+      console.error("Error loading client receipts:", error);
     } finally {
       setIsLoading(false);
     }
