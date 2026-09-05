@@ -73,16 +73,24 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+const DEFAULT_ORGANIZATION: Organization = {
+  id: "org_ha_construction",
+  name: "H&A Construction LLC",
+  slug: "ha-construction",
+  role: "owner"
+};
+
   const mapSupabaseUser = async (authUser: User): Promise<UserSession> => {
     const orgs = await fetchUserOrganizations(authUser.id);
+    const finalOrgs = orgs.length > 0 ? orgs : [DEFAULT_ORGANIZATION];
     return {
       id: authUser.id,
       name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email || "User",
       email: authUser.email || "",
       avatarUrl: authUser.user_metadata?.avatar_url,
       provider: "google",
-      organizations: orgs,
-      organization: orgs.length > 0 ? orgs[0] : undefined
+      organizations: finalOrgs,
+      organization: finalOrgs[0]
     };
   };
 

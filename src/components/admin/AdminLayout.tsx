@@ -32,55 +32,66 @@ const AdminLayout = () => {
     }
   }, [isAuthed, user, loadNotifications]);
 
-  // Primary internal operations nav items
-  const primaryNavItems = useMemo(
+  // Operations Nav Items
+  const operationsNavItems = useMemo(
     () => [
       { label: t("admin.dashboard"), icon: LayoutDashboard, path: "/admin" },
-      { label: "Leads", icon: Inbox, path: "/admin/inbox" },
+      { label: "Client Requests", icon: Inbox, path: "/admin/inbox", badge: newLeads },
       { label: t("admin.estimates"), icon: FileText, path: "/admin/estimates" },
       { label: "Client Receipts", icon: Receipt, path: "/admin/client-receipts" },
-      { label: "Receipts & Expenses", icon: FileText, path: "/admin/expenses" },
+    ],
+    [t, newLeads]
+  );
+
+  // Financial Nav Items
+  const financialNavItems = useMemo(
+    () => [
+      { label: "Expenses / Material Receipts", icon: FileText, path: "/admin/expenses" },
       { label: "Reimbursements", icon: DollarSign, path: "/admin/reimbursements" },
       { label: "Reports", icon: PieChart, path: "/admin/reports" },
       { label: "Tax Center", icon: Calculator, path: "/admin/tax-center" },
-      { label: "Notifications", icon: Bell, path: "/admin/notifications", badge: unreadCount },
-      { label: "Estimate Assistant", icon: FileText, path: "/admin/estimate-assistant" },
     ],
-    [t, unreadCount]
+    []
   );
 
-  // Secondary SaaS & Configuration items
-  const secondaryNavItems = useMemo(
+  // Company & Site Nav Items
+  const companyNavItems = useMemo(
     () => [
-      { label: "Billing & Credits", icon: CreditCard, path: "/admin/billing" },
-      { label: "Communications", icon: Mail, path: "/admin/communications" },
-      { label: t("nav.portfolio"), icon: Images, path: "/admin/portfolio" },
-      { label: "Client Link", icon: Link2, path: "/admin/client-link" },
-      { label: t("admin.reviews"), icon: BarChart3, path: "/admin/reviews" },
-      { label: t("admin.analytics"), icon: BarChart3, path: "/admin/analytics" },
-      { label: t("admin.locations"), icon: MapPin, path: "/admin/locations" },
       { label: "Services", icon: Store, path: "/admin/services" },
-      { label: "Lead Settings", icon: Settings, path: "/admin/lead-settings" },
-      { label: "Lead Market", icon: Store, path: "/admin/lead-market" },
-      { label: t("admin.company"), icon: Building2, path: "/admin/company" },
-      { label: t("admin.settings"), icon: Settings, path: "/admin/settings" },
+      { label: "Service Areas", icon: MapPin, path: "/admin/locations" },
+      { label: t("nav.portfolio"), icon: Images, path: "/admin/portfolio" },
+      { label: t("admin.reviews"), icon: BarChart3, path: "/admin/reviews" },
+      { label: "Communications", icon: Mail, path: "/admin/communications" },
+      { label: "Company Profile", icon: Building2, path: "/admin/company" },
     ],
     [t]
   );
 
-  const filteredPrimary = useMemo(() => {
-    if (userRole === "worker") {
-      return primaryNavItems.filter(item => item.path === "/admin");
-    }
-    return primaryNavItems;
-  }, [primaryNavItems, userRole]);
+  // System & SaaS Nav Items
+  const systemNavItems = useMemo(
+    () => [
+      { label: t("admin.settings"), icon: Settings, path: "/admin/settings" },
+      { label: "Billing & Credits", icon: CreditCard, path: "/admin/billing" },
+      { label: "Lead Market", icon: Store, path: "/admin/lead-market" },
+      { label: "Lead Settings", icon: Settings, path: "/admin/lead-settings" },
+      { label: t("admin.analytics"), icon: BarChart3, path: "/admin/analytics" },
+      { label: "Estimate Assistant", icon: FileText, path: "/admin/estimate-assistant" },
+      { label: "Notifications", icon: Bell, path: "/admin/notifications", badge: unreadCount },
+      { label: "Client Link", icon: Link2, path: "/admin/client-link" },
+    ],
+    [t, unreadCount]
+  );
 
-  const filteredSecondary = useMemo(() => {
+  const filteredOperations = useMemo(() => {
     if (userRole === "worker") {
-      return [];
+      return operationsNavItems.filter(item => item.path === "/admin");
     }
-    return secondaryNavItems;
-  }, [secondaryNavItems, userRole]);
+    return operationsNavItems;
+  }, [operationsNavItems, userRole]);
+
+  const filteredFinancial = useMemo(() => userRole === "worker" ? [] : financialNavItems, [financialNavItems, userRole]);
+  const filteredCompany = useMemo(() => userRole === "worker" ? [] : companyNavItems, [companyNavItems, userRole]);
+  const filteredSystem = useMemo(() => userRole === "worker" ? [] : systemNavItems, [systemNavItems, userRole]);
 
   const isNavActive = (path: string) => {
     if (path.includes("?")) {
@@ -181,9 +192,9 @@ const AdminLayout = () => {
             {t("nav.back_to_site")}
           </Link>
 
-          <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1 pt-1">Daily Operations</p>
-
-          {filteredPrimary.map((item) => {
+          {/* Operations Group */}
+          <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-blue-300/80 mb-1 pt-1">Operations</p>
+          {filteredOperations.map((item) => {
             const active = isNavActive(item.path);
             return (
               <Link
@@ -193,16 +204,11 @@ const AdminLayout = () => {
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-200 ${
                   active
                     ? "bg-blue-600 text-white font-semibold shadow-sm"
-                    : "text-white/75 hover:text-white hover:bg-white/10"
+                    : "text-white/80 hover:text-white hover:bg-white/10"
                 }`}
               >
                 <item.icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
                 <span className="truncate">{item.label}</span>
-                {item.label === "Leads" && newLeads > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {newLeads}
-                  </span>
-                )}
                 {item.badge !== undefined && item.badge > 0 && (
                   <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                     {item.badge}
@@ -212,10 +218,61 @@ const AdminLayout = () => {
             );
           })}
 
-          {filteredSecondary.length > 0 && (
+          {/* Financial Group */}
+          {filteredFinancial.length > 0 && (
             <>
-              <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-white/40 mt-4 mb-1 pt-2 border-t border-white/10">System & Admin</p>
-              {filteredSecondary.map((item) => {
+              <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-emerald-400/80 mt-4 mb-1 pt-2 border-t border-white/10">Financial</p>
+              {filteredFinancial.map((item) => {
+                const active = isNavActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsMobileOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-200 ${
+                      active
+                        ? "bg-blue-600 text-white font-semibold shadow-sm"
+                        : "text-white/75 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </>
+          )}
+
+          {/* Company & Site Group */}
+          {filteredCompany.length > 0 && (
+            <>
+              <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-amber-300/80 mt-4 mb-1 pt-2 border-t border-white/10">Company &amp; Site</p>
+              {filteredCompany.map((item) => {
+                const active = isNavActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsMobileOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-200 ${
+                      active
+                        ? "bg-blue-600 text-white font-semibold shadow-sm"
+                        : "text-white/70 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </>
+          )}
+
+          {/* System & SaaS Group */}
+          {filteredSystem.length > 0 && (
+            <>
+              <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-4 mb-1 pt-2 border-t border-white/10">System &amp; SaaS</p>
+              {filteredSystem.map((item) => {
                 const active = isNavActive(item.path);
                 return (
                   <Link
@@ -230,6 +287,11 @@ const AdminLayout = () => {
                   >
                     <item.icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
                     <span className="truncate">{item.label}</span>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className="ml-auto bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {item.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
