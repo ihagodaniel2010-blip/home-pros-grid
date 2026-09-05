@@ -119,12 +119,24 @@ const Header = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[72px] flex items-center justify-between">
         {/* Brand Logo Header */}
         <Link to="/" className="flex items-center gap-3 group">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <img
-              src={isHeroPage ? "/logo-light.svg" : "/logo.svg"}
-              alt="H&A Construction LLC"
-              className="h-10 sm:h-12 w-auto object-contain transition-transform group-hover:scale-105"
+              src="/brand/icon-512.png"
+              alt="H&A Construction LLC Emblem"
+              className="h-10 w-10 sm:h-11 sm:w-11 object-contain rounded-xl shadow-sm transition-transform group-hover:scale-105"
             />
+            <div className="flex flex-col">
+              <span className={`text-base sm:text-xl font-extrabold tracking-tight leading-none ${
+                isHeroPage ? "text-white" : "text-[#0b2a4a]"
+              }`}>
+                H&amp;A Construction
+              </span>
+              <span className={`text-[10px] font-bold tracking-wider uppercase mt-1 ${
+                isHeroPage ? "text-blue-200" : "text-blue-600"
+              }`}>
+                LLC · Southern Maine
+              </span>
+            </div>
           </div>
         </Link>
 
@@ -455,14 +467,26 @@ const Header = () => {
             className="fixed inset-y-0 right-0 w-full max-w-sm bg-[#0b2a4a] text-white z-[100] lg:hidden flex flex-col justify-between shadow-2xl overflow-y-auto"
           >
             <div className="p-6">
-              {/* Drawer Header with Logo & Close Button */}
+              {/* Drawer Header with Official Brand Logo & Close Button */}
               <div className="flex items-center justify-between border-b border-white/10 pb-5 mb-6">
-                <Link to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-2">
-                  <img src="/logo-light.svg" alt="H&A Construction Logo" className="h-10 w-auto" />
+                <Link to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 group shrink min-w-0 pr-2">
+                  <img
+                    src="/brand/icon-512.png"
+                    alt="H&A Construction LLC Emblem"
+                    className="h-10 w-10 object-contain rounded-xl shadow-md shrink-0"
+                  />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-base font-extrabold tracking-tight text-white leading-tight truncate">
+                      H&amp;A Construction
+                    </span>
+                    <span className="text-[10px] font-bold text-blue-300 tracking-wider uppercase mt-0.5 truncate">
+                      LLC · Southern Maine
+                    </span>
+                  </div>
                 </Link>
                 <button
                   onClick={() => setMobileOpen(false)}
-                  className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all focus:outline-none"
+                  className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all focus:outline-none shrink-0"
                   aria-label="Close menu"
                 >
                   <X className="h-6 w-6" />
@@ -486,38 +510,41 @@ const Header = () => {
                     className="flex items-center justify-between px-4 py-3.5 rounded-xl text-base font-semibold text-white/90 hover:text-white hover:bg-white/10 transition-all"
                   >
                     <div className="flex items-center gap-3">
-                      <link.icon className="h-5 w-5 text-blue-400" />
+                      <link.icon className="h-5 w-5 text-blue-400 shrink-0" />
                       <span>{link.label}</span>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-white/40" />
+                    <ChevronRight className="h-4 w-4 text-white/40 shrink-0" />
                   </Link>
                 ))}
               </nav>
 
-              {/* Primary Call To Action */}
+              {/* Primary Call To Action & Access Buttons */}
               <div className="mt-8 pt-6 border-t border-white/10 space-y-3">
                 <Button
                   onClick={() => { navigate("/quote/remodeling"); setMobileOpen(false); }}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white h-13 rounded-xl text-base font-bold shadow-lg shadow-blue-900/40"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white h-13 rounded-xl text-base font-bold shadow-lg shadow-blue-900/40 cursor-pointer"
                 >
                   Request Free Estimate
                 </Button>
 
+                {/* Secondary Portal Access Buttons (High Contrast Glass Design) */}
                 <div className="grid grid-cols-2 gap-2.5 pt-2">
-                  <Button
-                    variant="outline"
+                  <button
+                    type="button"
                     onClick={() => { navigate("/login"); setMobileOpen(false); }}
-                    className="border-white/20 text-white hover:bg-white/10 rounded-xl h-11 text-xs font-semibold"
+                    className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 active:bg-white/30 border border-white/20 text-white rounded-xl h-11 px-3 text-xs font-semibold transition-all cursor-pointer shadow-sm"
                   >
-                    {t("nav.login")}
-                  </Button>
-                  <Button
-                    variant="outline"
+                    <LogIn className="h-4 w-4 text-blue-300 shrink-0" />
+                    <span className="truncate">{t("nav.login") || "Client Login"}</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => { navigate("/admin/login"); setMobileOpen(false); }}
-                    className="border-white/20 text-white hover:bg-white/10 rounded-xl h-11 text-xs font-semibold"
+                    className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 active:bg-white/30 border border-white/20 text-white rounded-xl h-11 px-3 text-xs font-semibold transition-all cursor-pointer shadow-sm"
                   >
-                    {t("nav.admin_login")}
-                  </Button>
+                    <User className="h-4 w-4 text-blue-300 shrink-0" />
+                    <span className="truncate">{t("nav.admin_login") || "Admin Portal"}</span>
+                  </button>
                 </div>
               </div>
             </div>
