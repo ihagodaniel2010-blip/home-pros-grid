@@ -101,11 +101,9 @@ export async function getExpenses(organizationId: string): Promise<Expense[]> {
 export async function uploadReceiptFile(
   organizationId: string,
   receiptId: string,
-  file: File
+  file: File,
+  userId?: string
 ) {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData?.user?.id;
-
   const fileExt = file.name.split(".").pop();
   const fileName = `${receiptId}-${Date.now()}.${fileExt}`;
   const filePath = `${organizationId}/${fileName}`;

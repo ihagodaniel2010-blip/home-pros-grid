@@ -299,7 +299,7 @@ const EstimateEditor = () => {
                 
                 // If it came from a draft, mark draft as converted
                 if (draftId) {
-                    await saveAssistantDraft({ id: draftId, status: 'converted', organization_id: orgId, input: {} as any, output: {} as any, service_type: 'converted' }).catch(() => {});
+                    await saveAssistantDraft({ id: draftId, status: 'converted', organization_id: orgId, created_by: user?.id || 'system', input: {} as any, output: {} as any, service_type: 'converted' }).catch(() => {});
                 }
             }
             navigate("/admin/estimates");
