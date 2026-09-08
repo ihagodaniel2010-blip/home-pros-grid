@@ -36,7 +36,7 @@ export default function TaxCenter() {
       }
     }
     loadData();
-  }, [user]);
+  }, [user?.id, user?.organization?.id]);
 
   // Filters
   const yearExpenses = useMemo(() => {

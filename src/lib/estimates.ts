@@ -82,30 +82,98 @@ export const getEstimateById = async (id: string): Promise<Estimate | null> => {
     return data as Estimate;
 };
 
+const ALLOWED_ESTIMATE_COLUMNS = new Set([
+    'organization_id',
+    'lead_id',
+    'client_name',
+    'client_email',
+    'client_phone',
+    'project_type',
+    'status',
+    'subtotal',
+    'tax_rate',
+    'tax_amount',
+    'discount_amount',
+    'total_amount',
+    'amount_paid',
+    'balance_due',
+    'payment_status',
+    'public_token',
+    'notes',
+    'terms',
+    'valid_until',
+    'sent_at',
+    'approved_at'
+]);
+
+const ALLOWED_ESTIMATE_ITEM_COLUMNS = new Set([
+    'estimate_id',
+    'organization_id',
+    'description',
+    'quantity',
+    'unit_price',
+    'total_price'
+]);
+
+export function sanitizeEstimatePayload(raw: Record<string, any>): Record<string, any> {
+    const cleanPayload: Record<string, any> = {};
+    for (const [key, value] of Object.entries(raw)) {
+        if (ALLOWED_ESTIMATE_COLUMNS.has(key) && value !== undefined) {
+            cleanPayload[key] = value;
+        }
+    }
+
+    // Preserve address in notes if address fields are provided and notes doesn't already contain address
+    const addressParts = [raw.client_address, raw.client_city, raw.client_state, raw.client_zip].filter(Boolean);
+    if (addressParts.length > 0) {
+        const addressStr = addressParts.join(', ');
+        const existingNotes = cleanPayload.notes || '';
+        if (!existingNotes.includes(addressStr)) {
+            cleanPayload.notes = existingNotes 
+                ? `${existingNotes}\n\nClient Address: ${addressStr}`
+                : `Client Address: ${addressStr}`;
+        }
+    }
+
+    return cleanPayload;
+}
+
+export function sanitizeEstimateItemPayload(raw: Record<string, any>): Record<string, any> {
+    const cleanPayload: Record<string, any> = {};
+    for (const [key, value] of Object.entries(raw)) {
+        if (ALLOWED_ESTIMATE_ITEM_COLUMNS.has(key) && value !== undefined) {
+            cleanPayload[key] = value;
+        }
+    }
+    return cleanPayload;
+}
+
 export const createEstimate = async (
     estimate: Omit<Estimate, 'id' | 'created_at' | 'updated_at'>,
     items: Omit<EstimateLineItem, 'id' | 'estimate_id' | 'created_at'>[]
 ): Promise<Estimate | null> => {
     if (!supabase) return null;
 
+    const sanitizedHeader = sanitizeEstimatePayload(estimate as any);
+
     // 1. Insert Estimate Header
     const { data: estimateData, error: estimateError } = await supabase
         .from('estimates')
-        .insert([estimate])
+        .insert([sanitizedHeader])
         .select()
         .single();
 
     if (estimateError) {
-        console.error('Error creating estimate:', estimateError);
+        console.error('Error creating estimate header:', estimateError);
         throw estimateError;
     }
 
     // 2. Insert Items Linked to the Estimate
     if (items.length > 0) {
-        const itemsWithId = items.map(item => ({
+        const itemsWithId = items.map(item => sanitizeEstimateItemPayload({
             ...item,
             estimate_id: estimateData.id,
-            organization_id: estimate.organization_id // Explicitly pass org_id as requested
+            organization_id: estimateData.organization_id || estimate.organization_id
         }));
 
         const { error: itemsError } = await supabase
@@ -114,8 +182,7 @@ export const createEstimate = async (
 
         if (itemsError) {
             console.error('Error creating estimate items:', itemsError);
-            // Optional: Logic to delete the estimate header if items fail? 
-            // For now, we'll just log and return the header.
+            throw itemsError;
         }
     }
 
@@ -129,37 +196,40 @@ export const updateEstimate = async (
 ): Promise<Estimate | null> => {
     if (!supabase) return null;
 
+    const sanitizedUpdates = sanitizeEstimatePayload(updates as any);
+
     // 1. Update Header
     const { data, error } = await supabase
         .from('estimates')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({ ...sanitizedUpdates, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();
 
     if (error) {
         console.error('Error updating estimate:', error);
-        return null;
+        throw error;
     }
 
-    // 2. Update Items if provided (Simplistic approach: Delete and Re-insert)
+    // 2. Update Items if provided (Delete and Re-insert)
     if (items) {
-        // Delete existing
         await supabase.from('estimate_items').delete().eq('estimate_id', id);
 
-        // Insert new
-        const itemsToInsert = items.map(item => ({
-            ...item,
-            estimate_id: id,
-            organization_id: data.organization_id
-        }));
+        if (items.length > 0) {
+            const itemsToInsert = items.map(item => sanitizeEstimateItemPayload({
+                ...item,
+                estimate_id: id,
+                organization_id: data.organization_id
+            }));
 
-        const { error: itemsError } = await supabase
-            .from('estimate_items')
-            .insert(itemsToInsert);
+            const { error: itemsError } = await supabase
+                .from('estimate_items')
+                .insert(itemsToInsert);
 
-        if (itemsError) {
-            console.error('Error updating items:', itemsError);
+            if (itemsError) {
+                console.error('Error updating items:', itemsError);
+                throw itemsError;
+            }
         }
     }
 

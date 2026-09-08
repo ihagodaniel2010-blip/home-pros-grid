@@ -38,7 +38,7 @@ const Analytics = () => {
       setLeads([]);
       setIsLoading(false);
     });
-  }, [user]);
+  }, [user?.id, user?.organization?.id]);
 
   const now = useMemo(() => new Date(), []);
 

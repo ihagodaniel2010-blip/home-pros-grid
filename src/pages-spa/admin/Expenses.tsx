@@ -65,7 +65,7 @@ export default function Expenses() {
 
   useEffect(() => {
     fetchData();
-  }, [user]);
+  }, [user?.id, user?.organization?.id]);
 
   async function fetchData() {
     const orgId = user?.organization?.id || DEFAULT_ORG_ID;

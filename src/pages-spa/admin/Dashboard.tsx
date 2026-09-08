@@ -55,7 +55,7 @@ const Dashboard = () => {
       getLeads().then(setLeads);
       getEstimates().then(setEstimates);
     }
-  }, [user]);
+  }, [user?.id, user?.organization?.id]);
 
   // Stable date boundaries for KPIs
   const dateBoundaries = useMemo(() => {
@@ -484,7 +484,7 @@ const WorkerDashboard = () => {
 
   useEffect(() => {
     loadWorkerData();
-  }, [user]);
+  }, [user?.id, user?.organization?.id]);
 
   const loadWorkerData = async () => {
     if (!supabase || !user) return;

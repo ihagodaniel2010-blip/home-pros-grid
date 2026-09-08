@@ -49,7 +49,7 @@ const CompanySettings = () => {
         };
 
         loadSettings();
-    }, [user]);
+    }, [user?.id, user?.organization?.id]);
 
     const handleSave = async () => {
         if (!user?.organization?.id) {
