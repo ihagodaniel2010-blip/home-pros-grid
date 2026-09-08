@@ -49,7 +49,7 @@ export default function Reports() {
       }
     }
     loadData();
-  }, [user]);
+  }, [user?.id, user?.organization?.id]);
 
   // Date Filtering Logic
   const filterByDate = (dateString: string) => {

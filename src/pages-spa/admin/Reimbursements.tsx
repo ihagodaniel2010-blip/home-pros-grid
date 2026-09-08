@@ -33,7 +33,7 @@ export default function Reimbursements() {
 
   useEffect(() => {
     fetchData();
-  }, [user]);
+  }, [user?.id, user?.organization?.id]);
 
   async function fetchData() {
     const orgId = user?.organization?.id || DEFAULT_ORG_ID;

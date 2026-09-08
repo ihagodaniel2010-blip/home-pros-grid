@@ -279,14 +279,16 @@ const EstimateEditor = () => {
 
         setIsSaving(true);
         try {
-            const { client_address, ...cleanFormData } = formData as any;
             const payload = {
-                ...cleanFormData,
+                ...formData,
                 organization_id: orgId,
             } as Omit<Estimate, 'id' | 'created_at' | 'updated_at'>;
 
             if (id) {
-                await updateEstimate(id, payload, items);
+                const updated = await updateEstimate(id, payload, items);
+                if (!updated) {
+                    throw new Error("Supabase update returned null record.");
+                }
                 toast.success("Estimate updated successfully.");
             } else {
                 const created = await createEstimate(payload, items);

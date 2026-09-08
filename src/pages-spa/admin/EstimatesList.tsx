@@ -16,7 +16,7 @@ const EstimatesList = () => {
 
     useEffect(() => {
         loadEstimates();
-    }, [user]);
+    }, [user?.id, user?.organization?.id]);
 
     const loadEstimates = async () => {
         setIsLoading(true);
