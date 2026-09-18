@@ -6,7 +6,11 @@ export type ServiceExtra = {
     service_job_id: string;
     estimate_id: string | null;
     description: string;
-    amount: number;
+    amount: number; // Change order amount
+    previous_contract_price?: number | null;
+    revised_contract_price?: number | null;
+    schedule_impact?: string | null;
+    reason?: string | null;
     status: 'pending' | 'approved' | 'rejected' | 'paid';
     public_token: string | null;
     created_at: string;
@@ -15,18 +19,35 @@ export type ServiceExtra = {
 export const createServiceExtra = async (extraData: {
     organization_id: string;
     service_job_id: string;
-    estimate_id?: string;
+    estimate_id?: string | null;
     description: string;
     amount: number;
+    previous_contract_price?: number;
+    schedule_impact?: string;
+    reason?: string;
 }) => {
     if (!supabase) throw new Error("Supabase not initialized");
 
+    const previousPrice = extraData.previous_contract_price ?? 0;
+    const revisedPrice = previousPrice + extraData.amount;
+
+    const payload: Record<string, any> = {
+        organization_id: extraData.organization_id,
+        service_job_id: extraData.service_job_id,
+        description: extraData.description,
+        amount: extraData.amount,
+        previous_contract_price: extraData.previous_contract_price ?? null,
+        revised_contract_price: revisedPrice,
+        schedule_impact: extraData.schedule_impact ?? null,
+        status: 'pending'
+    };
+
+    if (extraData.estimate_id) payload.estimate_id = extraData.estimate_id;
+    if (extraData.reason) payload.reason = extraData.reason;
+
     const { data, error } = await supabase
         .from('service_extras')
-        .insert([{
-            ...extraData,
-            status: 'pending'
-        }])
+        .insert([payload])
         .select()
         .single();
 

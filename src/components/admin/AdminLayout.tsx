@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe, Building2, Store, Receipt, DollarSign, Calculator, Link2, Bell, PieChart, CreditCard, Mail, Menu, X, Wrench } from "lucide-react";
+import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe, Building2, Store, Receipt, DollarSign, Calculator, Link2, Bell, PieChart, CreditCard, Mail, Menu, X, Wrench, Loader2 } from "lucide-react";
+import ErrorBoundary from "./ErrorBoundary";
 import { adminLogout, fetchAdminSession } from "@/lib/admin-auth";
 import { getLeads } from "@/lib/leads";
 import { useNotifications } from "@/lib/notifications";
@@ -332,7 +333,15 @@ const AdminLayout = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto">
-        <Outlet />
+        <ErrorBoundary>
+          <Suspense fallback={
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <Loader2 className="h-8 w-8 animate-spin text-[#0b2a4a]" />
+            </div>
+          }>
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
       </main>
     </div>
   );

@@ -24,6 +24,10 @@ class ErrorBoundary extends React.Component<Props, State> {
     console.error("Admin error:", error);
   }
 
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   handleRefresh = () => {
     this.setState({ hasError: false, error: null });
     window.location.reload();
@@ -32,22 +36,30 @@ class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="p-8 flex items-center justify-center min-h-screen">
-          <div className="bg-white rounded-2xl border border-gray-200 p-8 max-w-sm">
-            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-50 mx-auto mb-4">
-              <AlertCircle className="h-6 w-6 text-red-600" />
+        <div className="p-8 flex items-center justify-center min-h-[60vh]">
+          <div className="bg-white rounded-2xl border border-gray-200 p-8 max-w-md shadow-lg text-center">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-50 mx-auto mb-4">
+              <AlertCircle className="h-6 w-6 text-amber-600" />
             </div>
-            <h2 className="text-center text-lg font-semibold text-gray-900 mb-2">Something went wrong</h2>
-            <p className="text-center text-sm text-gray-600 mb-6">
-              An error occurred while loading analytics. Please refresh to try again.
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Section Failed to Load</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              {this.state.error?.message || "A temporary error occurred while rendering this section."}
             </p>
-            <button
-              onClick={this.handleRefresh}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Refresh Page
-            </button>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={this.handleReset}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0b2a4a] text-white text-sm font-semibold rounded-xl hover:bg-[#081e35] transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Try Again
+              </button>
+              <button
+                onClick={this.handleRefresh}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                Reload Page
+              </button>
+            </div>
           </div>
         </div>
       );

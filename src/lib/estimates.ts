@@ -111,8 +111,7 @@ const ALLOWED_ESTIMATE_ITEM_COLUMNS = new Set([
     'organization_id',
     'description',
     'quantity',
-    'unit_price',
-    'total_price'
+    'unit_price'
 ]);
 
 export function sanitizeEstimatePayload(raw: Record<string, any>): Record<string, any> {

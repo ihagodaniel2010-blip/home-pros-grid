@@ -47,6 +47,7 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                     type="button"
                     variant="outline"
                     size="sm"
+                    id="add-item-btn"
                     onClick={addItem}
                     className="text-blue-600 border-blue-200 hover:bg-blue-50"
                 >
@@ -55,7 +56,7 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                 </Button>
             </div>
 
-            <div className="border border-gray-200 rounded-lg overflow-x-auto">
+            <div id="estimate-items-section" className="border border-gray-200 rounded-lg overflow-x-auto">
                 <table className="w-full text-left min-w-[500px]">
                     <thead className="bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
                         <tr>
@@ -78,6 +79,7 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                                 <tr key={index} className="group">
                                     <td className="px-4 py-3">
                                         <Input
+                                            id={`item-desc-${index}`}
                                             placeholder="e.g. Interior Painting - Living Room"
                                             value={item.description}
                                             onChange={(e) => updateItem(index, { description: e.target.value })}
@@ -86,6 +88,7 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                                     </td>
                                     <td className="px-4 py-3">
                                         <Input
+                                            id={`item-qty-${index}`}
                                             type="number"
                                             min="0"
                                             step="0.01"
@@ -98,6 +101,7 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                                         <div className="flex items-center gap-1">
                                             <span className="text-gray-400 text-sm">$</span>
                                             <Input
+                                                id={`item-price-${index}`}
                                                 type="number"
                                                 min="0"
                                                 step="0.01"
@@ -108,7 +112,7 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                                         </div>
                                     </td>
                                     <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                                        ${item.total_price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        ${(item.total_price ?? ((item.quantity || 0) * (item.unit_price || 0))).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <button
