@@ -2,7 +2,7 @@ import { supabase } from "./supabase";
 
 export const createServiceJob = async (jobData: {
     organization_id: string;
-    lead_id: string;
+    lead_id?: string | null;
     estimate_id: string;
     status: 'scheduled' | 'in_progress' | 'completed';
     assigned_worker_id?: string;
@@ -10,12 +10,19 @@ export const createServiceJob = async (jobData: {
 }) => {
     if (!supabase) throw new Error("Supabase not initialized");
 
+    const payload: Record<string, any> = {
+        organization_id: jobData.organization_id,
+        estimate_id: jobData.estimate_id,
+        status: jobData.status,
+        address_released_to_worker: jobData.address_released_to_worker ?? false,
+    };
+
+    if (jobData.lead_id) payload.lead_id = jobData.lead_id;
+    if (jobData.assigned_worker_id) payload.assigned_worker_id = jobData.assigned_worker_id;
+
     const { data, error } = await supabase
         .from('service_jobs')
-        .insert([{
-            ...jobData,
-            address_released_to_worker: jobData.address_released_to_worker ?? false,
-        }])
+        .insert([payload])
         .select()
         .single();
 

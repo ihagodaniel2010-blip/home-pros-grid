@@ -45,8 +45,38 @@ export default function CountersignModal({
         setIsSubmitting(true);
         try {
             const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
-            const versionId = estimate.id; // Using estimate ID for version scope
-            const docHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"; // Canonical SHA-256 fallback
+            
+            // Fetch or create document version record
+            const { getLatestDocumentVersion, createDocumentVersionSnapshot } = await import("@/lib/esignatures");
+            let versionRecord = await getLatestDocumentVersion('estimate', estimate.id);
+            
+            if (!versionRecord) {
+                versionRecord = await createDocumentVersionSnapshot({
+                    organization_id: orgId,
+                    document_type: 'estimate',
+                    document_id: estimate.id,
+                    version_number: 1,
+                    contractor_legal_name: contractorName.trim(),
+                    contractor_company_name: companySettings?.company_name || "H&A Construction LLC",
+                    contractor_email: contractorEmail.trim(),
+                    client_name: estimate.client_name || "Client",
+                    client_email: estimate.client_email || "client@example.com",
+                    client_phone: estimate.client_phone || undefined,
+                    project_address: estimate.client_address || undefined,
+                    scope_text: estimate.notes || "Scope of Work as detailed in estimate items",
+                    line_items_json: estimate.items || [],
+                    subtotal: estimate.subtotal || 0,
+                    tax_rate: (estimate.tax_rate || 0) / 100,
+                    tax_amount: estimate.tax_amount || 0,
+                    discount_amount: estimate.discount_amount || 0,
+                    total_amount: estimate.total_amount || 0,
+                    currency: "USD",
+                    terms_text: estimate.terms || "Payment due upon receipt."
+                });
+            }
+
+            const versionId = versionRecord.id;
+            const docHash = versionRecord.document_hash;
 
             // 1. Submit contractor signature
             const sigPath = `${orgId}/documents/estimate/${estimate.id}/v1/signatures/contractor.png`;
