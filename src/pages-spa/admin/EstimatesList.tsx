@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
+import { toast } from "sonner";
 
 const EstimatesList = () => {
     const { user } = useUser();
@@ -16,22 +17,13 @@ const EstimatesList = () => {
 
     useEffect(() => {
         let mounted = true;
-        const timer = setTimeout(() => {
-            if (mounted) {
-                setIsLoading(false);
-            }
-        }, 3000);
-
         loadEstimates().finally(() => {
             if (mounted) {
                 setIsLoading(false);
-                clearTimeout(timer);
             }
         });
-
         return () => {
             mounted = false;
-            clearTimeout(timer);
         };
     }, [user?.id, user?.organization?.id]);
 
@@ -41,8 +33,9 @@ const EstimatesList = () => {
         try {
             const data = await getEstimates(orgId);
             setEstimates(data || []);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error loading estimates:", err);
+            toast.error(`Failed to load estimates: ${err?.message || 'Network / Database error'}`);
         } finally {
             setIsLoading(false);
         }
