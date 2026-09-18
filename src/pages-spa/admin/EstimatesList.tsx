@@ -15,7 +15,24 @@ const EstimatesList = () => {
     const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
-        loadEstimates();
+        let mounted = true;
+        const timer = setTimeout(() => {
+            if (mounted) {
+                setIsLoading(false);
+            }
+        }, 3000);
+
+        loadEstimates().finally(() => {
+            if (mounted) {
+                setIsLoading(false);
+                clearTimeout(timer);
+            }
+        });
+
+        return () => {
+            mounted = false;
+            clearTimeout(timer);
+        };
     }, [user?.id, user?.organization?.id]);
 
     const loadEstimates = async () => {

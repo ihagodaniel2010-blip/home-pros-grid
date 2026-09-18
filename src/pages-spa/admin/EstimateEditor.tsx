@@ -401,7 +401,10 @@ const EstimateEditor = () => {
             if (existingJob) {
                 setServiceJob(existingJob);
                 toast.info("Opening existing Service Job for this estimate.");
-                navigate(`/admin/jobs`);
+                const targetPath = (existingJob.lead_id || formData.lead_id)
+                    ? `/admin/leads/${existingJob.lead_id || formData.lead_id}`
+                    : `/admin/jobs`;
+                navigate(targetPath);
                 return;
             }
 
@@ -415,7 +418,10 @@ const EstimateEditor = () => {
 
             setServiceJob(job);
             toast.success("Service Job created successfully!");
-            navigate(`/admin/jobs`);
+            const targetPath = (job.lead_id || formData.lead_id)
+                ? `/admin/leads/${job.lead_id || formData.lead_id}`
+                : `/admin/jobs`;
+            navigate(targetPath);
         } catch (error: any) {
             console.error("Create Service Job Error:", error);
             toast.error(`Failed to create Service Job: ${error?.message || "Database insert error"}`);
@@ -511,7 +517,13 @@ const EstimateEditor = () => {
                                 <Button
                                     variant="outline"
                                     className="h-10 gap-2 border-green-200 text-green-700 hover:bg-green-50"
-                                    onClick={() => navigate(`/admin/leads/${formData.lead_id}`)}
+                                    onClick={() => {
+                                        if (formData.lead_id && formData.lead_id !== 'null') {
+                                            navigate(`/admin/leads/${formData.lead_id}`);
+                                        } else {
+                                            navigate(`/admin/jobs`);
+                                        }
+                                    }}
                                 >
                                     <CheckCircle2 className="h-4 w-4" />
                                     Job Scheduled

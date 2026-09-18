@@ -104,6 +104,8 @@ const App = () => (
             <Route path="estimates" element={<EstimatesList />} />
             <Route path="estimates/new" element={<EstimateEditor />} />
             <Route path="estimates/:id" element={<EstimateEditor />} />
+            <Route path="jobs" element={<EstimatesList />} />
+            <Route path="jobs/:id" element={<LeadDetail />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="locations" element={<Locations />} />
             <Route path="services" element={<AdminServices />} />
