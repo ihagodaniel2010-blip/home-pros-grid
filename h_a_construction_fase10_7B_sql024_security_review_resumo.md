@@ -1,4 +1,4 @@
-# Relatório de Revisão de Segurança da Fase 10.7B — Proposal SQL 024 (FINAL CANDIDATE - REVISÃO FINAL)
+# Relatório de Revisão de Segurança da Fase 10.7B — Proposal SQL 024 (HARDENING MULTI-TENANT FINAL)
 
 **Status Geral**: REVISADO / FINAL CANDIDATE (PROPOSTA NÃO EXECUTADA)  
 **Projeto Inspecionado via PRECHECK**: `ozhjvprhhsdglxokfwze`  
@@ -6,80 +6,70 @@
 
 ---
 
-## 📌 Relatório Técnico Resumido (Respostas aos 24 Pontos de Ajuste Bloqueador)
+## 📌 Relatório Técnico Resumido (Respostas aos 20 Pontos de Hardening Multi-Tenant)
 
-1. **events agora têm composite integrity?**  
-   **SIM.** A tabela `document_signature_events` inclui `document_hash` com validação de formato e possui uma Chave Estrangeira Composta (`fk_signature_events_version_composite`) para `document_versions` garantindo que todos os eventos do `document_created` em diante correspondam estritamente à mesma versão, organização, tipo, ID e hash.
+1. **Job media agora impede organization/job mismatch?**  
+   **SIM.** Garantido fisicamente no motor do banco de dados através da Chave Estrangeira Composta (`fk_service_job_media_job_org`) referenciando `service_jobs(id, organization_id)`. É impossível inserir uma mídia onde a organização não seja rigorosamente a proprietária do Job.
 
-2. **signed PDF agora fica em tabela append-only separada?**  
-   **SIM.** Criada a tabela `signed_document_artifacts` com a chave única `document_version_id`, Composite FK e gatilho de imutabilidade. O PDF final congelado é inserido nesta tabela append-only assim que ambas as assinaturas são concluídas.
+2. **Extra media impede organization/extra mismatch?**  
+   **SIM.** Garantido fisicamente via Chave Estrangeira Composta (`fk_service_extra_media_extra_org`) referenciando `service_extras(id, organization_id)`.
 
-3. **electronic_signatures precisa de UPDATE depois de criada?**  
-   **NÃO.** O campo `signed_document_storage_path` foi totalmente removido de `electronic_signatures`. A tabela é 100% append-only e read-only após a inserção.
+3. **Existe Composite FK ou equivalente?**  
+   **SIM.** Adicionada restrição única `uq_service_jobs_id_org` em `service_jobs` e `uq_service_extras_id_org` em `service_extras`, permitindo Composite FKs diretas em `service_job_media` e `service_extra_media`.
 
-4. **buckets são realmente criados na proposal?**  
-   **SIM.** Inserção idempotente em `storage.buckets` das entidades `signatures`, `job-media` e `signed-documents` com limites de tamanho e restrições de tipos MIME.
+4. **Worker storage policy valida org + job?**  
+   **SIM.** A política valida simultaneamente no Storage que `(storage.foldername(name))[1]` é o `organization_id` do Job `(storage.foldername(name))[3]` E que o worker está atribuído ao Job (`public.is_worker_assigned_to_job(sj.id)`).
 
-5. **todos são private?**  
-   **SIM.** Todos declarados com `public = false`.
+5. **Manager upload valida org + job?**  
+   **SIM.** A política valida no Storage que o manager pertence à organização `(storage.foldername(name))[1]` E que a mesma organização é a proprietária real do Job em `(storage.foldername(name))[3]`.
 
-6. **signatures access está limitado Owner/Admin?**  
-   **SIM.** Apenas gestores (`owner`, `admin`) possuem permissão de leitura (`SELECT`).
+6. **Extra path valida org + job + extra?**  
+   **SIM.** O caminho canônico do Extra valida a cadeia completa `organization_id`, `service_job_id` e `service_extra_id`.
 
-7. **signed documents access está limitado Owner/Admin?**  
-   **SIM.** Apenas gestores (`owner`, `admin`) possuem permissão de leitura (`SELECT`). Clientes recebem cópias exclusivamente via Signed URLs de curta duração geradas pelo servidor.
+7. **Qual path canônico foi escolhido?**  
+   - Fotos do Job: `{organization_id}/jobs/{service_job_id}/photos/{uuid}.jpg`
+   - Vídeos do Job: `{organization_id}/jobs/{service_job_id}/videos/{uuid}.mp4`
+   - Mídias de Extras: `{organization_id}/jobs/{service_job_id}/extras/{service_extra_id}/{uuid}.jpg`
 
-8. **worker pode acessar assinatura?**  
-   **NÃO.** Nenhuma política concede acesso de leitura ou gravação de assinaturas a trabalhadores (`worker`).
+8. **signatures bucket existe atualmente?**  
+   **NÃO EXISTE.** Teste de precheck no projeto `ozhjvprhhsdglxokfwze` retornou HTTP 404 (`NoSuchBucket`).
 
-9. **worker Job Media é limitado ao Job atribuído?**  
-   **SIM.** O acesso é restrito por `public.is_worker_assigned_to_job(service_job_id)`.
+9. **job-media bucket existe atualmente?**  
+   **NÃO EXISTE.** Teste de precheck no projeto `ozhjvprhhsdglxokfwze` retornou HTTP 404 (`NoSuchBucket`).
 
-10. **client tem direct bucket SELECT?**  
-    **NÃO.** O cliente obtém URLs temporárias assinadas via servidor/endpoint.
+10. **signed-documents bucket existe atualmente?**  
+    **NÃO EXISTE.** Teste de precheck no projeto `ozhjvprhhsdglxokfwze` retornou HTTP 404 (`NoSuchBucket`).
 
-11. **public tem direct private bucket SELECT?**  
-    **NÃO.** Acesso público a buckets privados é estritamente bloqueado.
+11. **Bucket upsert deixou de sobrescrever configuração inesperada?**  
+    **SIM.** O comando `ON CONFLICT DO UPDATE` foi substituído por `INSERT INTO ... WHERE NOT EXISTS (...)`. O script só insere se o bucket não existir, preservando integralmente qualquer configuração pré-existente inesperada.
 
-12. **storage INSERT possui WITH CHECK?**  
-    **SIM.** Todas as políticas de `INSERT` utilizam cláusulas `WITH CHECK` dedicadas.
+12. **Signature upload é server-side only?**  
+    **SIM.** Clientes e navegadores têm 0 permissões de `INSERT` direto nos buckets `signatures`. Todo upload é gerado estritamente no servidor via Supabase Service Role Client.
 
-13. **unsafe UUID cast foi removido?**  
-    **SIM.** Removida a conversão perigosa `::uuid` direta. A comparação dos caminhos utiliza correspondência de texto segura via `ou.org_id::text = (storage.foldername(name))[1]`.
+13. **Signed PDF upload é server-side only?**  
+    **SIM.** Uploads de PDFs assinados no bucket `signed-documents` ocorrem exclusivamente server-side via Server Action/API segura.
 
-14. **Portfolio não expõe tabela operacional?**  
-    **SIM.** O acesso público ao portfólio é exposto via RPC `get_public_portfolio_media()` com `SECURITY DEFINER` e `SET search_path = public, pg_temp`, sem conceder `SELECT` direto em tabelas operacionais.
+14. **Como admin remove mídia sem deixar arquivo órfão?**  
+    Remoção efetuada via Server Action segura que exclui o objeto no Storage e a linha no banco de forma atômica/compensada. Adicionalmente, foi incluída a política de `DELETE` em `storage.objects` exclusiva para Managers da organização. Workers **não** possuem privilégio de exclusão.
 
-15. **SHA-256 formato é validado?**  
-    **SIM.** Validado via expressão regular estrita de 64 caracteres hexadecimais em minúsculo: `check (document_hash ~ '^[0-9a-f]{64}$')` e `check (pdf_hash ~ '^[0-9a-f]{64}$')`.
+15. **Cross-tenant tests foram adicionados ao LOCAL/STAGING test?**  
+    **SIM.** O script `024_test_job_project_media_and_esignatures_ROLLBACK.sql` inclui casos de teste A, B e C que confirmam a falha imediata por violação de Composite FK quando há tentativa de inserir mídia com divergência entre Organização e Job/Extra.
 
-16. **tax_rate convention foi definida?**  
-    **SIM.** Definida a Convenção B: armazenado como fator decimal (`numeric(6,4)`), ex: 6.5% de taxa é armazenado como `0.0650` (suportando impostos de 0% a 99.9999%).
-
-17. **trigger helpers ainda usam SECURITY DEFINER? Explicar.**  
-    **NÃO.** O atributo `SECURITY DEFINER` foi removido de `set_updated_at()` e `prevent_immutable_modification()`, aplicando o princípio de menor privilégio. Eles executam com os privilégios do chamador. `SECURITY DEFINER` foi mantido apenas nas RPCs de acesso controlado.
-
-18. **amount em service_extras é definido como change_order_amount?**  
-    **SIM.** `amount` na tabela `service_extras` representa o valor de alteração (`change_order_amount`). O valor total revisado obedece a `revised_contract_price = previous_contract_price + amount`.
-
-19. **video duration é validada/registrada?**  
-    **SIM.** Adicionada a coluna `duration_seconds` em `service_job_media` e `service_extra_media` com a restrição `check (duration_seconds is null or (duration_seconds > 0 and duration_seconds <= 60))`.
-
-20. **Algum SQL foi executado?**  
+16. **Algum SQL de alteração foi executado?**  
     **NÃO.**
 
-21. **Algum bucket foi criado?**  
+17. **Algum bucket foi criado?**  
     **NÃO.**
 
-22. **Production foi alterada?**  
+18. **Production foi alterada?**  
     **NÃO.**
 
-23. **Stripe foi tocado?**  
+19. **Stripe foi tocado?**  
     **NÃO.**
 
-24. **CalhaFlow foi tocado?**  
+20. **CalhaFlow foi tocado?**  
     **NÃO.**
 
 ---
 
-O SQL 024 FINAL CANDIDATE está tecnicamente preparado para a última revisão manual, permanecendo totalmente não executado.
+O SQL 024 preserva isolamento multi-tenant entre organização, Job, Extra e Storage paths e permanece não executado aguardando autorização manual.

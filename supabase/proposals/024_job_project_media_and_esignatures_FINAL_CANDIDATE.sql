@@ -1,14 +1,13 @@
 -- =============================================================================
 -- PROPOSAL FOR MANUAL REVIEW ONLY — DO NOT EXECUTE AUTOMATICALLY
 -- 024_job_project_media_and_esignatures_FINAL_CANDIDATE.sql
--- Production-Grade Architecture Candidate for E-Signatures, Snapshots, Audit Trails, and Private Media
+-- Production-Grade Multi-Tenant Hardened Architecture Candidate for E-Signatures, Snapshots, Audit Trails, and Private Media
 -- =============================================================================
 
 -- =============================================================================
 -- SECTION 0: HELPER FUNCTIONS & TRIGGERS (LEAST PRIVILEGE - NO SECURITY DEFINER)
 -- =============================================================================
 
--- Updated_at trigger function (Invoked with caller privileges)
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -20,7 +19,6 @@ begin
 end;
 $$;
 
--- Universal Immutability Guard Function (Blocks UPDATE and DELETE for caller)
 create or replace function public.prevent_immutable_modification()
 returns trigger
 language plpgsql
@@ -84,7 +82,6 @@ create table if not exists public.document_versions (
     constraint uq_document_versions_composite unique (id, organization_id, document_type, document_id, document_hash)
 );
 
--- Attach Immutability Trigger (Prevent any UPDATE or DELETE)
 create trigger trg_immutable_document_versions
 before update or delete on public.document_versions
 for each row execute function public.prevent_immutable_modification();
@@ -118,11 +115,9 @@ create table if not exists public.electronic_signatures (
         on delete restrict
 );
 
--- Ensure a signer role can only sign a specific version ONCE
 create unique index if not exists idx_electronic_signatures_unique_role_version
 on public.electronic_signatures(document_version_id, signer_role);
 
--- Attach Immutability Trigger (Prevent any UPDATE or DELETE)
 create trigger trg_immutable_electronic_signatures
 before update or delete on public.electronic_signatures
 for each row execute function public.prevent_immutable_modification();
@@ -143,17 +138,14 @@ create table if not exists public.signed_document_artifacts (
     generated_at timestamptz not null default now(),
     created_at timestamptz not null default now(),
 
-    -- Unique completed PDF artifact per document_version_id
     constraint uq_signed_document_artifacts_version unique (document_version_id),
     
-    -- Composite FK to document_versions
     constraint fk_signed_document_artifacts_version_composite
         foreign key (document_version_id, organization_id, document_type, document_id, document_hash)
         references public.document_versions(id, organization_id, document_type, document_id, document_hash)
         on delete restrict
 );
 
--- Attach Immutability Trigger
 create trigger trg_immutable_signed_document_artifacts
 before update or delete on public.signed_document_artifacts
 for each row execute function public.prevent_immutable_modification();
@@ -167,7 +159,7 @@ create table if not exists public.document_signature_events (
     organization_id uuid not null,
     document_type text not null check (document_type in ('estimate', 'change_order', 'contract')),
     document_id uuid not null,
-    document_version_id uuid not null, -- Every event belongs to a version
+    document_version_id uuid not null,
     document_hash text not null check (document_hash ~ '^[0-9a-f]{64}$'),
     event_type text not null check (event_type in (
         'document_created',
@@ -188,26 +180,28 @@ create table if not exists public.document_signature_events (
     occurred_at timestamptz not null default now(),
     metadata jsonb not null default '{}'::jsonb,
 
-    -- Composite FK ensuring event matches EXACT document_version properties
     constraint fk_signature_events_version_composite
         foreign key (document_version_id, organization_id, document_type, document_id, document_hash)
         references public.document_versions(id, organization_id, document_type, document_id, document_hash)
         on delete restrict
 );
 
--- Attach Immutability Trigger
 create trigger trg_immutable_document_signature_events
 before update or delete on public.document_signature_events
 for each row execute function public.prevent_immutable_modification();
 
 -- =============================================================================
--- SECTION 5: SERVICE JOB MEDIA (PRIVATE BY DEFAULT)
+-- SECTION 5: MULTI-TENANT HARDENED SERVICE JOB MEDIA
 -- =============================================================================
+
+-- Ensure service_jobs has composite unique constraint for Org integrity
+alter table public.service_jobs
+add constraint uq_service_jobs_id_org unique (id, organization_id);
 
 create table if not exists public.service_job_media (
     id uuid primary key default gen_random_uuid(),
-    organization_id uuid not null references public.organizations(id) on delete cascade,
-    service_job_id uuid not null references public.service_jobs(id) on delete cascade,
+    organization_id uuid not null,
+    service_job_id uuid not null,
     media_type text not null check (media_type in ('image', 'video')),
     storage_path text not null check (length(trim(storage_path)) > 0),
     file_name text not null,
@@ -222,7 +216,13 @@ create table if not exists public.service_job_media (
     media_status text not null default 'pending' check (media_status in ('pending', 'approved', 'rejected')),
     uploaded_by uuid references auth.users(id) on delete set null,
     created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now()
+    updated_at timestamptz not null default now(),
+
+    -- STRICT MULTI-TENANT COMPOSITE FK: Guarantees service_job belongs to same organization
+    constraint fk_service_job_media_job_org
+        foreign key (service_job_id, organization_id)
+        references public.service_jobs(id, organization_id)
+        on delete cascade
 );
 
 create trigger trg_service_job_media_updated_at
@@ -230,13 +230,17 @@ before update on public.service_job_media
 for each row execute function public.set_updated_at();
 
 -- =============================================================================
--- SECTION 6: SERVICE EXTRA MEDIA (CHANGE ORDERS)
+-- SECTION 6: MULTI-TENANT HARDENED SERVICE EXTRA MEDIA (CHANGE ORDERS)
 -- =============================================================================
+
+-- Ensure service_extras has composite unique constraint for Org integrity
+alter table public.service_extras
+add constraint uq_service_extras_id_org unique (id, organization_id);
 
 create table if not exists public.service_extra_media (
     id uuid primary key default gen_random_uuid(),
-    organization_id uuid not null references public.organizations(id) on delete cascade,
-    service_extra_id uuid not null references public.service_extras(id) on delete cascade,
+    organization_id uuid not null,
+    service_extra_id uuid not null,
     media_type text not null check (media_type in ('image', 'video')),
     storage_path text not null check (length(trim(storage_path)) > 0),
     file_name text not null,
@@ -245,7 +249,13 @@ create table if not exists public.service_extra_media (
     duration_seconds integer check (duration_seconds is null or (duration_seconds > 0 and duration_seconds <= 60)),
     caption text,
     uploaded_by uuid references auth.users(id) on delete set null,
-    created_at timestamptz not null default now()
+    created_at timestamptz not null default now(),
+
+    -- STRICT MULTI-TENANT COMPOSITE FK: Guarantees service_extra belongs to same organization
+    constraint fk_service_extra_media_extra_org
+        foreign key (service_extra_id, organization_id)
+        references public.service_extras(id, organization_id)
+        on delete cascade
 );
 
 -- =============================================================================
@@ -403,21 +413,28 @@ revoke all on function public.get_public_portfolio_media() from public;
 grant execute on function public.get_public_portfolio_media() to anon, authenticated;
 
 -- =============================================================================
--- SECTION 11: IDEMPOTENT PRIVATE STORAGE BUCKETS DECLARATION
+-- SECTION 11: NON-OVERWRITING PRIVATE STORAGE BUCKET CREATION (SAFE INSERT)
 -- =============================================================================
+
+-- Canonical Storage Paths:
+-- Job Media Photos: {organization_id}/jobs/{service_job_id}/photos/{uuid}.jpg
+-- Job Media Videos: {organization_id}/jobs/{service_job_id}/videos/{uuid}.mp4
+-- Job Extra Media: {organization_id}/jobs/{service_job_id}/extras/{service_extra_id}/{uuid}.jpg
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values
-  ('signatures', 'signatures', false, 5242880, array['image/png']), -- 5MB limit
-  ('job-media', 'job-media', false, 104857600, array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime']), -- 100MB limit
-  ('signed-documents', 'signed-documents', false, 20971520, array['application/pdf']) -- 20MB limit
-on conflict (id) do update set
-  public = false,
-  file_size_limit = excluded.file_size_limit,
-  allowed_mime_types = excluded.allowed_mime_types;
+select 'signatures', 'signatures', false, 5242880, array['image/png']
+where not exists (select 1 from storage.buckets where id = 'signatures');
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+select 'job-media', 'job-media', false, 104857600, array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime']
+where not exists (select 1 from storage.buckets where id = 'job-media');
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+select 'signed-documents', 'signed-documents', false, 20971520, array['application/pdf']
+where not exists (select 1 from storage.buckets where id = 'signed-documents');
 
 -- =============================================================================
--- SECTION 12: STORAGE ACCESS POLICIES (SAFE STRING PATH COMPARISON, NO CAST)
+-- SECTION 12: MULTI-TENANT HARDENED STORAGE ACCESS POLICIES
 -- =============================================================================
 
 -- 12A. Signatures Bucket (Managers Read-Only)
@@ -446,33 +463,52 @@ using (
     )
 );
 
--- 12C. Job Media Bucket (Managers Select)
+-- 12C. Job Media Bucket (Managers Select - Validates Org + Job Relationship)
 create policy "Managers select job media bucket"
 on storage.objects for select
 using (
     bucket_id = 'job-media'
     and exists (
         select 1 from public.organization_users ou
+        join public.service_jobs sj on sj.organization_id = ou.org_id
         where ou.user_id = auth.uid()
           and ou.role in ('owner', 'admin')
           and ou.org_id::text = (storage.foldername(name))[1]
+          and sj.id::text = (storage.foldername(name))[3]
     )
 );
 
--- Job Media Bucket (Managers Insert)
+-- Job Media Bucket (Managers Insert - Validates Org + Job Relationship)
 create policy "Managers insert job media bucket"
 on storage.objects for insert
 with check (
     bucket_id = 'job-media'
     and exists (
         select 1 from public.organization_users ou
+        join public.service_jobs sj on sj.organization_id = ou.org_id
         where ou.user_id = auth.uid()
           and ou.role in ('owner', 'admin')
           and ou.org_id::text = (storage.foldername(name))[1]
+          and sj.id::text = (storage.foldername(name))[3]
     )
 );
 
--- Job Media Bucket (Assigned Workers Select)
+-- Job Media Bucket (Managers Delete - Prevents Orphan Files)
+create policy "Managers delete job media bucket"
+on storage.objects for delete
+using (
+    bucket_id = 'job-media'
+    and exists (
+        select 1 from public.organization_users ou
+        join public.service_jobs sj on sj.organization_id = ou.org_id
+        where ou.user_id = auth.uid()
+          and ou.role in ('owner', 'admin')
+          and ou.org_id::text = (storage.foldername(name))[1]
+          and sj.id::text = (storage.foldername(name))[3]
+    )
+);
+
+-- Job Media Bucket (Assigned Workers Select - Validates Org + Job Relationship + Worker Assignment)
 create policy "Assigned workers select job media bucket"
 on storage.objects for select
 using (
@@ -480,11 +516,12 @@ using (
     and exists (
         select 1 from public.service_jobs sj
         where sj.id::text = (storage.foldername(name))[3]
+          and sj.organization_id::text = (storage.foldername(name))[1]
           and public.is_worker_assigned_to_job(sj.id)
     )
 );
 
--- Job Media Bucket (Assigned Workers Insert)
+-- Job Media Bucket (Assigned Workers Insert - Validates Org + Job Relationship + Worker Assignment)
 create policy "Assigned workers insert job media bucket"
 on storage.objects for insert
 with check (
@@ -492,6 +529,7 @@ with check (
     and exists (
         select 1 from public.service_jobs sj
         where sj.id::text = (storage.foldername(name))[3]
+          and sj.organization_id::text = (storage.foldername(name))[1]
           and public.is_worker_assigned_to_job(sj.id)
     )
 );
