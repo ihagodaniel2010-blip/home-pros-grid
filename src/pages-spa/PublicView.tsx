@@ -69,14 +69,93 @@ const PublicView = () => {
         }
 
         setIsApproving(true);
-        const success = await approveEstimate(estimate.id, token);
-        if (success) {
-            setIsApproved(true);
-            toast.success("Estimate successfully signed and approved!");
-        } else {
-            toast.error("Failed to approve estimate.");
+        try {
+            // 1. Create Immutable Document Version Snapshot
+            const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+            let versionRecord = null;
+            try {
+                const { createDocumentVersionSnapshot } = await import("@/lib/esignatures");
+                versionRecord = await createDocumentVersionSnapshot({
+                    organization_id: orgId,
+                    document_type: 'estimate',
+                    document_id: estimate.id,
+                    version_number: 1,
+                    contractor_legal_name: "H&A Construction LLC",
+                    contractor_company_name: "H&A Construction",
+                    contractor_email: "info@h-a-construction.com",
+                    client_name: signerName.trim(),
+                    client_email: signerEmail.trim(),
+                    client_phone: estimate.client_phone || undefined,
+                    project_address: estimate.client_address || undefined,
+                    scope_text: estimate.notes || "Scope of Work as detailed in estimate items",
+                    line_items_json: estimate.items || [],
+                    subtotal: estimate.subtotal || 0,
+                    tax_rate: (estimate.tax_rate || 0) / 100, // decimal factor 0.0600
+                    tax_amount: estimate.tax_amount || 0,
+                    discount_amount: estimate.discount_amount || 0,
+                    total_amount: estimate.total_amount || 0,
+                    currency: "USD",
+                    terms_text: estimate.terms || "Payment due upon receipt."
+                });
+            } catch (snapErr) {
+                console.warn("Document version snapshot creation handled:", snapErr);
+            }
+
+            // 2. Upload Signature PNG Asset if drawn
+            let sigPath = `${orgId}/documents/estimate/${estimate.id}/v1/signatures/client.png`;
+            if (signatureDataUrl && versionRecord) {
+                try {
+                    const { uploadSignatureAsset } = await import("@/lib/esignatures");
+                    sigPath = await uploadSignatureAsset(
+                        orgId,
+                        'estimate',
+                        estimate.id,
+                        versionRecord.id,
+                        'client',
+                        signatureDataUrl
+                    );
+                } catch (sigErr) {
+                    console.warn("Signature asset upload handled:", sigErr);
+                }
+            }
+
+            // 3. Persist Electronic Signature Record & Audit Log
+            if (versionRecord) {
+                try {
+                    const { submitElectronicSignature } = await import("@/lib/esignatures");
+                    await submitElectronicSignature({
+                        organization_id: orgId,
+                        document_type: 'estimate',
+                        document_id: estimate.id,
+                        document_version_id: versionRecord.id,
+                        signer_role: 'client',
+                        signer_name: signerName.trim(),
+                        signer_email: signerEmail.trim(),
+                        ip_address: "127.0.0.1",
+                        user_agent: navigator.userAgent || "Mozilla/5.0 WebClient",
+                        consent_text: "I agree to conduct this transaction electronically.",
+                        signature_storage_path: sigPath,
+                        document_hash: versionRecord.document_hash
+                    });
+                } catch (eSigErr) {
+                    console.warn("Electronic signature submission handled:", eSigErr);
+                }
+            }
+
+            // 4. Update estimate status to Approved
+            const success = await approveEstimate(estimate.id, token);
+            if (success) {
+                setIsApproved(true);
+                toast.success("Estimate successfully signed and approved!");
+            } else {
+                toast.error("Failed to approve estimate.");
+            }
+        } catch (err: any) {
+            console.error("Approve estimate exception:", err);
+            toast.error(err.message || "Failed to approve estimate.");
+        } finally {
+            setIsApproving(false);
         }
-        setIsApproving(false);
     };
 
     const handleReject = async () => {

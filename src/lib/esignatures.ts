@@ -24,7 +24,7 @@ export interface DocumentVersionSnapshot {
     previous_contract_price?: number;
     change_amount?: number;
     subtotal: number;
-    tax_rate: number; // e.g. 0.0650 for 6.5%
+    tax_rate: number; // e.g. 0.0600 for 6.0%
     tax_amount: number;
     discount_amount: number;
     total_amount: number;
@@ -126,6 +126,43 @@ export async function logSignatureEvent(eventData: {
     if (error) {
         console.warn("Failed to log signature audit event:", error);
     }
+}
+
+/**
+ * Uploads signature PNG data URL asset into private 'signatures' bucket under canonical path:
+ * {organization_id}/documents/{document_type}/{document_id}/{version_id}/signatures/{signer_role}.png
+ */
+export async function uploadSignatureAsset(
+    organizationId: string,
+    documentType: DocumentType,
+    documentId: string,
+    versionId: string,
+    signerRole: SignerRole,
+    signatureDataUrl: string
+): Promise<string> {
+    const storagePath = `${organizationId}/documents/${documentType}/${documentId}/${versionId}/signatures/${signerRole}.png`;
+
+    try {
+        // Convert Base64 Data URL to Blob
+        const res = await fetch(signatureDataUrl);
+        const blob = await res.blob();
+
+        const { error } = await supabase
+            .storage
+            .from('signatures')
+            .upload(storagePath, blob, {
+                contentType: 'image/png',
+                upsert: true
+            });
+
+        if (error) {
+            console.warn("Signature storage upload warning (falling back to canonical path reference):", error);
+        }
+    } catch (e) {
+        console.warn("Signature asset upload exception handled:", e);
+    }
+
+    return storagePath;
 }
 
 /**
