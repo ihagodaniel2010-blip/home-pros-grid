@@ -18,6 +18,7 @@ const PublicExtraView = () => {
     const [consentScope, setConsentScope] = useState(false);
     const [signerName, setSignerName] = useState("");
     const [signerEmail, setSignerEmail] = useState("");
+    const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
 
     useEffect(() => {
