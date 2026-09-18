@@ -20,6 +20,7 @@ import EstimateItemsTable from "@/components/admin/estimates/EstimateItemsTable"
 import TotalsSummary from "@/components/admin/estimates/TotalsSummary";
 import RegisterPaymentModal from "@/components/admin/estimates/RegisterPaymentModal";
 import EstimateValidationModal from "@/components/admin/estimates/EstimateValidationModal";
+import CountersignModal from "@/components/admin/estimates/CountersignModal";
 import { generateProfessionalPDF } from "@/lib/pdf-generator";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ const EstimateEditor = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isCountersignModalOpen, setIsCountersignModalOpen] = useState(false);
     const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -466,6 +468,16 @@ const EstimateEditor = () => {
                     )}
                     {id && (
                         <>
+                            {formData.status === 'Approved' && (
+                                <Button
+                                    variant="outline"
+                                    className="h-10 gap-2 border-purple-200 text-purple-700 hover:bg-purple-50"
+                                    onClick={() => setIsCountersignModalOpen(true)}
+                                >
+                                    <PenTool className="h-4 w-4" />
+                                    Countersign Estimate
+                                </Button>
+                            )}
                             {formData.status === 'Approved' && !serviceJob && (
                                 <Button
                                     variant="outline"
@@ -632,6 +644,16 @@ const EstimateEditor = () => {
                 targetElementId={validationState.targetElementId}
                 onClose={() => setValidationState(prev => ({ ...prev, isOpen: false }))}
             />
+
+            {id && (
+                <CountersignModal
+                    isOpen={isCountersignModalOpen}
+                    onClose={() => setIsCountersignModalOpen(false)}
+                    estimate={formData as Estimate}
+                    companySettings={companySettings}
+                    onCountersigned={() => loadData()}
+                />
+            )}
         </div>
     );
 };
