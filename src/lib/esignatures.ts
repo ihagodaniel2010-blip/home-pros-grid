@@ -73,6 +73,29 @@ export interface SignedDocumentArtifactRecord {
 }
 
 /**
+ * Fetches the latest document version snapshot record for a document.
+ */
+export async function getLatestDocumentVersion(
+    documentType: DocumentType,
+    documentId: string
+): Promise<DocumentVersionRecord | null> {
+    const { data, error } = await supabase
+        .from('document_versions')
+        .select()
+        .eq('document_type', documentType)
+        .eq('document_id', documentId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (error) {
+        console.warn("Error fetching latest document version:", error);
+        return null;
+    }
+    return data as DocumentVersionRecord | null;
+}
+
+/**
  * Creates an immutable document version snapshot record.
  * Computes canonical SHA-256 document hash before persisting.
  */

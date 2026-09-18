@@ -388,19 +388,37 @@ const EstimateEditor = () => {
     };
 
     const handleCreateJob = async () => {
-        if (!user?.organization?.id || !formData.lead_id || !id) return;
+        if (!id) {
+            toast.error("Please save the estimate before creating a Service Job.");
+            return;
+        }
+
+        const orgId = user?.organization?.id || DEFAULT_ORG_ID;
         setIsSaving(true);
         try {
+            // Check if job already exists for this estimate
+            const existingJob = await getServiceJobByEstimateId(id);
+            if (existingJob) {
+                setServiceJob(existingJob);
+                toast.info("Opening existing Service Job for this estimate.");
+                navigate(`/admin/jobs`);
+                return;
+            }
+
+            // Create new Service Job
             const job = await createServiceJob({
-                organization_id: user.organization.id,
-                lead_id: formData.lead_id,
+                organization_id: orgId,
+                lead_id: formData.lead_id || undefined,
                 estimate_id: id,
                 status: 'scheduled'
             });
+
             setServiceJob(job);
-            toast.success("Service Job created successfully.");
-        } catch (error) {
-            toast.error("Failed to create Service Job.");
+            toast.success("Service Job created successfully!");
+            navigate(`/admin/jobs`);
+        } catch (error: any) {
+            console.error("Create Service Job Error:", error);
+            toast.error(`Failed to create Service Job: ${error?.message || "Database insert error"}`);
         } finally {
             setIsSaving(false);
         }

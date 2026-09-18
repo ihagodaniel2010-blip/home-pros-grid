@@ -32,7 +32,7 @@ const LeadDetail = () => {
   const [serviceJob, setServiceJob] = useState<ServiceJob | null>(null);
   const [serviceExtras, setServiceExtras] = useState<ServiceExtra[]>([]);
   const [isAddingExtra, setIsAddingExtra] = useState(false);
-  const [newExtra, setNewExtra] = useState({ description: '', reason: '', amount: '' });
+  const [newExtra, setNewExtra] = useState({ description: '', reason: '', amount: '', previous_contract_price: '10000', schedule_impact: '2 additional working days' });
   const [isSavingExtra, setIsSavingExtra] = useState(false);
 
   useEffect(() => {
@@ -67,17 +67,20 @@ const LeadDetail = () => {
     setIsSavingExtra(true);
     try {
       const orgId = (serviceJob as any).organization_id || user?.organization?.id || DEFAULT_ORG_ID;
+      const prevPrice = parseFloat(newExtra.previous_contract_price || '10000');
       const extra = await createServiceExtra({
         organization_id: orgId,
         service_job_id: serviceJob.id,
         estimate_id: (serviceJob as any).estimate_id || null,
         description: newExtra.description,
         reason: newExtra.reason || undefined,
-        amount: parseFloat(newExtra.amount)
+        amount: parseFloat(newExtra.amount),
+        previous_contract_price: prevPrice,
+        schedule_impact: newExtra.schedule_impact || undefined
       });
       setServiceExtras([extra, ...serviceExtras]);
       setIsAddingExtra(false);
-      setNewExtra({ description: '', reason: '', amount: '' });
+      setNewExtra({ description: '', reason: '', amount: '', previous_contract_price: '10000', schedule_impact: '2 additional working days' });
       toast.success("Service Extra created successfully.");
     } catch (err: any) {
       console.error("Create extra error:", err);
@@ -361,16 +364,39 @@ const LeadDetail = () => {
                 <div className="mb-4 space-y-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
                   <input
                     type="text"
-                    placeholder="Description"
+                    placeholder="Description (e.g. Replace damaged framing)"
                     value={newExtra.description}
                     onChange={(e) => setNewExtra({ ...newExtra, description: e.target.value })}
                     className="w-full text-sm p-2 rounded-lg border-gray-200"
                   />
                   <input
-                    type="number"
-                    placeholder="Amount ($)"
-                    value={newExtra.amount}
-                    onChange={(e) => setNewExtra({ ...newExtra, amount: e.target.value })}
+                    type="text"
+                    placeholder="Reason (e.g. Hidden framing damage discovered)"
+                    value={newExtra.reason}
+                    onChange={(e) => setNewExtra({ ...newExtra, reason: e.target.value })}
+                    className="w-full text-sm p-2 rounded-lg border-gray-200"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      placeholder="Previous Contract ($)"
+                      value={newExtra.previous_contract_price}
+                      onChange={(e) => setNewExtra({ ...newExtra, previous_contract_price: e.target.value })}
+                      className="w-full text-sm p-2 rounded-lg border-gray-200"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Extra Amount ($)"
+                      value={newExtra.amount}
+                      onChange={(e) => setNewExtra({ ...newExtra, amount: e.target.value })}
+                      className="w-full text-sm p-2 rounded-lg border-gray-200"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Schedule Impact (e.g. 2 additional working days)"
+                    value={newExtra.schedule_impact}
+                    onChange={(e) => setNewExtra({ ...newExtra, schedule_impact: e.target.value })}
                     className="w-full text-sm p-2 rounded-lg border-gray-200"
                   />
                   <Button

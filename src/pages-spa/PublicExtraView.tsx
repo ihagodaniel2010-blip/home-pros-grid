@@ -287,7 +287,7 @@ const PublicExtraView = () => {
                                 {/* Drawn Signature */}
                                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Step 3 — Draw Signature</h4>
-                                    <SignaturePad />
+                                    <SignaturePad onSignatureChange={(dataUrl) => setSignatureDataUrl(dataUrl)} />
                                 </div>
 
                                 {/* Actions */}
