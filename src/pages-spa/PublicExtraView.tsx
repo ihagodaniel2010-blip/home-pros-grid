@@ -2,15 +2,23 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPublicServiceExtra, respondPublicServiceExtra, type ServiceExtra } from "@/lib/service-extras";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, XCircle, FileText } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, FileText, ShieldCheck, AlertCircle, PenTool, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import SignaturePad from "@/components/common/SignaturePad";
 
 const PublicExtraView = () => {
     const { token } = useParams<{ token: string }>();
     const [extra, setExtra] = useState<ServiceExtra | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isResponding, setIsResponding] = useState(false);
+
+    // E-Signature & Change Order UI State
+    const [consentElectronic, setConsentElectronic] = useState(false);
+    const [consentScope, setConsentScope] = useState(false);
+    const [signerName, setSignerName] = useState("");
+    const [signerEmail, setSignerEmail] = useState("");
+    const [validationError, setValidationError] = useState<string | null>(null);
 
     useEffect(() => {
         if (token) loadExtra(token);
@@ -25,13 +33,38 @@ const PublicExtraView = () => {
 
     const handleRespond = async (status: 'approved' | 'rejected') => {
         if (!extra || !token) return;
+
+        if (status === 'approved') {
+            setValidationError(null);
+            if (!consentElectronic) {
+                setValidationError("You must consent to conduct this transaction electronically.");
+                toast.error("Electronic consent required.");
+                return;
+            }
+            if (!consentScope) {
+                setValidationError("You must review and agree to the Change Order price and revised total.");
+                toast.error("Change Order terms agreement required.");
+                return;
+            }
+            if (!signerName.trim()) {
+                setValidationError("Full Legal Name is required to sign.");
+                toast.error("Full Legal Name required.");
+                return;
+            }
+            if (!signerEmail.includes("@")) {
+                setValidationError("Valid Email Address is required.");
+                toast.error("Valid email required.");
+                return;
+            }
+        }
+
         setIsResponding(true);
         const success = await respondPublicServiceExtra(token, status);
         if (success) {
             setExtra({ ...extra, status });
-            toast.success(`Extra ${status} successfully!`);
+            toast.success(`Change Order ${status} successfully!`);
         } else {
-            toast.error("Failed to respond to extra.");
+            toast.error("Failed to respond to Change Order.");
         }
         setIsResponding(false);
     };
@@ -80,62 +113,142 @@ const PublicExtraView = () => {
                     </div>
 
                     <div className="p-8 md:p-12">
-                        <div className="mb-12">
-                            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Description</h2>
-                            <p className="text-lg text-gray-900">{extra.description}</p>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-8 bg-purple-50 rounded-3xl border border-purple-100">
-                            <div className="flex items-center gap-4">
-                                {isApproved ? (
-                                    <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center text-white">
-                                        <CheckCircle2 className="h-6 w-6" />
-                                    </div>
-                                ) : isRejected ? (
-                                    <div className="h-12 w-12 rounded-full bg-red-500 flex items-center justify-center text-white">
-                                        <XCircle className="h-6 w-6" />
-                                    </div>
-                                ) : (
-                                    <div className="h-12 w-12 rounded-full bg-purple-600 flex items-center justify-center text-white">
-                                        <FileText className="h-6 w-6" />
-                                    </div>
-                                )}
-                                <div>
-                                    <p className="text-gray-900 font-bold text-lg">
-                                        {isApproved ? "Extra Approved" : isRejected ? "Extra Declined" : "Ready for your decision"}
-                                    </p>
-                                    <p className="text-purple-700/60 text-sm">
-                                        {isApproved
-                                            ? "You have approved this extra."
-                                            : isRejected
-                                            ? "You have declined this extra."
-                                            : "Please approve or decline this additional service."}
-                                    </p>
-                                </div>
+                        {/* Change Order Breakdown */}
+                        <div className="space-y-6 mb-10">
+                            <div>
+                                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Scope &amp; Description</h2>
+                                <p className="text-lg font-semibold text-gray-900 leading-relaxed">{extra.description}</p>
                             </div>
 
-                            {isPending && (
-                                <div className="flex gap-3">
+                            {extra.reason && (
+                                <div className="p-4 bg-purple-50/60 rounded-2xl border border-purple-100">
+                                    <h3 className="text-xs font-bold text-purple-700 uppercase tracking-widest mb-1">Reason for Change Order</h3>
+                                    <p className="text-sm text-purple-900">{extra.reason}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Action & E-Signature Section */}
+                        {isPending ? (
+                            <div className="space-y-8 bg-purple-50/70 rounded-3xl border border-purple-100 p-6 md:p-8">
+                                <div className="border-b border-purple-100 pb-4">
+                                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                        <ShieldCheck className="h-5 w-5 text-purple-600" />
+                                        Sign &amp; Approve Change Order
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Please review the details above and complete electronic consent to sign.
+                                    </p>
+                                </div>
+
+                                {validationError && (
+                                    <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700 text-sm font-medium">
+                                        <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
+                                        <span>{validationError}</span>
+                                    </div>
+                                )}
+
+                                {/* Consent Checkboxes */}
+                                <div className="space-y-3 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Step 1 — Consent &amp; Price Agreement</h4>
+                                    
+                                    <label className="flex items-start gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={consentElectronic}
+                                            onChange={(e) => setConsentElectronic(e.target.checked)}
+                                            className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                        />
+                                        <span className="text-xs text-gray-700 leading-relaxed font-medium">
+                                            I agree to conduct this Change Order approval transaction electronically and use an electronic signature.
+                                        </span>
+                                    </label>
+
+                                    <label className="flex items-start gap-3 cursor-pointer pt-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={consentScope}
+                                            onChange={(e) => setConsentScope(e.target.checked)}
+                                            className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                        />
+                                        <span className="text-xs text-gray-700 leading-relaxed font-medium">
+                                            I have reviewed the scope change and agree to the added cost of ${extra.amount.toLocaleString()}.
+                                        </span>
+                                    </label>
+                                </div>
+
+                                {/* Identity */}
+                                <div className="space-y-3 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Step 2 — Signer Identity</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-gray-700">Full Legal Name *</label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. Johnathan Doe"
+                                                value={signerName}
+                                                onChange={(e) => setSignerName(e.target.value)}
+                                                className="w-full h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500/10 focus:border-purple-500"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-gray-700">Email Address *</label>
+                                            <input
+                                                type="email"
+                                                placeholder="john@example.com"
+                                                value={signerEmail}
+                                                onChange={(e) => setSignerEmail(e.target.value)}
+                                                className="w-full h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500/10 focus:border-purple-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Drawn Signature */}
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Step 3 — Draw Signature</h4>
+                                    <SignaturePad />
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
                                     <Button
                                         size="lg"
                                         variant="outline"
                                         onClick={() => handleRespond('rejected')}
                                         disabled={isResponding}
-                                        className="h-14 rounded-2xl text-lg font-bold border-red-200 text-red-600 hover:bg-red-50 min-w-[120px]"
+                                        className="w-full sm:w-auto h-12 rounded-xl font-bold border-red-200 text-red-600 hover:bg-red-50"
                                     >
-                                        Decline
+                                        Decline Change Order
                                     </Button>
                                     <Button
                                         size="lg"
                                         onClick={() => handleRespond('approved')}
                                         disabled={isResponding}
-                                        className="bg-purple-600 hover:bg-purple-700 text-white min-w-[160px] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-purple-600/20"
+                                        className="w-full sm:w-auto bg-purple-700 hover:bg-purple-800 text-white h-12 px-8 rounded-xl font-bold shadow-lg shadow-purple-900/20 flex items-center gap-2"
                                     >
-                                        {isResponding ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Approve"}
+                                        {isResponding ? <Loader2 className="h-5 w-5 animate-spin" /> : <PenTool className="h-4 w-4 text-purple-300" />}
+                                        Sign &amp; Approve Change Order
                                     </Button>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-4 p-8 bg-green-50 rounded-3xl border border-green-200">
+                                <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center text-white shrink-0">
+                                    <CheckCircle2 className="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <p className="text-gray-900 font-bold text-lg">
+                                        {isApproved ? "Change Order Approved" : "Change Order Declined"}
+                                    </p>
+                                    <p className="text-green-800/80 text-sm mt-0.5">
+                                        {isApproved
+                                            ? "You have successfully approved this Change Order."
+                                            : "You have declined this Change Order."}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="mt-8 text-center text-gray-400 text-sm">

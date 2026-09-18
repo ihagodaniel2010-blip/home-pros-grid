@@ -19,6 +19,7 @@ import EstimateForm from "@/components/admin/estimates/EstimateForm";
 import EstimateItemsTable from "@/components/admin/estimates/EstimateItemsTable";
 import TotalsSummary from "@/components/admin/estimates/TotalsSummary";
 import RegisterPaymentModal from "@/components/admin/estimates/RegisterPaymentModal";
+import EstimateValidationModal from "@/components/admin/estimates/EstimateValidationModal";
 import { generateProfessionalPDF } from "@/lib/pdf-generator";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -172,12 +173,30 @@ const EstimateEditor = () => {
                         ? `${lead.selectedServiceOption} (${lead.subtype})`
                         : lead.selectedServiceOption;
 
+                    // Derive project type from serviceSlug or option
+                    let derivedProjectType = "";
+                    if (lead.serviceSlug) {
+                        const slugMap: Record<string, string> = {
+                            gutters: "General Repair",
+                            carpentry: "Custom Carpentry",
+                            framing: "Framing",
+                            remodel: "Kitchen Remodel",
+                            roofing: "Roofing Repair",
+                            siding: "Siding",
+                            trim: "Trim Work"
+                        };
+                        derivedProjectType = slugMap[lead.serviceSlug.toLowerCase()] || "";
+                    }
+
                     setFormData(prev => ({
                         ...prev,
                         client_name: lead.fullName,
                         client_email: lead.email,
                         client_phone: lead.phone,
+                        client_address: lead.address || prev.client_address,
+                        client_zip: lead.zip || prev.client_zip,
                         lead_id: lead.id,
+                        project_type: derivedProjectType || prev.project_type || "General Repair",
                         notes: `${t("estimate.converted_from")} [${serviceInfo}]: ${lead.details || 'No details provided.'}`
                     }));
                 }
@@ -246,9 +265,25 @@ const EstimateEditor = () => {
         toast.success("Share link copied to clipboard!");
     };
 
+    const [validationState, setValidationState] = useState<{
+        isOpen: boolean;
+        title?: string;
+        message: string;
+        targetElementId?: string;
+    }>({ isOpen: false, message: "" });
+
+    const showValidationError = (message: string, targetElementId?: string, title?: string) => {
+        setValidationState({
+            isOpen: true,
+            title: title || "Validation Required",
+            message,
+            targetElementId
+        });
+    };
+
     const handleGeneratePDF = async () => {
         if (!id) {
-            toast.error("Save the estimate first to generate PDF.");
+            showValidationError("Please save this estimate before generating a PDF.", undefined, "Save Estimate First");
             return;
         }
         setIsGeneratingPDF(true);
@@ -270,11 +305,50 @@ const EstimateEditor = () => {
     };
 
     const handleSave = async () => {
+        if (isSaving) return; // Prevent double submit
+
         const orgId = user?.organization?.id || DEFAULT_ORG_ID;
 
-        if (!formData.client_name) {
-            toast.error("Client name is required.");
+        // Step-by-step pre-save validations
+        if (!formData.client_name || !formData.client_name.trim()) {
+            showValidationError("Client Name is required.", "client_name");
             return;
+        }
+
+        if (!formData.project_type || !formData.project_type.trim()) {
+            showValidationError("Project Type is required.", "project_type");
+            return;
+        }
+
+        if (!formData.valid_until) {
+            showValidationError("Valid Until date is required.", "valid_until");
+            return;
+        }
+
+        if (!formData.status) {
+            showValidationError("Status is required.", "status");
+            return;
+        }
+
+        if (items.length === 0) {
+            showValidationError("Please add at least one service item before saving this estimate.", "add-item-btn");
+            return;
+        }
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (!item.description || !item.description.trim()) {
+                showValidationError(`Item #${i + 1}: Description is required.`, `item-desc-${i}`);
+                return;
+            }
+            if ((item.quantity || 0) <= 0) {
+                showValidationError(`Item #${i + 1}: Quantity must be greater than 0.`, `item-qty-${i}`);
+                return;
+            }
+            if ((item.unit_price ?? -1) < 0) {
+                showValidationError(`Item #${i + 1}: Unit Price must be valid (>= 0).`, `item-price-${i}`);
+                return;
+            }
         }
 
         setIsSaving(true);
@@ -550,6 +624,14 @@ const EstimateEditor = () => {
                     onSuccess={() => loadData()}
                 />
             )}
+
+            <EstimateValidationModal
+                isOpen={validationState.isOpen}
+                title={validationState.title}
+                message={validationState.message}
+                targetElementId={validationState.targetElementId}
+                onClose={() => setValidationState(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

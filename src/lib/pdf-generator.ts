@@ -26,25 +26,29 @@ export const generateProfessionalPDF = async (
         }
     }
 
-    // Company Info (Right Side)
+    // Company Header / Title
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
+    doc.setFontSize(20);
     doc.setTextColor(11, 42, 74); // #0b2a4a
-    doc.text("ESTIMATE", pageWidth - 20, 25, { align: "right" });
+    doc.text(company?.company_name || "H&A Construction LLC", 20, 25);
+
+    doc.setFontSize(16);
+    const isApproved = estimate.status === 'Approved' || estimate.status === 'Paid';
+    const statusHeader = isApproved ? "ESTIMATE (APPROVED)" : "ESTIMATE (UNSIGNED)";
+    doc.text(statusHeader, pageWidth - 20, 25, { align: "right" });
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setTextColor(100);
     const companyInfo = [
-        company?.company_name || "Company Name",
-        company?.address || "",
-        `Phone: ${company?.phone || ""}`,
-        `Email: ${company?.email || ""}`,
-        `License: ${company?.license_number || ""}`
+        company?.address || "Fairfield County, CT",
+        company?.phone ? `Phone: ${company.phone}` : "Phone: (203) 555-0199",
+        company?.email ? `Email: ${company.email}` : "Email: info@h-a-construction.com",
+        company?.license_number ? `License: ${company.license_number}` : "CT HIC License # Registered"
     ].filter(Boolean);
 
     companyInfo.forEach((line, i) => {
-        doc.text(line, pageWidth - 20, 35 + (i * 5), { align: "right" });
+        doc.text(line, pageWidth - 20, 32 + (i * 4.5), { align: "right" });
     });
 
     // 2. Client & Estimate Details
@@ -84,13 +88,16 @@ export const generateProfessionalPDF = async (
 
     // 3. Items Table
     const tableHeaders = [["Item", "Description", "Qty", "Unit Price", "Total"]];
-    const tableData = (estimate.items || []).map((item, idx) => [
-        idx + 1,
-        item.description,
-        item.quantity,
-        `$${item.unit_price.toFixed(2)}`,
-        `$${item.total_price.toFixed(2)}`
-    ]);
+    const tableData = (estimate.items || []).map((item, idx) => {
+        const itemTotal = item.total_price ?? ((item.quantity || 0) * (item.unit_price || 0));
+        return [
+            idx + 1,
+            item.description,
+            item.quantity,
+            `$${(item.unit_price || 0).toFixed(2)}`,
+            `$${itemTotal.toFixed(2)}`
+        ];
+    });
 
     // @ts-ignore
     doc.autoTable({

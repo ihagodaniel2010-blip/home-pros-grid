@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Estimate } from "@/lib/estimates";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, FileText, Download } from "lucide-react";
+import { Loader2, CheckCircle2, FileText, Download, ShieldCheck, PenTool, CheckSquare, Square, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import SignaturePad from "@/components/common/SignaturePad";
 
 const PublicView = () => {
     const { token } = useParams<{ token: string }>();
@@ -13,6 +14,14 @@ const PublicView = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isApproving, setIsApproving] = useState(false);
     const [isApproved, setIsApproved] = useState(false);
+
+    // 4-Step E-Signature UI State
+    const [consentElectronic, setConsentElectronic] = useState(false);
+    const [consentScope, setConsentScope] = useState(false);
+    const [signerName, setSignerName] = useState("");
+    const [signerEmail, setSignerEmail] = useState("");
+    const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+    const [validationError, setValidationError] = useState<string | null>(null);
 
     useEffect(() => {
         if (token) {
@@ -25,32 +34,45 @@ const PublicView = () => {
         const data = await getEstimateByToken(tk);
         if (data) {
             setEstimate(data);
+            if (data.client_name) setSignerName(data.client_name);
+            if (data.client_email) setSignerEmail(data.client_email);
             if (data.status === 'Approved' || data.status === 'Paid') {
                 setIsApproved(true);
             }
-
-            // TODO (Fase 4.1): track_public_estimate_view RPC not yet created in DB.
-            // When the SQL in supabase/migrations/005_homeleadpro_track_public_estimate_view_rpc.sql
-            // is reviewed and applied, replace this block with:
-            //
-            //   if (data.status === 'Sent') {
-            //     await supabase.rpc('track_public_estimate_view', { p_token: tk });
-            //     setEstimate(prev => prev ? { ...prev, status: 'Viewed' } : null);
-            //   }
-            //
-            // DO NOT use direct updateEstimate() here — anons are blocked by RLS.
-
         }
         setIsLoading(false);
     };
 
     const handleApprove = async () => {
         if (!estimate) return;
+
+        setValidationError(null);
+        if (!consentElectronic) {
+            setValidationError("You must check the agreement to conduct this transaction electronically.");
+            toast.error("Electronic consent required.");
+            return;
+        }
+        if (!consentScope) {
+            setValidationError("You must agree to the scope of work, pricing, and terms.");
+            toast.error("Scope & terms agreement required.");
+            return;
+        }
+        if (!signerName || !signerName.trim()) {
+            setValidationError("Full Legal Name is required to sign.");
+            toast.error("Full Legal Name required.");
+            return;
+        }
+        if (!signerEmail || !signerEmail.includes("@")) {
+            setValidationError("A valid Email Address is required.");
+            toast.error("Valid email required.");
+            return;
+        }
+
         setIsApproving(true);
         const success = await approveEstimate(estimate.id, token);
         if (success) {
             setIsApproved(true);
-            toast.success("Estimate approved successfully!");
+            toast.success("Estimate successfully signed and approved!");
         } else {
             toast.error("Failed to approve estimate.");
         }
@@ -206,58 +228,127 @@ const PublicView = () => {
                             </div>
                         )}
 
-                        {/* Action Section */}
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-8 bg-blue-50 rounded-3xl border border-blue-100">
-                            <div className="flex items-center gap-4">
-                                {isApproved ? (
-                                    <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center text-white">
-                                        <CheckCircle2 className="h-6 w-6" />
-                                    </div>
-                                ) : isDeclined ? (
-                                    <div className="h-12 w-12 rounded-full bg-red-500 flex items-center justify-center text-white">
-                                        <FileText className="h-6 w-6" />
-                                    </div>
-                                ) : (
-                                    <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                                        <FileText className="h-6 w-6" />
-                                    </div>
-                                )}
-                                <div>
-                                    <p className="text-gray-900 font-bold text-lg">
-                                        {isApproved ? "Approved & Verified" : isDeclined ? "Estimate Declined" : "Ready for your decision"}
-                                    </p>
-                                    <p className="text-blue-700/60 text-sm">
-                                        {isApproved
-                                            ? `This estimate was approved on ${new Date(estimate.approved_at || Date.now()).toLocaleDateString()}`
-                                            : isDeclined 
-                                            ? "You have declined this estimate. Contact us if you have questions."
-                                            : "Please review and approve to proceed with the project."}
+                        {/* Action & E-Signature Section */}
+                        {!isApproved && !isDeclined ? (
+                            <div className="space-y-8 bg-blue-50/70 rounded-3xl border border-blue-100 p-6 md:p-8">
+                                <div className="border-b border-blue-100 pb-4">
+                                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                        <ShieldCheck className="h-5 w-5 text-blue-600" />
+                                        Electronic Signature & Proposal Approval
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Please complete the required consent, legal identity, and signature below to approve this estimate.
                                     </p>
                                 </div>
-                            </div>
 
-                            {!isApproved && !isDeclined && (
-                                <div className="flex gap-3">
+                                {validationError && (
+                                    <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700 text-sm font-medium">
+                                        <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
+                                        <span>{validationError}</span>
+                                    </div>
+                                )}
+
+                                {/* STEP 2: Electronic Consent */}
+                                <div className="space-y-3 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Step 1 of 3 — Consent & Terms</h4>
+                                    
+                                    <label className="flex items-start gap-3 cursor-pointer group">
+                                        <input
+                                            type="checkbox"
+                                            checked={consentElectronic}
+                                            onChange={(e) => setConsentElectronic(e.target.checked)}
+                                            className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span className="text-xs text-gray-700 leading-relaxed font-medium">
+                                            I have reviewed this estimate and agree to conduct this transaction electronically and use an electronic signature (UETA / E-SIGN Act Compliance).
+                                        </span>
+                                    </label>
+
+                                    <label className="flex items-start gap-3 cursor-pointer group pt-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={consentScope}
+                                            onChange={(e) => setConsentScope(e.target.checked)}
+                                            className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span className="text-xs text-gray-700 leading-relaxed font-medium">
+                                            I have read, understood, and agree to the scope of work, pricing total (${estimate.total_amount.toLocaleString()}), terms, and conditions shown above.
+                                        </span>
+                                    </label>
+                                </div>
+
+                                {/* STEP 3: Signer Identity */}
+                                <div className="space-y-3 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Step 2 of 3 — Signer Identity</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-gray-700">Full Legal Name *</label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. Johnathan Doe"
+                                                value={signerName}
+                                                onChange={(e) => setSignerName(e.target.value)}
+                                                className="w-full h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-gray-700">Email Address *</label>
+                                            <input
+                                                type="email"
+                                                placeholder="john@example.com"
+                                                value={signerEmail}
+                                                onChange={(e) => setSignerEmail(e.target.value)}
+                                                className="w-full h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* STEP 4: Drawn Signature */}
+                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Step 3 of 3 — Draw Signature</h4>
+                                    <SignaturePad onSignatureChange={(dataUrl) => setSignatureDataUrl(dataUrl)} />
+                                </div>
+
+                                {/* Submit Buttons */}
+                                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
                                     <Button
                                         size="lg"
                                         variant="outline"
                                         onClick={handleReject}
                                         disabled={isApproving}
-                                        className="h-14 rounded-2xl text-lg font-bold border-red-200 text-red-600 hover:bg-red-50 min-w-[120px]"
+                                        className="w-full sm:w-auto h-12 rounded-xl font-bold border-red-200 text-red-600 hover:bg-red-50"
                                     >
-                                        Decline
+                                        Decline Estimate
                                     </Button>
                                     <Button
                                         size="lg"
                                         onClick={handleApprove}
                                         disabled={isApproving}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white min-w-[160px] h-14 rounded-2xl text-lg font-bold shadow-lg shadow-blue-600/20"
+                                        className="w-full sm:w-auto bg-[#0b2a4a] hover:bg-[#081e35] text-white h-12 px-8 rounded-xl font-bold shadow-lg shadow-blue-900/10 flex items-center gap-2"
                                     >
-                                        {isApproving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Approve"}
+                                        {isApproving ? <Loader2 className="h-5 w-5 animate-spin" /> : <PenTool className="h-4 w-4 text-blue-400" />}
+                                        Sign &amp; Approve Estimate
                                     </Button>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-4 p-8 bg-green-50 rounded-3xl border border-green-200">
+                                <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center text-white shrink-0">
+                                    <CheckCircle2 className="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <p className="text-gray-900 font-bold text-lg">
+                                        {isApproved ? "Estimate Successfully Signed & Approved" : "Estimate Declined"}
+                                    </p>
+                                    <p className="text-green-800/80 text-sm mt-0.5">
+                                        {isApproved
+                                            ? `Approved on ${new Date(estimate.approved_at || Date.now()).toLocaleDateString()}. Thank you for choosing H&A Construction!`
+                                            : "This estimate was declined."}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

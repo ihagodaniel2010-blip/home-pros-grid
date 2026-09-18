@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 
 const statuses: Lead["status"][] = ["New", "Contacted", "Estimate Sent", "Approved", "Closed"];
 
@@ -24,13 +25,14 @@ type ServiceJob = {
 const LeadDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useUser();
   const [lead, setLead] = useState<Lead | null>(null);
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [serviceJob, setServiceJob] = useState<ServiceJob | null>(null);
   const [serviceExtras, setServiceExtras] = useState<ServiceExtra[]>([]);
   const [isAddingExtra, setIsAddingExtra] = useState(false);
-  const [newExtra, setNewExtra] = useState({ description: '', amount: '' });
+  const [newExtra, setNewExtra] = useState({ description: '', reason: '', amount: '' });
   const [isSavingExtra, setIsSavingExtra] = useState(false);
 
   useEffect(() => {
@@ -64,19 +66,22 @@ const LeadDetail = () => {
     if (!serviceJob || !newExtra.description || !newExtra.amount) return;
     setIsSavingExtra(true);
     try {
+      const orgId = (serviceJob as any).organization_id || user?.organization?.id || DEFAULT_ORG_ID;
       const extra = await createServiceExtra({
-        organization_id: (serviceJob as any).organization_id,
+        organization_id: orgId,
         service_job_id: serviceJob.id,
-        estimate_id: (serviceJob as any).estimate_id,
+        estimate_id: (serviceJob as any).estimate_id || null,
         description: newExtra.description,
+        reason: newExtra.reason || undefined,
         amount: parseFloat(newExtra.amount)
       });
       setServiceExtras([extra, ...serviceExtras]);
       setIsAddingExtra(false);
-      setNewExtra({ description: '', amount: '' });
-      toast.success("Extra created successfully.");
-    } catch (err) {
-      toast.error("Failed to create extra.");
+      setNewExtra({ description: '', reason: '', amount: '' });
+      toast.success("Service Extra created successfully.");
+    } catch (err: any) {
+      console.error("Create extra error:", err);
+      toast.error(`Failed to create extra: ${err?.message || "Database insert error"}`);
     } finally {
       setIsSavingExtra(false);
     }

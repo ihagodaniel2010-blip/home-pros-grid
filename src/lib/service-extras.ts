@@ -7,6 +7,7 @@ export type ServiceExtra = {
     estimate_id: string | null;
     description: string;
     amount: number;
+    reason?: string | null;
     status: 'pending' | 'approved' | 'rejected' | 'paid';
     public_token: string | null;
     created_at: string;
@@ -15,18 +16,27 @@ export type ServiceExtra = {
 export const createServiceExtra = async (extraData: {
     organization_id: string;
     service_job_id: string;
-    estimate_id?: string;
+    estimate_id?: string | null;
     description: string;
     amount: number;
+    reason?: string;
 }) => {
     if (!supabase) throw new Error("Supabase not initialized");
 
+    const payload: Record<string, any> = {
+        organization_id: extraData.organization_id,
+        service_job_id: extraData.service_job_id,
+        description: extraData.description,
+        amount: extraData.amount,
+        status: 'pending'
+    };
+
+    if (extraData.estimate_id) payload.estimate_id = extraData.estimate_id;
+    if (extraData.reason) payload.reason = extraData.reason;
+
     const { data, error } = await supabase
         .from('service_extras')
-        .insert([{
-            ...extraData,
-            status: 'pending'
-        }])
+        .insert([payload])
         .select()
         .single();
 
