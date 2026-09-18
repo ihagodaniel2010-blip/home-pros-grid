@@ -446,7 +446,7 @@ using (
         select 1 from public.organization_users ou
         where ou.user_id = auth.uid()
           and ou.role in ('owner', 'admin')
-          and ou.org_id::text = (storage.foldername(name))[1]
+          and ou.organization_id::text = (storage.foldername(name))[1]
     )
 );
 
@@ -459,7 +459,7 @@ using (
         select 1 from public.organization_users ou
         where ou.user_id = auth.uid()
           and ou.role in ('owner', 'admin')
-          and ou.org_id::text = (storage.foldername(name))[1]
+          and ou.organization_id::text = (storage.foldername(name))[1]
     )
 );
 
@@ -470,10 +470,10 @@ using (
     bucket_id = 'job-media'
     and exists (
         select 1 from public.organization_users ou
-        join public.service_jobs sj on sj.organization_id = ou.org_id
+        join public.service_jobs sj on sj.organization_id = ou.organization_id
         where ou.user_id = auth.uid()
           and ou.role in ('owner', 'admin')
-          and ou.org_id::text = (storage.foldername(name))[1]
+          and ou.organization_id::text = (storage.foldername(name))[1]
           and sj.id::text = (storage.foldername(name))[3]
     )
 );
@@ -485,10 +485,10 @@ with check (
     bucket_id = 'job-media'
     and exists (
         select 1 from public.organization_users ou
-        join public.service_jobs sj on sj.organization_id = ou.org_id
+        join public.service_jobs sj on sj.organization_id = ou.organization_id
         where ou.user_id = auth.uid()
           and ou.role in ('owner', 'admin')
-          and ou.org_id::text = (storage.foldername(name))[1]
+          and ou.organization_id::text = (storage.foldername(name))[1]
           and sj.id::text = (storage.foldername(name))[3]
     )
 );
@@ -500,10 +500,10 @@ using (
     bucket_id = 'job-media'
     and exists (
         select 1 from public.organization_users ou
-        join public.service_jobs sj on sj.organization_id = ou.org_id
+        join public.service_jobs sj on sj.organization_id = ou.organization_id
         where ou.user_id = auth.uid()
           and ou.role in ('owner', 'admin')
-          and ou.org_id::text = (storage.foldername(name))[1]
+          and ou.organization_id::text = (storage.foldername(name))[1]
           and sj.id::text = (storage.foldername(name))[3]
     )
 );
