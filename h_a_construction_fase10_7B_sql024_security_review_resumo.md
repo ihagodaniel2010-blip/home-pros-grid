@@ -1,4 +1,4 @@
-# Relatório de Revisão de Segurança da Fase 10.7B — Proposal SQL 024 (FINAL CANDIDATE)
+# Relatório de Revisão de Segurança da Fase 10.7B — Proposal SQL 024 (FINAL CANDIDATE - REVISÃO FINAL)
 
 **Status Geral**: REVISADO / FINAL CANDIDATE (PROPOSTA NÃO EXECUTADA)  
 **Projeto Inspecionado via PRECHECK**: `ozhjvprhhsdglxokfwze`  
@@ -6,131 +6,80 @@
 
 ---
 
-## 📌 Relatório Técnico Resumido (Respostas aos 32 Pontos)
+## 📌 Relatório Técnico Resumido (Respostas aos 24 Pontos de Ajuste Bloqueador)
 
-1. **Immutable triggers/guards existem?**  
-   Sim. A função `prevent_immutable_modification()` com gatilho `BEFORE UPDATE OR DELETE` foi adicionada a `document_versions`, `electronic_signatures` e `document_signature_events`.
+1. **events agora têm composite integrity?**  
+   **SIM.** A tabela `document_signature_events` inclui `document_hash` com validação de formato e possui uma Chave Estrangeira Composta (`fk_signature_events_version_composite`) para `document_versions` garantindo que todos os eventos do `document_created` em diante correspondam estritamente à mesma versão, organização, tipo, ID e hash.
 
-2. **service_role consegue alterar versão assinada?**  
-   **NÃO.** Gatilhos PostgreSQL `BEFORE UPDATE OR DELETE` disparam no nível do motor do Postgres antes de qualquer operação, interrompendo a transação com exceção (`raise exception`) mesmo quando executados via `service_role` ou superusuário.
+2. **signed PDF agora fica em tabela append-only separada?**  
+   **SIM.** Criada a tabela `signed_document_artifacts` com a chave única `document_version_id`, Composite FK e gatilho de imutabilidade. O PDF final congelado é inserido nesta tabela append-only assim que ambas as assinaturas são concluídas.
 
-3. **Como assinatura é garantida contra version mismatch?**  
-   Através de uma **Chave Estrangeira Composta (Composite FK)** entre `electronic_signatures` e `document_versions` nos campos `(document_version_id, organization_id, document_type, document_id, document_hash)`. É impossível no nível do banco assinar uma Versão A com IDs ou Hash divergentes.
+3. **electronic_signatures precisa de UPDATE depois de criada?**  
+   **NÃO.** O campo `signed_document_storage_path` foi totalmente removido de `electronic_signatures`. A tabela é 100% append-only e read-only após a inserção.
 
-4. **Como event é garantido contra version mismatch?**  
-   Através de vinculação estruturada com a organização (`fk_signature_events_org`) e referência explícita ao `document_version_id`.
+4. **buckets são realmente criados na proposal?**  
+   **SIM.** Inserção idempotente em `storage.buckets` das entidades `signatures`, `job-media` e `signed-documents` com limites de tamanho e restrições de tipos MIME.
 
-5. **Unique key de version foi corrigida?**  
-   Sim. Alterada para `unique (organization_id, document_type, document_id, version_number)`.
+5. **todos são private?**  
+   **SIM.** Todos declarados com `public = false`.
 
-6. **`version_number > 0`?**  
-   Sim. Adicionado `check (version_number > 0)`.
+6. **signatures access está limitado Owner/Admin?**  
+   **SIM.** Apenas gestores (`owner`, `admin`) possuem permissão de leitura (`SELECT`).
 
-7. **Regex de email foi removido?**  
-   Sim. O regex de TLD de 2–4 caracteres foi substituído por uma validação ampla `^[^@\s]+@[^@\s]+\.[^@\s]+$`, aceitando domínios modernos (ex: `@company.construction`).
+7. **signed documents access está limitado Owner/Admin?**  
+   **SIM.** Apenas gestores (`owner`, `admin`) possuem permissão de leitura (`SELECT`). Clientes recebem cópias exclusivamente via Signed URLs de curta duração geradas pelo servidor.
 
-8. **Money possui precisão?**  
-   Sim. Todos os campos monetários utilizam `numeric(12,2)`. A taxa de imposto utiliza `numeric(5,4)` e o campo `currency` (`'USD'`) foi adicionado.
+8. **worker pode acessar assinatura?**  
+   **NÃO.** Nenhuma política concede acesso de leitura ou gravação de assinaturas a trabalhadores (`worker`).
 
-9. **Snapshot possui dados suficientes para reconstruir documento?**  
-   Sim. O snapshot inclui dados completos de ambas as partes (razao social, nome legal, endereço completo, telefone, email do empreiteiro e do cliente), escopo completo, itens de linha em JSON, preços prévios e revisados, termos contratuais e hash criptográfico SHA-256.
+9. **worker Job Media é limitado ao Job atribuído?**  
+   **SIM.** O acesso é restrito por `public.is_worker_assigned_to_job(service_job_id)`.
 
-10. **`set_updated_at` existe no banco real?**  
-    O PRECHECK constatou que `set_updated_at` **não existe** no banco real. A proposta `FINAL_CANDIDATE` inclui a definição completa e segura da função `set_updated_at()`.
+10. **client tem direct bucket SELECT?**  
+    **NÃO.** O cliente obtém URLs temporárias assinadas via servidor/endpoint.
 
-11. **`is_worker_assigned_to_job` existe?**  
-    **SIM.** O PRECHECK confirmou que a função `public.is_worker_assigned_to_job(p_service_job_id uuid)` **existe** e foi devidamente mapeada na policy de mídia do trabalhador.
+11. **public tem direct private bucket SELECT?**  
+    **NÃO.** Acesso público a buckets privados é estritamente bloqueado.
 
-12. **`get_user_role_in_org` existe?**  
-    **SIM.** O PRECHECK confirmou que a função `public.get_user_role_in_org(org_id uuid)` **existe** e funciona.
+12. **storage INSERT possui WITH CHECK?**  
+    **SIM.** Todas as políticas de `INSERT` utilizam cláusulas `WITH CHECK` dedicadas.
 
-13. **`SECURITY DEFINER` usa safe `search_path`?**  
-    Sim. Todas as funções `SECURITY DEFINER` especificam explicitamente `SET search_path = public, pg_temp` para prevenir ataques de Schema Search Path Hijacking.
+13. **unsafe UUID cast foi removido?**  
+    **SIM.** Removida a conversão perigosa `::uuid` direta. A comparação dos caminhos utiliza correspondência de texto segura via `ou.org_id::text = (storage.foldername(name))[1]`.
 
-14. **PUBLIC execute foi revogado?**  
-    Sim. Executado `REVOKE ALL ON FUNCTION public.get_client_job_media(text) FROM PUBLIC;`.
+14. **Portfolio não expõe tabela operacional?**  
+    **SIM.** O acesso público ao portfólio é exposto via RPC `get_public_portfolio_media()` com `SECURITY DEFINER` e `SET search_path = public, pg_temp`, sem conceder `SELECT` direto em tabelas operacionais.
 
-15. **Qual role recebe EXECUTE?**  
-    `GRANT EXECUTE ON FUNCTION public.get_client_job_media(text) TO anon, authenticated;`.
+15. **SHA-256 formato é validado?**  
+    **SIM.** Validado via expressão regular estrita de 64 caracteres hexadecimais em minúsculo: `check (document_hash ~ '^[0-9a-f]{64}$')` e `check (pdf_hash ~ '^[0-9a-f]{64}$')`.
 
-16. **`public_token` possui entropia adequada?**  
-    Sim. O PRECHECK confirmou que `generate_public_token` gera tokens no formato `lead_<32_caracteres_hex>` (128 bits de entropia aleatória criptográfica via `gen_random_bytes(16)`).
+16. **tax_rate convention foi definida?**  
+    **SIM.** Definida a Convenção B: armazenado como fator decimal (`numeric(6,4)`), ex: 6.5% de taxa é armazenado como `0.0650` (suportando impostos de 0% a 99.9999%).
 
-17. **Cliente recebe apenas signed URLs temporárias?**  
-    Sim. O cliente obtém os metadados via RPC/Endpoint e recebe **Signed URLs de curta duração (10 a 15 minutos)** para cada mídia autorizada.
+17. **trigger helpers ainda usam SECURITY DEFINER? Explicar.**  
+    **NÃO.** O atributo `SECURITY DEFINER` foi removido de `set_updated_at()` e `prevent_immutable_modification()`, aplicando o princípio de menor privilégio. Eles executam com os privilégios do chamador. `SECURITY DEFINER` foi mantido apenas nas RPCs de acesso controlado.
 
-18. **Storage paths privados ficam ocultos?**  
-    Sim. A RPC do cliente e a View Pública não retornam caminhos internos nem buckets privados.
+18. **amount em service_extras é definido como change_order_amount?**  
+    **SIM.** `amount` na tabela `service_extras` representa o valor de alteração (`change_order_amount`). O valor total revisado obedece a `revised_contract_price = previous_contract_price + amount`.
 
-19. **Portfolio usa view/RPC/endpoint limitado?**  
-    Sim. Criada a view pública `public.public_portfolio_media` que expõe unicamente `id`, `media_type`, `caption` e `created_at` sob a política de duplo aceite (`visible_on_public_site = true AND portfolio_approved = true`).
+19. **video duration é validada/registrada?**  
+    **SIM.** Adicionada a coluna `duration_seconds` em `service_job_media` e `service_extra_media` com a restrição `check (duration_seconds is null or (duration_seconds > 0 and duration_seconds <= 60))`.
 
-20. **Buckets privados fazem parte da `FINAL_CANDIDATE`?**  
-    Sim. A proposta inclui a declaração dos buckets privados `signatures`, `job-media` e `signed-documents`.
-
-21. **Storage RLS/policies fazem parte da proposal?**  
-    Sim. Declaração detalhada de políticas em `storage.objects` validando o `organization_id` no primeiro segmento do caminho (`(storage.foldername(name))[1]`).
-
-22. **Como Extra Media será servido ao cliente?**  
-    Servido via servidor/endpoint seguro que valida o token público do Change Order e gera Signed URLs temporárias.
-
-23. **Onde Change Order editable data ficará?**  
-    Na tabela `public.service_extras`, cujos campos rascunho (`previous_contract_price`, `revised_contract_price`, `schedule_impact`) são expandidos na proposta antes do congelamento no snapshot.
-
-24. **Como final PDF é congelado?**  
-    Após a coleta de ambas as assinaturas (`client` e `contractor`), o servidor renderiza o PDF final assinado, envia para o bucket privado `signed-documents/`, vincula o caminho em `signed_document_storage_path`, registra o evento `document_completed` e dispara a cópia ao cliente (`copy_sent`).
-
-25. **Rollback test está explicitamente LOCAL/STAGING ONLY?**  
-    Sim. Incluída advertência em destaque no cabeçalho: `WARNING: DO NOT RUN THIS TEST ON PRODUCTION DB. DESTINED FOR LOCAL OR DEDICATED STAGING DB ONLY.`
-
-26. **PRECHECK foi executado somente no Carpentry correto?**  
-    **SIM.** Executado exclusivamente no projeto `ozhjvprhhsdglxokfwze`.
-
-27. **OUTPUT completo do PRECHECK**:
-
-```json
-=== PRECHECK RESULTS FOR PROJECT ozhjvprhhsdglxokfwze ===
-
-1. TABLE EXISTENCE (HTTP Status via REST):
-   - public.organizations: EXISTS (HTTP 200)
-   - public.organization_users: EXISTS (HTTP 200)
-   - public.leads: EXISTS (HTTP 200)
-   - public.estimates: EXISTS (HTTP 200)
-   - public.estimate_items: EXISTS (HTTP 200)
-   - public.service_jobs: EXISTS (HTTP 200)
-   - public.service_extras: EXISTS (HTTP 200)
-   - public.electronic_signatures: NOT CREATED YET (HTTP 404)
-   - public.document_versions: NOT CREATED YET (HTTP 404)
-   - public.document_signature_events: NOT CREATED YET (HTTP 404)
-   - public.service_job_media: NOT CREATED YET (HTTP 404)
-   - public.service_extra_media: NOT CREATED YET (HTTP 404)
-
-2. VERIFIED RPC FUNCTIONS (HTTP Status & Schema Cache Hints):
-   - public.get_user_role_in_org(org_id uuid): EXISTS (HTTP 200)
-   - public.is_super_admin(): EXISTS (HTTP 200)
-   - public.is_worker_assigned_to_job(p_service_job_id uuid): EXISTS (HTTP 200)
-   - public.generate_public_token(): EXISTS (HTTP 200 -> "lead_e8e40c93d2734951989d1cf4749545ac")
-   - public.set_updated_at(): DOES NOT EXIST (HTTP 404)
-
-3. STORAGE BUCKETS:
-   - storage.buckets: 0 public buckets accessible to anon.
-```
-
-28. **Algum SQL além do PRECHECK foi executado?**  
+20. **Algum SQL foi executado?**  
     **NÃO.**
 
-29. **Algum bucket foi criado?**  
+21. **Algum bucket foi criado?**  
     **NÃO.**
 
-30. **Production RLS foi alterada?**  
+22. **Production foi alterada?**  
     **NÃO.**
 
-31. **Stripe foi tocado?**  
+23. **Stripe foi tocado?**  
     **NÃO.**
 
-32. **CalhaFlow foi tocado?**  
+24. **CalhaFlow foi tocado?**  
     **NÃO.**
 
 ---
 
-O SQL 024 FINAL CANDIDATE permanece não executado e aguarda autorização manual após validação do precheck e revisão final.
+O SQL 024 FINAL CANDIDATE está tecnicamente preparado para a última revisão manual, permanecendo totalmente não executado.

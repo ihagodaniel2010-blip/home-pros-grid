@@ -5,14 +5,13 @@
 -- =============================================================================
 
 -- =============================================================================
--- SECTION 0: HELPER FUNCTIONS & TRIGGERS
+-- SECTION 0: HELPER FUNCTIONS & TRIGGERS (LEAST PRIVILEGE - NO SECURITY DEFINER)
 -- =============================================================================
 
--- Updated_at trigger function
+-- Updated_at trigger function (Invoked with caller privileges)
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
-security definer
 set search_path = public, pg_temp
 as $$
 begin
@@ -21,11 +20,10 @@ begin
 end;
 $$;
 
--- Universal Immutability Guard Function (Blocks UPDATE and DELETE)
+-- Universal Immutability Guard Function (Blocks UPDATE and DELETE for caller)
 create or replace function public.prevent_immutable_modification()
 returns trigger
 language plpgsql
-security definer
 set search_path = public, pg_temp
 as $$
 begin
@@ -64,7 +62,9 @@ create table if not exists public.document_versions (
     previous_contract_price numeric(12,2) check (previous_contract_price >= 0),
     change_amount numeric(12,2) default 0,
     subtotal numeric(12,2) not null check (subtotal >= 0),
-    tax_rate numeric(5,4) not null default 0 check (tax_rate >= 0),
+    
+    -- Tax rate stored as decimal factor: e.g. 6.5% = 0.0650
+    tax_rate numeric(6,4) not null default 0 check (tax_rate >= 0),
     tax_amount numeric(12,2) not null default 0 check (tax_amount >= 0),
     discount_amount numeric(12,2) not null default 0 check (discount_amount >= 0),
     total_amount numeric(12,2) not null check (total_amount >= 0),
@@ -73,14 +73,14 @@ create table if not exists public.document_versions (
     schedule_impact text,
     terms_text text not null,
     
-    -- Cryptographic Document Integrity Hash (SHA-256)
-    document_hash text not null check (length(document_hash) = 64),
+    -- Cryptographic Document Integrity Hash (Strict SHA-256 Hex Lowercase)
+    document_hash text not null check (document_hash ~ '^[0-9a-f]{64}$'),
     created_at timestamptz not null default now(),
     
     -- Unique version identifier per organization document
     constraint uq_document_versions_org_doc_ver unique (organization_id, document_type, document_id, version_number),
     
-    -- Composite unique key to enforce signature consistency
+    -- Composite unique key to enforce signature & event consistency
     constraint uq_document_versions_composite unique (id, organization_id, document_type, document_id, document_hash)
 );
 
@@ -90,7 +90,7 @@ before update or delete on public.document_versions
 for each row execute function public.prevent_immutable_modification();
 
 -- =============================================================================
--- SECTION 2: AUDITABLE ELECTRONIC SIGNATURES
+-- SECTION 2: AUDITABLE ELECTRONIC SIGNATURES (APPEND-ONLY, NO SIGNED PDF PATH)
 -- =============================================================================
 
 create table if not exists public.electronic_signatures (
@@ -108,8 +108,7 @@ create table if not exists public.electronic_signatures (
     consent_version text not null default 'v1.0_UETA_ESIGN',
     consent_text text not null,
     signature_storage_path text not null check (length(trim(signature_storage_path)) > 0),
-    signed_document_storage_path text,
-    document_hash text not null check (length(document_hash) = 64),
+    document_hash text not null check (document_hash ~ '^[0-9a-f]{64}$'),
     created_at timestamptz not null default now(),
     
     -- Strict Composite Foreign Key ensuring signature matches EXACT document_version properties
@@ -129,7 +128,38 @@ before update or delete on public.electronic_signatures
 for each row execute function public.prevent_immutable_modification();
 
 -- =============================================================================
--- SECTION 3: DOCUMENT SIGNATURE AUDIT EVENTS
+-- SECTION 3: IMMUTABLE SIGNED DOCUMENT ARTIFACTS (FINAL CONVERTED PDF)
+-- =============================================================================
+
+create table if not exists public.signed_document_artifacts (
+    id uuid primary key default gen_random_uuid(),
+    organization_id uuid not null,
+    document_type text not null check (document_type in ('estimate', 'change_order', 'contract')),
+    document_id uuid not null,
+    document_version_id uuid not null,
+    document_hash text not null check (document_hash ~ '^[0-9a-f]{64}$'),
+    storage_path text not null check (length(trim(storage_path)) > 0),
+    pdf_hash text not null check (pdf_hash ~ '^[0-9a-f]{64}$'),
+    generated_at timestamptz not null default now(),
+    created_at timestamptz not null default now(),
+
+    -- Unique completed PDF artifact per document_version_id
+    constraint uq_signed_document_artifacts_version unique (document_version_id),
+    
+    -- Composite FK to document_versions
+    constraint fk_signed_document_artifacts_version_composite
+        foreign key (document_version_id, organization_id, document_type, document_id, document_hash)
+        references public.document_versions(id, organization_id, document_type, document_id, document_hash)
+        on delete restrict
+);
+
+-- Attach Immutability Trigger
+create trigger trg_immutable_signed_document_artifacts
+before update or delete on public.signed_document_artifacts
+for each row execute function public.prevent_immutable_modification();
+
+-- =============================================================================
+-- SECTION 4: DOCUMENT SIGNATURE AUDIT EVENTS (STRICT COMPOSITE INTEGRITY)
 -- =============================================================================
 
 create table if not exists public.document_signature_events (
@@ -137,7 +167,8 @@ create table if not exists public.document_signature_events (
     organization_id uuid not null,
     document_type text not null check (document_type in ('estimate', 'change_order', 'contract')),
     document_id uuid not null,
-    document_version_id uuid,
+    document_version_id uuid not null, -- Every event belongs to a version
+    document_hash text not null check (document_hash ~ '^[0-9a-f]{64}$'),
     event_type text not null check (event_type in (
         'document_created',
         'document_sent',
@@ -157,17 +188,20 @@ create table if not exists public.document_signature_events (
     occurred_at timestamptz not null default now(),
     metadata jsonb not null default '{}'::jsonb,
 
-    -- Foreign key to organization
-    constraint fk_signature_events_org foreign key (organization_id) references public.organizations(id) on delete restrict
+    -- Composite FK ensuring event matches EXACT document_version properties
+    constraint fk_signature_events_version_composite
+        foreign key (document_version_id, organization_id, document_type, document_id, document_hash)
+        references public.document_versions(id, organization_id, document_type, document_id, document_hash)
+        on delete restrict
 );
 
--- Attach Immutability Trigger (Prevent any UPDATE or DELETE)
+-- Attach Immutability Trigger
 create trigger trg_immutable_document_signature_events
 before update or delete on public.document_signature_events
 for each row execute function public.prevent_immutable_modification();
 
 -- =============================================================================
--- SECTION 4: SERVICE JOB MEDIA (PRIVATE BY DEFAULT)
+-- SECTION 5: SERVICE JOB MEDIA (PRIVATE BY DEFAULT)
 -- =============================================================================
 
 create table if not exists public.service_job_media (
@@ -179,6 +213,7 @@ create table if not exists public.service_job_media (
     file_name text not null,
     mime_type text not null,
     file_size_bytes bigint not null check (file_size_bytes > 0),
+    duration_seconds integer check (duration_seconds is null or (duration_seconds > 0 and duration_seconds <= 60)),
     caption text,
     sort_order integer default 0,
     visible_to_client boolean not null default false, -- Default PRIVATE
@@ -195,7 +230,7 @@ before update on public.service_job_media
 for each row execute function public.set_updated_at();
 
 -- =============================================================================
--- SECTION 5: SERVICE EXTRA MEDIA (CHANGE ORDERS)
+-- SECTION 6: SERVICE EXTRA MEDIA (CHANGE ORDERS)
 -- =============================================================================
 
 create table if not exists public.service_extra_media (
@@ -207,92 +242,112 @@ create table if not exists public.service_extra_media (
     file_name text not null,
     mime_type text not null,
     file_size_bytes bigint not null check (file_size_bytes > 0),
+    duration_seconds integer check (duration_seconds is null or (duration_seconds > 0 and duration_seconds <= 60)),
     caption text,
     uploaded_by uuid references auth.users(id) on delete set null,
     created_at timestamptz not null default now()
 );
 
 -- =============================================================================
--- SECTION 6: SERVICE EXTRAS (EDITABLE CHANGE ORDER DATA EXPANSION PROPOSAL)
+-- SECTION 7: SERVICE EXTRAS (EDITABLE DRAFT CHANGE ORDER EXPANSION)
 -- =============================================================================
 
--- Proposal to add editable draft fields to service_extras before freezing into document_versions snapshot
+-- Note: amount column in service_extras stores change_order_amount.
+-- revised_contract_price = previous_contract_price + amount
 alter table public.service_extras
 add column if not exists previous_contract_price numeric(12,2) check (previous_contract_price >= 0),
 add column if not exists revised_contract_price numeric(12,2) check (revised_contract_price >= 0),
 add column if not exists schedule_impact text;
 
 -- =============================================================================
--- SECTION 7: INDEXES FOR PERFORMANCE
+-- SECTION 8: INDEXES FOR PERFORMANCE
 -- =============================================================================
 
 create index if not exists idx_document_versions_lookup on public.document_versions(organization_id, document_type, document_id);
 create index if not exists idx_electronic_signatures_doc on public.electronic_signatures(organization_id, document_id);
 create index if not exists idx_electronic_signatures_ver on public.electronic_signatures(document_version_id);
+create index if not exists idx_signed_artifacts_ver on public.signed_document_artifacts(document_version_id);
 create index if not exists idx_signature_events_lookup on public.document_signature_events(document_id, document_version_id);
 create index if not exists idx_service_job_media_job on public.service_job_media(organization_id, service_job_id);
 create index if not exists idx_service_job_media_public on public.service_job_media(visible_on_public_site, portfolio_approved) where visible_on_public_site = true and portfolio_approved = true;
 create index if not exists idx_service_extra_media_extra on public.service_extra_media(organization_id, service_extra_id);
 
 -- =============================================================================
--- SECTION 8: ROW LEVEL SECURITY & POLICIES
+-- SECTION 9: ROW LEVEL SECURITY & POLICIES (STRICT SEGREGATION BY COMMAND)
 -- =============================================================================
 
 alter table public.document_versions enable row level security;
 alter table public.electronic_signatures enable row level security;
+alter table public.signed_document_artifacts enable row level security;
 alter table public.document_signature_events enable row level security;
 alter table public.service_job_media enable row level security;
 alter table public.service_extra_media enable row level security;
 
 -- Manager Policies
-create policy "Company managers can view document versions"
+create policy "Company managers select document versions"
 on public.document_versions for select
 using (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
 
-create policy "Company managers can view electronic signatures"
+create policy "Company managers select electronic signatures"
 on public.electronic_signatures for select
 using (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
 
-create policy "Company managers can view signature events"
+create policy "Company managers select signed document artifacts"
+on public.signed_document_artifacts for select
+using (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
+
+create policy "Company managers select signature events"
 on public.document_signature_events for select
 using (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
 
-create policy "Company managers can manage job media"
-on public.service_job_media for all
+-- Media Policies (Managers Full Access)
+create policy "Company managers select job media"
+on public.service_job_media for select
 using (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
 
-create policy "Company managers can manage extra media"
-on public.service_extra_media for all
+create policy "Company managers insert job media"
+on public.service_job_media for insert
+with check (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
+
+create policy "Company managers update job media"
+on public.service_job_media for update
+using (public.get_user_role_in_org(organization_id) in ('owner', 'admin'))
+with check (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
+
+create policy "Company managers delete job media"
+on public.service_job_media for delete
 using (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
+
+-- Extra Media Policies (Managers Full Access)
+create policy "Company managers select extra media"
+on public.service_extra_media for select
+using (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
+
+create policy "Company managers insert extra media"
+on public.service_extra_media for insert
+with check (public.get_user_role_in_org(organization_id) in ('owner', 'admin'));
 
 -- Worker Policy using existing verified function public.is_worker_assigned_to_job(p_service_job_id)
-create policy "Assigned workers can view job media"
+create policy "Assigned workers select job media"
 on public.service_job_media for select
 using (public.is_worker_assigned_to_job(service_job_id));
 
--- Double-Lock Public Portfolio View
-create or replace view public.public_portfolio_media as
-select
-    id,
-    media_type,
-    caption,
-    created_at
-from public.service_job_media
-where visible_on_public_site = true
-  and portfolio_approved = true;
-
-grant select on public.public_portfolio_media to anon, authenticated;
+create policy "Assigned workers insert job media"
+on public.service_job_media for insert
+with check (public.is_worker_assigned_to_job(service_job_id));
 
 -- =============================================================================
--- SECTION 9: HARDENED SECURE CLIENT ACCESS RPC
+-- SECTION 10: HARDENED RPC FOR CLIENT & PUBLIC PORTFOLIO ACCESS
 -- =============================================================================
 
+-- 10A. Client Job Media Metadata RPC
 create or replace function public.get_client_job_media(p_job_token text)
 returns table (
     id uuid,
     media_type text,
     file_name text,
     caption text,
+    duration_seconds integer,
     created_at timestamptz
 )
 language plpgsql
@@ -302,7 +357,6 @@ as $$
 declare
     v_job_id uuid;
 begin
-    -- Locate job_id via valid token
     select sj.id into v_job_id
     from public.service_jobs sj
     join public.estimates e on e.id = sj.estimate_id
@@ -312,49 +366,132 @@ begin
         return;
     end if;
 
-    -- Return only metadata for client-visible media (NO private storage paths exposed)
     return query
-    select sjm.id, sjm.media_type, sjm.file_name, sjm.caption, sjm.created_at
+    select sjm.id, sjm.media_type, sjm.file_name, sjm.caption, sjm.duration_seconds, sjm.created_at
     from public.service_job_media sjm
     where sjm.service_job_id = v_job_id
       and sjm.visible_to_client = true;
 end;
 $$;
 
--- Hardening permissions: Revoke from PUBLIC, grant specifically to anon and authenticated
 revoke all on function public.get_client_job_media(text) from public;
 grant execute on function public.get_client_job_media(text) to anon, authenticated;
 
+-- 10B. Public Portfolio Media Metadata RPC (No direct table SELECT for anon)
+create or replace function public.get_public_portfolio_media()
+returns table (
+    id uuid,
+    media_type text,
+    caption text,
+    duration_seconds integer,
+    created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+    return query
+    select sjm.id, sjm.media_type, sjm.caption, sjm.duration_seconds, sjm.created_at
+    from public.service_job_media sjm
+    where sjm.visible_on_public_site = true
+      and sjm.portfolio_approved = true;
+end;
+$$;
+
+revoke all on function public.get_public_portfolio_media() from public;
+grant execute on function public.get_public_portfolio_media() to anon, authenticated;
+
 -- =============================================================================
--- SECTION 10: PRIVATE STORAGE BUCKETS & POLICIES DECLARATION (PROPOSAL ONLY)
+-- SECTION 11: IDEMPOTENT PRIVATE STORAGE BUCKETS DECLARATION
 -- =============================================================================
 
--- Buckets MUST be private: signatures, job-media, signed-documents
--- Storage policies for storage.objects:
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values
+  ('signatures', 'signatures', false, 5242880, array['image/png']), -- 5MB limit
+  ('job-media', 'job-media', false, 104857600, array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime']), -- 100MB limit
+  ('signed-documents', 'signed-documents', false, 20971520, array['application/pdf']) -- 20MB limit
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
-create policy "Org Managers Access Private Signatures"
+-- =============================================================================
+-- SECTION 12: STORAGE ACCESS POLICIES (SAFE STRING PATH COMPARISON, NO CAST)
+-- =============================================================================
+
+-- 12A. Signatures Bucket (Managers Read-Only)
+create policy "Managers read signatures bucket"
 on storage.objects for select
 using (
     bucket_id = 'signatures'
-    and (storage.foldername(name))[1]::uuid in (
-        select org_id from public.organization_users where user_id = auth.uid()
+    and exists (
+        select 1 from public.organization_users ou
+        where ou.user_id = auth.uid()
+          and ou.role in ('owner', 'admin')
+          and ou.org_id::text = (storage.foldername(name))[1]
     )
 );
 
-create policy "Org Managers Access Private Job Media"
-on storage.objects for all
-using (
-    bucket_id = 'job-media'
-    and (storage.foldername(name))[1]::uuid in (
-        select org_id from public.organization_users where user_id = auth.uid()
-    )
-);
-
-create policy "Org Managers Access Private Signed Documents"
+-- 12B. Signed Documents Bucket (Managers Read-Only)
+create policy "Managers read signed documents bucket"
 on storage.objects for select
 using (
     bucket_id = 'signed-documents'
-    and (storage.foldername(name))[1]::uuid in (
-        select org_id from public.organization_users where user_id = auth.uid()
+    and exists (
+        select 1 from public.organization_users ou
+        where ou.user_id = auth.uid()
+          and ou.role in ('owner', 'admin')
+          and ou.org_id::text = (storage.foldername(name))[1]
+    )
+);
+
+-- 12C. Job Media Bucket (Managers Select)
+create policy "Managers select job media bucket"
+on storage.objects for select
+using (
+    bucket_id = 'job-media'
+    and exists (
+        select 1 from public.organization_users ou
+        where ou.user_id = auth.uid()
+          and ou.role in ('owner', 'admin')
+          and ou.org_id::text = (storage.foldername(name))[1]
+    )
+);
+
+-- Job Media Bucket (Managers Insert)
+create policy "Managers insert job media bucket"
+on storage.objects for insert
+with check (
+    bucket_id = 'job-media'
+    and exists (
+        select 1 from public.organization_users ou
+        where ou.user_id = auth.uid()
+          and ou.role in ('owner', 'admin')
+          and ou.org_id::text = (storage.foldername(name))[1]
+    )
+);
+
+-- Job Media Bucket (Assigned Workers Select)
+create policy "Assigned workers select job media bucket"
+on storage.objects for select
+using (
+    bucket_id = 'job-media'
+    and exists (
+        select 1 from public.service_jobs sj
+        where sj.id::text = (storage.foldername(name))[3]
+          and public.is_worker_assigned_to_job(sj.id)
+    )
+);
+
+-- Job Media Bucket (Assigned Workers Insert)
+create policy "Assigned workers insert job media bucket"
+on storage.objects for insert
+with check (
+    bucket_id = 'job-media'
+    and exists (
+        select 1 from public.service_jobs sj
+        where sj.id::text = (storage.foldername(name))[3]
+          and public.is_worker_assigned_to_job(sj.id)
     )
 );
