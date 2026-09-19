@@ -22,9 +22,17 @@ const AdminLayout = () => {
   const userRole = user?.organization?.role;
 
   useEffect(() => {
-    getLeads().then(leads => {
-      setNewLeads(leads.filter(l => l.status === "New").length);
-    });
+    let mounted = true;
+    getLeads()
+      .then(leads => {
+        if (mounted) setNewLeads((leads || []).filter(l => l.status === "New").length);
+      })
+      .catch(err => {
+        console.warn("[AdminLayout] Error fetching new leads badge:", err);
+      });
+    return () => {
+      mounted = false;
+    };
   }, [location.pathname]); // Update badge when path changes
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { getCompanySettings, saveCompanySettings, CompanySettings } from "@/lib/company-settings";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -10,39 +10,45 @@ import { Label } from "@/components/ui/label";
 
 const LeadSettings = () => {
   const { t } = useLanguage();
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const currentOrganization = user?.organization;
+  const orgId = currentOrganization?.id;
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [currentMonthSpent, setCurrentMonthSpent] = useState<number>(0);
 
   useEffect(() => {
-    if (!currentOrganization?.id) return;
+    if (isUserLoading) return;
     
     let active = true;
     setIsLoading(true);
 
+    const targetOrgId = orgId || DEFAULT_ORG_ID;
+
     const loadData = async () => {
       try {
-        const data = await getCompanySettings(currentOrganization.id);
+        const data = await getCompanySettings(targetOrgId);
         if (!active) return;
         setSettings(data);
 
         // Fetch current month spent from organization_credit_ledger
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        const { data: ledgerData, error: ledgerError } = await supabase
-          .from("organization_credit_ledger")
-          .select("amount")
-          .eq("organization_id", currentOrganization.id)
-          .eq("transaction_type", "lead_debit")
-          .gte("created_at", startOfMonth);
+        let spent = 0;
+        if (supabase) {
+          const now = new Date();
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+          const { data: ledgerData, error: ledgerError } = await supabase
+            .from("organization_credit_ledger")
+            .select("amount")
+            .eq("organization_id", targetOrgId)
+            .eq("transaction_type", "lead_debit")
+            .gte("created_at", startOfMonth);
 
-        if (ledgerError) throw ledgerError;
-
-        const spent = ledgerData.reduce((acc, row) => acc + Math.abs(Number(row.amount)), 0);
-        setCurrentMonthSpent(spent);
+          if (!ledgerError && ledgerData) {
+            spent = ledgerData.reduce((acc, row) => acc + Math.abs(Number(row.amount)), 0);
+          }
+        }
+        if (active) setCurrentMonthSpent(spent);
       } catch (err) {
         console.error("Failed to load lead settings:", err);
         if (active) toast.error("Failed to load settings.");
@@ -56,7 +62,7 @@ const LeadSettings = () => {
     return () => {
       active = false;
     };
-  }, [currentOrganization?.id]);
+  }, [isUserLoading, orgId]);
 
   const handleSave = async () => {
     if (!settings || !currentOrganization?.id) return;

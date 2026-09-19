@@ -4,11 +4,11 @@ import { getServiceAreas } from "@/lib/service-areas";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2, Store, DollarSign, MapPin, AlertCircle, Clock, CheckCircle2, Settings as SettingsIcon } from "lucide-react";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { useNavigate, Link } from "react-router-dom";
 
 export default function LeadMarket() {
-    const { user } = useUser();
+    const { user, isLoading: isUserLoading } = useUser();
     const isWorker = user?.organization?.role === 'worker';
     const navigate = useNavigate();
     const [leads, setLeads] = useState<any[]>([]);
@@ -25,26 +25,37 @@ export default function LeadMarket() {
             navigate("/admin/inbox");
             return;
         }
-        if (orgId) {
-            loadMarketData();
-        }
-    }, [isWorker, navigate, orgId]);
 
-    const loadMarketData = async () => {
+        if (isUserLoading) return;
+
+        let active = true;
         setIsLoading(true);
-        if (!orgId) return;
 
-        const [availableLeads, currentBalance, areas] = await Promise.all([
-            getPublicAvailableLeads(),
-            getOrganizationBalance(),
-            getServiceAreas(orgId)
-        ]);
-        
-        setLeads(availableLeads);
-        setBalance(currentBalance);
-        setHasServiceAreas(areas && areas.length > 0);
-        setIsLoading(false);
-    };
+        const targetOrgId = orgId || DEFAULT_ORG_ID;
+
+        Promise.all([
+            getPublicAvailableLeads().catch(() => []),
+            getOrganizationBalance().catch(() => 0),
+            getServiceAreas(targetOrgId).catch(() => [])
+        ])
+        .then(([availableLeads, currentBalance, areas]) => {
+            if (!active) return;
+            setLeads(availableLeads || []);
+            setBalance(currentBalance || 0);
+            setHasServiceAreas(areas && areas.length > 0);
+        })
+        .catch(err => {
+            console.error("[LeadMarket] Error loading data:", err);
+            if (active) toast.error("Failed to load lead market data");
+        })
+        .finally(() => {
+            if (active) setIsLoading(false);
+        });
+
+        return () => {
+            active = false;
+        };
+    }, [isWorker, navigate, orgId, isUserLoading]);
 
     const handleBuyLead = async (leadId: string) => {
         setIsBuying(leadId);

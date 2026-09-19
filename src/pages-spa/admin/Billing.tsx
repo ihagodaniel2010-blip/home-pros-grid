@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
 import { getOrganizationBalance } from "@/lib/lead-market";
 import { supabase } from "@/lib/supabase";
@@ -23,7 +23,7 @@ interface LedgerItem {
 }
 
 export default function Billing() {
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const isWorker = user?.organization?.role === 'worker';
   const navigate = useNavigate();
   const currentOrganization = user?.organization;
@@ -45,27 +45,33 @@ export default function Billing() {
       return;
     }
 
-    if (!currentOrganization?.id) return;
+    if (isUserLoading) return;
 
     let active = true;
     setIsLoading(true);
 
+    const targetOrgId = currentOrganization?.id || DEFAULT_ORG_ID;
+
     const loadBillingData = async () => {
       try {
         const [companySet, currentBal] = await Promise.all([
-          getCompanySettings(currentOrganization.id),
+          getCompanySettings(targetOrgId),
           getOrganizationBalance()
         ]);
 
-        // Fetch ledger
-        const { data: ledgerData, error: ledgerErr } = await supabase
-          .from("organization_credit_ledger")
-          .select("*")
-          .eq("organization_id", currentOrganization.id)
-          .order("created_at", { ascending: false });
+        let ledgerData: any[] = [];
+        if (supabase) {
+          const { data, error: ledgerErr } = await supabase
+            .from("organization_credit_ledger")
+            .select("*")
+            .eq("organization_id", targetOrgId)
+            .order("created_at", { ascending: false });
 
-        if (ledgerErr) {
-          console.warn("Could not fetch ledger rows:", ledgerErr);
+          if (ledgerErr) {
+            console.warn("Could not fetch ledger rows:", ledgerErr);
+          } else {
+            ledgerData = data || [];
+          }
         }
 
         if (!active) return;
@@ -85,7 +91,7 @@ export default function Billing() {
     return () => {
       active = false;
     };
-  }, [currentOrganization?.id, isWorker, navigate]);
+  }, [currentOrganization?.id, isUserLoading, isWorker, navigate]);
 
   const handleAddManualCredit = async () => {
     const amountNum = Number(manualAmount);

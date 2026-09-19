@@ -32,7 +32,7 @@ const EstimateEditor = () => {
     const leadId = searchParams.get("leadId");
     const draftId = searchParams.get("draftId");
     const navigate = useNavigate();
-    const { user } = useUser();
+    const { user, isLoading: isUserLoading } = useUser();
     const userRole = user?.organization?.role;
     const { t } = useLanguage();
 
@@ -228,10 +228,9 @@ const EstimateEditor = () => {
     }, [id, leadId, draftId, t, user]);
 
     useEffect(() => {
-        if (user?.organization?.id) {
-            loadData();
-        }
-    }, [user, loadData]);
+        if (isUserLoading) return;
+        loadData();
+    }, [isUserLoading, user?.organization?.id, loadData]);
 
     const calculateTotals = (currentItems: EstimateLineItem[], taxRate: number, discount: number) => {
         const subtotal = currentItems.reduce((acc, item) => acc + (item.total_price || 0), 0);

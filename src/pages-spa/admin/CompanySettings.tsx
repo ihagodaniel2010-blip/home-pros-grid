@@ -6,13 +6,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Loader2, Save, Building2, Upload } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { getCompanySettings, saveCompanySettings, CompanySettings as CompanySettingsType } from "@/lib/company-settings";
 import { supabase } from "@/lib/supabase";
 
 const CompanySettings = () => {
     const { t } = useLanguage();
-    const { user } = useUser();
+    const { user, isLoading: isUserLoading } = useUser();
+    const orgId = user?.organization?.id;
     const [settings, setSettings] = useState<Partial<CompanySettingsType>>({
         company_name: "",
         logo_url: "",
@@ -30,26 +31,34 @@ const CompanySettings = () => {
     const [isUploading, setIsUploading] = useState(false);
 
     useEffect(() => {
-        const loadSettings = async () => {
-            if (!user?.organization?.id) return;
-            setIsLoading(true);
-            try {
-                const data = await getCompanySettings(user.organization.id);
+        if (isUserLoading) return;
+
+        let active = true;
+        setIsLoading(true);
+
+        const targetOrgId = orgId || DEFAULT_ORG_ID;
+        getCompanySettings(targetOrgId)
+            .then(data => {
+                if (!active) return;
                 if (data) {
                     setSettings({
                         ...data,
                         default_footer: data.default_footer || ""
                     });
                 }
-            } catch (error) {
+            })
+            .catch(error => {
                 console.error("Error loading settings:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+                if (active) toast.error("Failed to load company settings");
+            })
+            .finally(() => {
+                if (active) setIsLoading(false);
+            });
 
-        loadSettings();
-    }, [user?.id, user?.organization?.id]);
+        return () => {
+            active = false;
+        };
+    }, [isUserLoading, orgId]);
 
     const handleSave = async () => {
         if (!user?.organization?.id) {

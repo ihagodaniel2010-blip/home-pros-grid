@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { MapPin, Search, X, Save, Trash2, Loader2, Plus, Info, CheckCircle2, Crosshair } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { useUser } from "@/context/UserContext";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { toast } from "sonner";
 import { USLocation } from "@/lib/us-locations";
 import { searchLocations, findNearestLocation } from "@/lib/location-search";
@@ -50,7 +50,7 @@ function FitBounds({ locations }: { locations: USLocation[] }) {
 
 export default function Locations() {
   const { t } = useLanguage();
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<USLocation[]>([]);
@@ -65,31 +65,36 @@ export default function Locations() {
   const userRole = user?.organization?.role;
 
   useEffect(() => {
-    if (orgId) {
-      loadAreas();
-    }
-  }, [orgId]);
+    if (isUserLoading) return;
 
-  const loadAreas = async () => {
-    if (!orgId) return;
+    let mounted = true;
     setIsLoading(true);
-    try {
-      const areas = await getServiceAreas(orgId);
-      const mapped: USLocation[] = areas.map(a => ({
-        city: a.city || "Unknown City",
-        state: a.state || "Unknown State",
-        zip: a.zip || "",
-        latitude: a.latitude || 43.6614, // default to Portland ME if missing
-        longitude: a.longitude || -70.2553
-      }));
-      setSelectedLocations(mapped);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load service areas");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
+    const targetOrgId = orgId || DEFAULT_ORG_ID;
+    getServiceAreas(targetOrgId)
+      .then(areas => {
+        if (!mounted) return;
+        const mapped: USLocation[] = (areas || []).map(a => ({
+          city: a.city || "Unknown City",
+          state: a.state || "Unknown State",
+          zip: a.zip || "",
+          latitude: a.latitude || 43.6614,
+          longitude: a.longitude || -70.2553
+        }));
+        setSelectedLocations(mapped);
+      })
+      .catch(err => {
+        console.error("[Locations] Error loading service areas:", err);
+        if (mounted) toast.error("Failed to load service areas");
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isUserLoading, orgId]);
 
   const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;

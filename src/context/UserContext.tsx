@@ -134,13 +134,20 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (session?.user) {
-          const mappedUser = await mapSupabaseUser(session.user);
-          setUser(mappedUser);
-          localStorage.removeItem(USER_STORAGE_KEY);
-        } else {
-          setUser(null);
-          localStorage.removeItem(USER_STORAGE_KEY);
+        if (!isMounted) return;
+        try {
+          if (session?.user) {
+            const mappedUser = await mapSupabaseUser(session.user);
+            setUser(mappedUser);
+            localStorage.removeItem(USER_STORAGE_KEY);
+          } else {
+            setUser(null);
+            localStorage.removeItem(USER_STORAGE_KEY);
+          }
+        } catch (error) {
+          console.error("Auth state change error:", error);
+        } finally {
+          setIsLoading(false);
         }
       });
 
