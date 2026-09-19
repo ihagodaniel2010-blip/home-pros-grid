@@ -14,11 +14,12 @@ type DateFilter = "All" | "Today" | "7d" | "30d";
 
 const AdminInbox = () => {
   const navigate = useNavigate();
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const userRole = user?.organization?.role;
+  const orgId = user?.organization?.id;
 
   // Workers should NOT see the commercial leads inbox.
   // Their operational view is exclusively through WorkerDashboard at /admin.
@@ -29,13 +30,30 @@ const AdminInbox = () => {
   }, [userRole, navigate]);
 
   useEffect(() => {
-    if (userRole === "worker") return; // skip fetching for workers
-    setIsLoading(true);
-    getLeads().then(data => {
-      setLeads(data);
+    if (userRole === "worker") {
       setIsLoading(false);
-    });
-  }, [userRole]);
+      return;
+    }
+
+    let mounted = true;
+    setIsLoading(true);
+
+    getLeads(orgId)
+      .then(data => {
+        if (mounted) setLeads(data || []);
+      })
+      .catch(err => {
+        console.error("[Inbox] Error loading leads:", err);
+        if (mounted) toast.error(`Failed to load leads: ${err?.message || "Network error"}`);
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [userRole, orgId, isUserLoading]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");

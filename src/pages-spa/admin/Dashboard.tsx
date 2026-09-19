@@ -32,7 +32,7 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
@@ -47,15 +47,26 @@ const Dashboard = () => {
   }
 
   useEffect(() => {
-    if (user?.organization?.id) {
-      getLeads(user.organization.id).then(setLeads);
-      getEstimates().then(setEstimates);
-      getServiceJobs(user.organization.id).then(setActiveJobs);
-    } else {
-      getLeads().then(setLeads);
-      getEstimates().then(setEstimates);
-    }
-  }, [user?.id, user?.organization?.id]);
+    if (isUserLoading) return;
+    let mounted = true;
+
+    const orgId = user?.organization?.id;
+
+    Promise.all([
+      getLeads(orgId).catch(() => []),
+      getEstimates(orgId).catch(() => []),
+      getServiceJobs(orgId).catch(() => [])
+    ]).then(([l, e, j]) => {
+      if (!mounted) return;
+      setLeads(l || []);
+      setEstimates(e || []);
+      setActiveJobs(j || []);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id, user?.organization?.id, isUserLoading]);
 
   // Stable date boundaries for KPIs
   const dateBoundaries = useMemo(() => {

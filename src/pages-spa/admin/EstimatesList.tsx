@@ -10,36 +10,34 @@ import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { toast } from "sonner";
 
 const EstimatesList = () => {
-    const { user } = useUser();
+    const { user, isLoading: isUserLoading } = useUser();
     const [estimates, setEstimates] = useState<Estimate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
 
+    const orgId = user?.organization?.id;
+
     useEffect(() => {
         let mounted = true;
-        loadEstimates().finally(() => {
-            if (mounted) {
-                setIsLoading(false);
-            }
-        });
+        setIsLoading(true);
+
+        const targetOrgId = orgId || DEFAULT_ORG_ID;
+        getEstimates(targetOrgId)
+            .then(data => {
+                if (mounted) setEstimates(data || []);
+            })
+            .catch(err => {
+                console.error("[EstimatesList] Error loading estimates:", err);
+                if (mounted) toast.error(`Failed to load estimates: ${err?.message || 'Network / Database error'}`);
+            })
+            .finally(() => {
+                if (mounted) setIsLoading(false);
+            });
+
         return () => {
             mounted = false;
         };
-    }, [user?.id, user?.organization?.id]);
-
-    const loadEstimates = async () => {
-        setIsLoading(true);
-        const orgId = user?.organization?.id || DEFAULT_ORG_ID;
-        try {
-            const data = await getEstimates(orgId);
-            setEstimates(data || []);
-        } catch (err: any) {
-            console.error("Error loading estimates:", err);
-            toast.error(`Failed to load estimates: ${err?.message || 'Network / Database error'}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    }, [orgId, isUserLoading]);
 
     const filteredEstimates = estimates.filter(est =>
         est.client_name.toLowerCase().includes(searchTerm.toLowerCase())

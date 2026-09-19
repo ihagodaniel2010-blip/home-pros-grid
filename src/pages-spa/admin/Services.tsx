@@ -22,8 +22,9 @@ interface Task {
 }
 
 const AdminServices = () => {
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const currentOrganization = user?.organization;
+  const orgId = currentOrganization?.id;
   const [categories, setCategories] = useState<Category[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
@@ -33,13 +34,14 @@ const AdminServices = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    if (!currentOrganization?.id) return;
+    if (isUserLoading) return;
 
     let active = true;
     setIsLoading(true);
 
     const loadData = async () => {
       try {
+        if (!supabase) return;
         // Load categories
         const { data: cats, error: catsErr } = await supabase
           .from("service_categories")
@@ -56,14 +58,18 @@ const AdminServices = () => {
           .order("name");
         if (tsksErr) throw tsksErr;
 
-        // Load company selections
-        const { data: selections, error: selErr } = await supabase
-          .from("company_services")
-          .select("service_task_id")
-          .eq("organization_id", currentOrganization.id)
-          .eq("active", true)
-          .not("service_task_id", "is", null);
-        if (selErr) throw selErr;
+        // Load company selections if orgId exists
+        let selections: any[] = [];
+        if (orgId) {
+          const { data: sel, error: selErr } = await supabase
+            .from("company_services")
+            .select("service_task_id")
+            .eq("organization_id", orgId)
+            .eq("active", true)
+            .not("service_task_id", "is", null);
+          if (selErr) throw selErr;
+          selections = sel || [];
+        }
 
         if (!active) return;
 
@@ -88,7 +94,7 @@ const AdminServices = () => {
 
       } catch (err) {
         console.error("Failed to load services:", err);
-        if (active) toast.error("Failed to load services data.");
+        if (active) toast.error("Failed to load services.");
       } finally {
         if (active) setIsLoading(false);
       }
@@ -99,7 +105,7 @@ const AdminServices = () => {
     return () => {
       active = false;
     };
-  }, [currentOrganization?.id]);
+  }, [isUserLoading, orgId]);
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories(prev => {
