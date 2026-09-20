@@ -79,6 +79,7 @@ DROP TABLE IF EXISTS public.organization_partners RESTRICT;
 -- 6. Revert Column Additions and Foreign Key Constraints Added by 025
 ALTER TABLE public.receipts
   DROP CONSTRAINT IF EXISTS fk_receipts_partner_org,
+  DROP CONSTRAINT IF EXISTS uq_receipts_id_org,
   DROP COLUMN IF EXISTS paid_by_partner_id,
   DROP COLUMN IF EXISTS material_responsibility;
 

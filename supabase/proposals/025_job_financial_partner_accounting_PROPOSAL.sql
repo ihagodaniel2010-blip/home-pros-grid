@@ -863,7 +863,10 @@ BEGIN
     LEFT JOIN mat_receipts mr ON r.id = mr.receipt_id
    WHERE r.service_job_id = v_job_id
      AND r.organization_id = v_org_id
-     AND (r.bill_to_client = true OR r.material_responsibility = 'client');
+      AND (
+        r.material_responsibility = 'client'
+        OR (r.material_responsibility IS NULL AND r.bill_to_client = true)
+      );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
