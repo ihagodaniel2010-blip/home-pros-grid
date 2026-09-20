@@ -76,6 +76,31 @@ export const getServiceExtrasByJobId = async (jobId: string) => {
     return data as ServiceExtra[];
 };
 
+export const getServiceExtrasByJobOrEstimateId = async (jobId?: string | null, estimateId?: string | null) => {
+    if (!supabase) return [];
+
+    let query = supabase.from('service_extras').select('*');
+
+    if (jobId && estimateId) {
+        query = query.or(`service_job_id.eq.${jobId},estimate_id.eq.${estimateId}`);
+    } else if (jobId) {
+        query = query.eq('service_job_id', jobId);
+    } else if (estimateId) {
+        query = query.eq('estimate_id', estimateId);
+    } else {
+        return [];
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error getting service extras:", error);
+        return [];
+    }
+
+    return data as ServiceExtra[];
+};
+
 export const respondPublicServiceExtra = async (token: string, status: 'approved' | 'rejected') => {
     if (!supabase) return false;
 

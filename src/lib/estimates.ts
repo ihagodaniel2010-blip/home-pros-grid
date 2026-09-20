@@ -302,42 +302,73 @@ export const createPayment = async (payment: EstimatePayment): Promise<EstimateP
 };
 
 export const getEstimateByToken = async (token: string): Promise<Estimate | null> => {
-    if (!supabase) return null;
+    if (!supabase || !token) return null;
 
-    // Call public RPC for estimate header
-    const { data: estimate, error: estimateError } = await supabase
-        .rpc('get_public_estimate', { p_token: token });
-
-    if (estimateError || !estimate) {
-        console.error('Error fetching public estimate:', estimateError);
-        return null;
-    }
-
-    // Call public RPC for estimate items
-    const { data: items, error: itemsError } = await supabase
-        .rpc('get_public_estimate_items', { p_token: token });
-
-    if (itemsError) {
-        console.error('Error fetching public estimate items:', itemsError);
-    }
-
-    // Call public RPC for estimate files
-    let files: any[] = [];
+    // Tier 1: Try public RPC for estimate header
     try {
-        const { data: filesData, error: filesError } = await supabase
-            .rpc('get_public_estimate_files', { p_token: token });
-        if (!filesError && filesData) {
-            files = filesData;
+        const { data: estimate, error: estimateError } = await supabase
+            .rpc('get_public_estimate', { p_token: token });
+
+        if (!estimateError && estimate) {
+            const { data: items } = await supabase
+                .rpc('get_public_estimate_items', { p_token: token });
+            let files: any[] = [];
+            try {
+                const { data: filesData } = await supabase
+                    .rpc('get_public_estimate_files', { p_token: token });
+                if (filesData) files = filesData;
+            } catch (e) {}
+
+            return {
+                ...estimate,
+                items: items || [],
+                files
+            } as Estimate;
         }
-    } catch (e) {
-        console.warn('get_public_estimate_files RPC may not exist:', e);
+    } catch (rpcErr) {
+        console.warn('RPC get_public_estimate failed, trying direct select:', rpcErr);
     }
 
-    return {
-        ...estimate,
-        items: items || [],
-        files
-    } as Estimate;
+    // Tier 2: Direct SELECT by public_token OR id
+    try {
+        const { data: directEst, error: directErr } = await supabase
+            .from('estimates')
+            .select('*')
+            .or(`public_token.eq.${token},id.eq.${token}`)
+            .maybeSingle();
+
+        if (!directErr && directEst) {
+            const { data: items } = await supabase
+                .from('estimate_items')
+                .select('*')
+                .eq('estimate_id', directEst.id);
+
+            return {
+                ...directEst,
+                items: items || [],
+                files: []
+            } as Estimate;
+        }
+    } catch (selectErr) {
+        console.warn('Direct select estimate error:', selectErr);
+    }
+
+    // Tier 3: Fallback check if token is a service_job_id
+    try {
+        const { data: jobRecord } = await supabase
+            .from('service_jobs')
+            .select('estimate_id')
+            .eq('id', token)
+            .maybeSingle();
+
+        if (jobRecord?.estimate_id) {
+            return getEstimateByToken(jobRecord.estimate_id);
+        }
+    } catch (jobErr) {
+        console.warn('Job lookup for token failed:', jobErr);
+    }
+
+    return null;
 };
 
 export const approveEstimate = async (id: string, token?: string): Promise<boolean> => {

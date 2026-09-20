@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Estimate } from "@/lib/estimates";
 import { getServiceJobByEstimateId } from "@/lib/service-jobs";
-import { getServiceExtrasByJobId, respondPublicServiceExtra, ServiceExtra } from "@/lib/service-extras";
+import { getServiceExtrasByJobId, getServiceExtrasByJobOrEstimateId, respondPublicServiceExtra, ServiceExtra } from "@/lib/service-extras";
 import { getExpenses, Expense } from "@/lib/expenses";
 import { getJobMediaRecords, ServiceJobMediaRecord } from "@/lib/job-media";
 import { supabase } from "@/lib/supabase";
@@ -58,16 +58,20 @@ const PublicView = () => {
             // Fetch linked Job Workspace Extras, Client Materials, and Photos
             try {
                 const job = await getServiceJobByEstimateId(data.id);
-                if (job) {
-                    const [extrasList, allExpenses, mediaList] = await Promise.all([
-                        getServiceExtrasByJobId(job.id).catch(() => []),
-                        getExpenses(data.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd").catch(() => []),
-                        getJobMediaRecords(job.id).catch(() => [])
-                    ]);
-                    setExtras(extrasList || []);
-                    setClientMaterials((allExpenses || []).filter(e => (e.service_job_id === job.id || e.estimate_id === data.id) && e.bill_to_client));
-                    setClientMedia((mediaList || []).filter(m => m.visible_to_client));
-                }
+                const orgId = data.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+
+                const [extrasList, allExpenses, mediaList] = await Promise.all([
+                    getServiceExtrasByJobOrEstimateId(job?.id, data.id).catch(() => []),
+                    getExpenses(orgId).catch(() => []),
+                    job ? getJobMediaRecords(job.id).catch(() => []) : Promise.resolve([])
+                ]);
+
+                setExtras(extrasList || []);
+                setClientMaterials((allExpenses || []).filter(e => 
+                    ((job && e.service_job_id === job.id) || e.estimate_id === data.id) && 
+                    (e.material_responsibility === 'client' || (e.material_responsibility === null && e.bill_to_client))
+                ));
+                setClientMedia((mediaList || []).filter(m => m.visible_to_client));
             } catch (err) {
                 console.warn("Could not load linked job details in Client Portal:", err);
             }

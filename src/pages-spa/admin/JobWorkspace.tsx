@@ -680,10 +680,21 @@ export default function JobWorkspace() {
                     <span className="text-gray-500">Approved Extras ({extras.filter(e => e.status === 'approved').length}):</span>
                     <span className="font-bold text-purple-600">+${financialSummary.approvedExtras.toLocaleString()}</span>
                   </div>
+                  {extras.filter(e => e.status === 'pending').length > 0 && (
+                    <div className="flex justify-between items-center text-amber-800 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200/80 text-[11px] font-semibold">
+                      <span>Pending Extras ({extras.filter(e => e.status === 'pending').length}):</span>
+                      <span className="font-bold text-amber-900">+${extras.filter(e => e.status === 'pending').reduce((s, x) => s + (x.amount || 0), 0).toLocaleString()} (Awaiting Approval)</span>
+                    </div>
+                  )}
                   <div className="flex justify-between pt-2 border-t border-gray-100 font-bold">
                     <span className="text-gray-900">Current Total:</span>
                     <span className="text-blue-600">${financialSummary.currentContractValue.toLocaleString()}</span>
                   </div>
+                  {extras.filter(e => e.status === 'pending').length > 0 && (
+                    <p className="text-[10px] text-amber-700/80 italic -mt-1">
+                      * Current Total reflects Original + Approved Extras. Pending extras enter contract upon client signature.
+                    </p>
+                  )}
                   <div className="flex justify-between text-emerald-700 font-bold">
                     <span>Paid to Date:</span>
                     <span>${financialSummary.amountPaid.toLocaleString()}</span>
