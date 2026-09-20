@@ -40,10 +40,14 @@ const JobProjectPhotos: React.FC<JobProjectPhotosProps> = ({ jobId }) => {
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (selectedFileUrl && selectedFileUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(selectedFileUrl);
+            }
             const url = URL.createObjectURL(file);
             setSelectedFileUrl(url);
         }
     };
+
 
     const handleAddPhoto = async () => {
         if (!selectedFileUrl) return;

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 
 type Language = "en" | "pt" | "es" | "zh" | "fr" | "ht" | "vi" | "ar" | "ru" | "hi" | "it";
 
@@ -786,7 +786,9 @@ const supportedLanguages: Language[] = ["en", "pt", "es", "zh", "fr", "ht", "vi"
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [language, setLanguageState] = useState<Language>("en");
-    const direction = language === "ar" ? "rtl" : "ltr";
+    const direction: "ltr" | "rtl" = language === "ar" ? "rtl" : "ltr";
+
+
 
     useEffect(() => {
         document.documentElement.dir = direction;
@@ -802,22 +804,30 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     }, []);
 
-    const setLanguage = (lang: Language) => {
+    const setLanguage = useCallback((lang: Language) => {
         setLanguageState(lang);
         localStorage.setItem("preferred_language", lang);
-    };
+    }, []);
 
-    const t = (key: string) => {
+    const t = useCallback((key: string) => {
         if (!translations[language]) return translations["en"][key] || key;
         return translations[language][key] || translations["en"][key] || key;
-    };
+    }, [language]);
+
+    const value = useMemo(() => ({
+        language,
+        direction,
+        setLanguage,
+        t
+    }), [language, direction, setLanguage, t]);
 
     return (
-        <LanguageContext.Provider value={{ language, direction, setLanguage, t }}>
+        <LanguageContext.Provider value={value}>
             {children}
         </LanguageContext.Provider>
     );
 };
+
 
 export const useLanguage = () => {
     const context = useContext(LanguageContext);

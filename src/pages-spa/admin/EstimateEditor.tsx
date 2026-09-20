@@ -205,8 +205,9 @@ const EstimateEditor = () => {
             }
 
             // Load company settings
-            if (user?.organization?.id) {
-                const settings = await getCompanySettings(user.organization.id);
+            const targetOrgId = user?.organization?.id;
+            if (targetOrgId) {
+                const settings = await getCompanySettings(targetOrgId);
                 setCompanySettings(settings);
                 if (settings && !id) {
                     setFormData(prev => ({
@@ -225,12 +226,13 @@ const EstimateEditor = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [id, leadId, draftId, t, user]);
+    }, [id, leadId, draftId, t, user?.organization?.id, user?.id]);
 
     useEffect(() => {
         if (isUserLoading) return;
         loadData();
     }, [isUserLoading, user?.organization?.id, loadData]);
+
 
     const calculateTotals = (currentItems: EstimateLineItem[], taxRate: number, discount: number) => {
         const subtotal = currentItems.reduce((acc, item) => acc + (item.total_price || 0), 0);

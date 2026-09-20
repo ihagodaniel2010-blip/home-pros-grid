@@ -35,11 +35,14 @@ const AdminLayout = () => {
     };
   }, [location.pathname]); // Update badge when path changes
 
+  const orgId = user?.organization?.id;
+
   useEffect(() => {
-    if (isAuthed && user?.organization?.id) {
-      loadNotifications(user.organization.id);
+    if (isAuthed && orgId) {
+      loadNotifications(orgId);
     }
-  }, [isAuthed, user, loadNotifications]);
+  }, [isAuthed, orgId]);
+
 
   // Operations Nav Items
   const operationsNavItems = useMemo(

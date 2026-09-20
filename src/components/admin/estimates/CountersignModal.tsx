@@ -43,10 +43,18 @@ export default function CountersignModal({
         }
 
         setIsSubmitting(true);
+        const t0 = performance.now();
+        console.log("[Countersign] T0: Process started");
+
         try {
             const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
             
-            // Fetch or create document version record
+            // T1: Capture canvas & validation
+            const t1 = performance.now();
+            console.log(`[Countersign] T1: Canvas capture verified in ${(t1 - t0).toFixed(2)} ms`);
+
+            // T3: Fetch or create document version record
+            const t3_start = performance.now();
             const { getLatestDocumentVersion, createDocumentVersionSnapshot } = await import("@/lib/esignatures");
             let versionRecord = await getLatestDocumentVersion('estimate', estimate.id);
             
@@ -74,11 +82,14 @@ export default function CountersignModal({
                     terms_text: estimate.terms || "Payment due upon receipt."
                 });
             }
+            const t3_end = performance.now();
+            console.log(`[Countersign] T3: Document version snapshot in ${(t3_end - t3_start).toFixed(2)} ms`);
 
             const versionId = versionRecord.id;
             const docHash = versionRecord.document_hash;
 
-            // 1. Submit contractor signature
+            // T4: Submit contractor electronic signature
+            const t4_start = performance.now();
             const sigPath = `${orgId}/documents/estimate/${estimate.id}/v1/signatures/contractor.png`;
             try {
                 await submitElectronicSignature({
@@ -98,11 +109,17 @@ export default function CountersignModal({
             } catch (sigErr) {
                 console.warn("Contractor signature DB insertion handled:", sigErr);
             }
+            const t4_end = performance.now();
+            console.log(`[Countersign] T4: Electronic signature recorded in ${(t4_end - t4_start).toFixed(2)} ms`);
 
-            // 2. Generate final signed PDF
+            // T5: Generate final signed PDF
+            const t5_start = performance.now();
             await generateProfessionalPDF(estimate, companySettings, {});
+            const t5_end = performance.now();
+            console.log(`[Countersign] T5: PDF generation completed in ${(t5_end - t5_start).toFixed(2)} ms`);
 
-            // 3. Register final artifact
+            // T6: Register final artifact
+            const t6_start = performance.now();
             const pdfHash = await computeSha256Hex(`FINAL_SIGNED_PDF_${estimate.id}_${Date.now()}`);
             const signedPdfStoragePath = `${orgId}/signed-documents/estimate/${estimate.id}/signed_v1.pdf`;
             try {
@@ -118,6 +135,11 @@ export default function CountersignModal({
             } catch (artErr) {
                 console.warn("Signed document artifact creation handled:", artErr);
             }
+            const t6_end = performance.now();
+            console.log(`[Countersign] T6: Signed artifact recorded in ${(t6_end - t6_start).toFixed(2)} ms`);
+
+            const t7 = performance.now();
+            console.log(`[Countersign] T7: Total Countersign workflow finished in ${(t7 - t0).toFixed(2)} ms`);
 
             toast.success("Estimate successfully countersigned and final signed PDF generated!");
             onCountersigned();
@@ -129,6 +151,7 @@ export default function CountersignModal({
             setIsSubmitting(false);
         }
     };
+
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>

@@ -1,5 +1,5 @@
-import React, { useRef, useState, useEffect } from "react";
-import { Eraser, RotateCcw, Check, ShieldCheck, PenTool } from "lucide-react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
+import { Eraser, RotateCcw, ShieldCheck, PenTool } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SignaturePadProps {
@@ -9,9 +9,10 @@ interface SignaturePadProps {
 
 const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange, readOnly = false }) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [isDrawing, setIsDrawing] = useState(false);
+    const isDrawingRef = useRef(false);
+    const historyRef = useRef<ImageData[]>([]);
     const [isEmpty, setIsEmpty] = useState(true);
-    const [history, setHistory] = useState<ImageData[]>([]);
+    const [historyCount, setHistoryCount] = useState(0);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -31,12 +32,13 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange, readOnly
 
         // Save initial state
         const initialData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        setHistory([initialData]);
+        historyRef.current = [initialData];
+        setHistoryCount(1);
     }, []);
 
     const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
         if (readOnly) return;
-        setIsDrawing(true);
+        isDrawingRef.current = true;
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
@@ -51,7 +53,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange, readOnly
     };
 
     const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-        if (!isDrawing || readOnly) return;
+        if (!isDrawingRef.current || readOnly) return;
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
@@ -63,27 +65,32 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange, readOnly
 
         ctx.lineTo(clientX - rect.left, clientY - rect.top);
         ctx.stroke();
-        setIsEmpty(false);
+
+        setIsEmpty(prev => {
+            if (prev) return false;
+            return prev;
+        });
     };
 
     const stopDrawing = () => {
-        if (!isDrawing) return;
-        setIsDrawing(false);
+        if (!isDrawingRef.current) return;
+        isDrawingRef.current = false;
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        // Save state to history for Undo
+        // Save state to history ref for Undo without causing React state bloat
         const currentData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        setHistory(prev => [...prev, currentData]);
+        historyRef.current.push(currentData);
+        setHistoryCount(historyRef.current.length);
 
-        if (onSignatureChange && !isEmpty) {
+        if (onSignatureChange) {
             onSignatureChange(canvas.toDataURL("image/png"));
         }
     };
 
-    const handleClear = () => {
+    const handleClear = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
@@ -91,13 +98,14 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange, readOnly
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const resetData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        setHistory([resetData]);
+        historyRef.current = [resetData];
+        setHistoryCount(1);
         setIsEmpty(true);
         if (onSignatureChange) onSignatureChange(null);
-    };
+    }, [onSignatureChange]);
 
-    const handleUndo = () => {
-        if (history.length <= 1) {
+    const handleUndo = useCallback(() => {
+        if (historyRef.current.length <= 1) {
             handleClear();
             return;
         }
@@ -106,16 +114,18 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange, readOnly
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        const newHistory = history.slice(0, history.length - 1);
-        const previousData = newHistory[newHistory.length - 1];
+        historyRef.current.pop();
+        const previousData = historyRef.current[historyRef.current.length - 1];
         ctx.putImageData(previousData, 0, 0);
-        setHistory(newHistory);
+        setHistoryCount(historyRef.current.length);
 
-        if (newHistory.length === 1) setIsEmpty(true);
+        const hasDrawing = historyRef.current.length > 1;
+        if (!hasDrawing) setIsEmpty(true);
+
         if (onSignatureChange) {
-            onSignatureChange(newHistory.length > 1 ? canvas.toDataURL("image/png") : null);
+            onSignatureChange(hasDrawing ? canvas.toDataURL("image/png") : null);
         }
-    };
+    }, [handleClear, onSignatureChange]);
 
     return (
         <div className="space-y-3">
@@ -131,7 +141,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange, readOnly
                             variant="ghost"
                             size="sm"
                             onClick={handleUndo}
-                            disabled={history.length <= 1}
+                            disabled={historyCount <= 1}
                             className="h-7 text-xs px-2 text-gray-600 hover:text-gray-900"
                         >
                             <RotateCcw className="h-3 w-3 mr-1" /> Undo
@@ -185,3 +195,4 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange, readOnly
 };
 
 export default SignaturePad;
+
