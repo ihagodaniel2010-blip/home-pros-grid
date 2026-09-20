@@ -124,12 +124,8 @@ export const respondPublicServiceExtra = async (token: string, status: 'approved
 export const getPublicServiceExtra = async (token: string) => {
     if (!supabase || !token) return null;
 
-    // Strict Security Rule: Reject direct UUIDs or Lead IDs passed as public tokens
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
-    const isLeadId = token.startsWith('lead_');
-
-    if (isUuid || isLeadId) {
-        console.warn(`[SECURITY REJECT] Direct ID access attempted on public extra route: ${token}`);
+    if (token.startsWith('lead_')) {
+        console.warn(`[SECURITY REJECT] Direct Lead ID access attempted on public extra route: ${token}`);
         return null;
     }
 
@@ -143,17 +139,17 @@ export const getPublicServiceExtra = async (token: string) => {
         console.warn("RPC get_public_service_extra failed, falling back:", rpcErr);
     }
 
-    // 2. Direct query on service_extras table strictly by public_token
+    // 2. Direct query on service_extras table by public_token or id
     try {
         const { data: directExtra } = await supabase
             .from('service_extras')
             .select('*')
-            .eq('public_token', token)
+            .or(`public_token.eq.${token},id.eq.${token}`)
             .maybeSingle();
 
         if (directExtra) return directExtra;
     } catch (directErr) {
-        console.warn("Direct query service_extras by public_token failed:", directErr);
+        console.warn("Direct query service_extras by public_token/id failed:", directErr);
     }
 
     return null;
