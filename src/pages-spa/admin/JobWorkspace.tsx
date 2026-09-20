@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { supabase } from "@/lib/supabase";
 import { getEstimateById, Estimate } from "@/lib/estimates";
-import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra } from "@/lib/service-extras";
+import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra, extractMediaFromText } from "@/lib/service-extras";
 import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, deleteJobMediaRecord, resolveSignedMediaUrl, uploadExtraMediaRecord, ServiceJobMediaRecord } from "@/lib/job-media";
 import { getExpenses, createExpense, Expense, updateExpense } from "@/lib/expenses";
 import { getClientPayments, createClientPayment, ClientPayment } from "@/lib/client-payments";
@@ -1325,15 +1325,28 @@ export default function JobWorkspace() {
                 <p className="text-xs text-gray-400 italic">No Change Orders added for this job.</p>
               ) : (
                 <div className="grid gap-4">
-                  {extras.map(extra => (
-                    <div key={extra.id} className="p-5 bg-gray-50/80 rounded-2xl border border-gray-200 space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-bold text-sm text-gray-900">{extra.description}</p>
-                          {extra.reason && <p className="text-xs text-gray-500 mt-0.5">Reason: {extra.reason}</p>}
+                  {extras.map(extra => {
+                    const { cleanText: cleanReasonText, mediaUrls: extraPhotos } = extractMediaFromText(extra.reason);
+                    const { cleanText: cleanDescText } = extractMediaFromText(extra.description);
+                    return (
+                      <div key={extra.id} className="p-5 bg-gray-50/80 rounded-2xl border border-gray-200 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold text-sm text-gray-900">{cleanDescText}</p>
+                            {cleanReasonText && <p className="text-xs text-gray-500 mt-0.5">Reason: {cleanReasonText}</p>}
+                          </div>
+                          <span className="font-bold text-base text-purple-700">+${extra.amount.toLocaleString()}</span>
                         </div>
-                        <span className="font-bold text-base text-purple-700">+${extra.amount.toLocaleString()}</span>
-                      </div>
+
+                        {extraPhotos.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                            {extraPhotos.map((url, idx) => (
+                              <div key={idx} className="relative aspect-square w-16 rounded-lg overflow-hidden border border-gray-200 cursor-pointer" onClick={() => setSelectedMediaUrl(url)}>
+                                <img src={url} alt="Extra photo attachment" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200 text-xs">
                         <div className="flex items-center gap-3">
@@ -1355,7 +1368,8 @@ export default function JobWorkspace() {
                         )}
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
                 </div>
               )}
             </div>

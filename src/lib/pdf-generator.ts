@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Estimate } from './estimates';
 import { CompanySettings } from './company-settings';
-import { ServiceExtra } from './service-extras';
+import { ServiceExtra, extractMediaFromText } from './service-extras';
 
 export const generateProfessionalPDF = async (
     estimate: Estimate,
@@ -57,10 +57,10 @@ export const generateProfessionalPDF = async (
     doc.setTextColor(100);
     const companyInfo = [
         company?.address || "Fairfield County, CT",
-        company?.phone ? `Phone: ${company.phone}` : "Phone: (203) 555-0199",
-        company?.email ? `Email: ${company.email}` : "Email: info@h-a-construction.com",
-        company?.license_number ? `License: ${company.license_number}` : "CT HIC License # Registered"
-    ].filter(Boolean);
+        company?.phone ? `Phone: ${company.phone}` : null,
+        company?.email ? `Email: ${company.email}` : null,
+        company?.license_number ? `License: ${company.license_number}` : null
+    ].filter((line): line is string => Boolean(line));
 
     companyInfo.forEach((line, i) => {
         doc.text(line, pageWidth - 20, 32 + (i * 4.5), { align: "right" });
@@ -246,7 +246,9 @@ export const generateProfessionalPDF = async (
     doc.setFontSize(7.5);
     doc.setTextColor(80);
     doc.text("Authorized Representative Line: ____________________", rightColX, sigY + 25);
-    doc.text(`License #: ${company?.license_number || "HIC Registered"}`, rightColX, sigY + 32);
+    if (company?.license_number) {
+        doc.text(`License #: ${company.license_number}`, rightColX, sigY + 32);
+    }
     doc.text(`Date: ${new Date().toLocaleDateString()}`, rightColX, sigY + 38);
 
     // Footer
@@ -319,10 +321,10 @@ export const generateChangeOrderPDF = async (
     doc.setTextColor(100);
     const companyInfo = [
         company?.address || "Fairfield County, CT",
-        company?.phone ? `Phone: ${company.phone}` : "Phone: (203) 555-0199",
-        company?.email ? `Email: ${company.email}` : "Email: info@h-a-construction.com",
-        company?.license_number ? `License: ${company.license_number}` : "CT HIC License # Registered"
-    ].filter(Boolean);
+        company?.phone ? `Phone: ${company.phone}` : null,
+        company?.email ? `Email: ${company.email}` : null,
+        company?.license_number ? `License: ${company.license_number}` : null
+    ].filter((line): line is string => Boolean(line));
 
     companyInfo.forEach((line, i) => {
         doc.text(line, pageWidth - 20, 32 + (i * 4.5), { align: "right" });
@@ -367,11 +369,16 @@ export const generateChangeOrderPDF = async (
     doc.text(extra.created_at ? new Date(extra.created_at).toLocaleDateString() : new Date().toLocaleDateString(), pageWidth - 20, 82, { align: "right" });
     doc.text(extra.status.toUpperCase(), pageWidth - 20, 87, { align: "right" });
 
-    // 3. Scope of Work Table
+    // 3. Scope of Work Table (CLEAN TEXT ONLY - NO BASE64 OR [media:...] TAGS)
+    const { cleanText: cleanDesc, mediaUrls: descMedia } = extractMediaFromText(extra.description);
+    const { cleanText: cleanReason, mediaUrls: reasonMedia } = extractMediaFromText(extra.reason);
+    const photoUrls = Array.from(new Set([...descMedia, ...reasonMedia]));
+
+    const fullCleanText = `${cleanDesc}${cleanReason ? `\nReason: ${cleanReason}` : ''}`;
     const tableHeaders = [["Item", "Description / Reason", "Schedule Impact", "Amount"]];
     const tableData = [[
         1,
-        `${extra.description}${extra.reason ? `\nReason: ${extra.reason}` : ''}`,
+        fullCleanText,
         extra.schedule_impact || "None",
         `+$${extra.amount.toFixed(2)}`
     ]];
@@ -475,8 +482,66 @@ export const generateChangeOrderPDF = async (
     doc.setFontSize(7.5);
     doc.setTextColor(80);
     doc.text("Authorized Representative Signoff", rightX, sigY + 25);
-    doc.text(`License #: ${company?.license_number || "HIC Registered"}`, rightX, sigY + 32);
+    if (company?.license_number) {
+        doc.text(`License #: ${company.license_number}`, rightX, sigY + 32);
+    }
     doc.text(`Date: ${new Date().toLocaleDateString()}`, rightX, sigY + 38);
+
+    // 6. Visual Photo Attachments Section (Rendered separately as images, never text)
+    if (photoUrls.length > 0) {
+        let photoY = sigY + 55;
+        if (photoY + 45 > 280) {
+            doc.addPage();
+            photoY = 20;
+        }
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(11, 42, 74);
+        doc.text(`ATTACHED EVIDENCE & PHOTOS (${photoUrls.length})`, 20, photoY);
+        doc.setDrawColor(200);
+        doc.line(20, photoY + 2, pageWidth - 20, photoY + 2);
+
+        photoY += 8;
+        let posX = 20;
+        const boxWidth = 35;
+        const boxHeight = 35;
+
+        for (let i = 0; i < photoUrls.length; i++) {
+            const pUrl = photoUrls[i];
+            if (posX + boxWidth > pageWidth - 20) {
+                posX = 20;
+                photoY += boxHeight + 8;
+                if (photoY + boxHeight > 270) {
+                    doc.addPage();
+                    photoY = 20;
+                }
+            }
+
+            if (pUrl.startsWith('data:image') || pUrl.startsWith('http://') || pUrl.startsWith('https://')) {
+                try {
+                    const format = pUrl.includes('image/png') ? 'PNG' : 'JPEG';
+                    doc.addImage(pUrl, format, posX, photoY, boxWidth, boxHeight);
+                    doc.setDrawColor(220);
+                    doc.rect(posX, photoY, boxWidth, boxHeight, "S");
+                } catch (imgErr) {
+                    doc.setFontSize(7);
+                    doc.setFont("helvetica", "italic");
+                    doc.text(`[Attached Photo ${i + 1}]`, posX, photoY + 15);
+                }
+            } else if (pUrl.includes('.mp4') || pUrl.includes('.mov')) {
+                doc.setFontSize(7);
+                doc.setFont("helvetica", "bold");
+                doc.text(`[Video Attachment ${i + 1}]`, posX, photoY + 15);
+            } else {
+                doc.setFontSize(7);
+                doc.setFont("helvetica", "italic");
+                doc.text(`[Attachment ${i + 1}]`, posX, photoY + 15);
+            }
+
+            posX += boxWidth + 8;
+        }
+    }
 
     doc.setFontSize(8);
     doc.setTextColor(150);

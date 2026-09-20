@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Estimate } from "@/lib/estimates";
 import { getServiceJobByEstimateId } from "@/lib/service-jobs";
-import { getServiceExtrasByJobId, getServiceExtrasByJobOrEstimateId, respondPublicServiceExtra, ServiceExtra } from "@/lib/service-extras";
+import { getServiceExtrasByJobId, getServiceExtrasByJobOrEstimateId, respondPublicServiceExtra, ServiceExtra, cleanReasonForDisplay } from "@/lib/service-extras";
 import { getExpenses, Expense } from "@/lib/expenses";
 import { getJobMediaRecords, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
 import { supabase } from "@/lib/supabase";
@@ -880,8 +880,10 @@ const PublicView = () => {
 
                         {/* Scope & Financial summary */}
                         <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-3">
-                            <h4 className="font-bold text-purple-950 text-base">{extraToApprove.description}</h4>
-                            {extraToApprove.reason && <p className="text-xs text-purple-800">Reason: {extraToApprove.reason}</p>}
+                            <h4 className="font-bold text-purple-950 text-base">{cleanReasonForDisplay(extraToApprove.description)}</h4>
+                            {extraToApprove.reason && cleanReasonForDisplay(extraToApprove.reason) && (
+                                <p className="text-xs text-purple-800">Reason: {cleanReasonForDisplay(extraToApprove.reason)}</p>
+                            )}
                             {extraToApprove.schedule_impact && <p className="text-xs text-purple-700 font-medium">Schedule Impact: {extraToApprove.schedule_impact}</p>}
                             
                             <div className="grid grid-cols-3 gap-2 pt-3 border-t border-purple-200 text-center text-xs">
