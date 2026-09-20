@@ -52,8 +52,8 @@ export default function ProjectsList() {
           getEstimates(orgId).catch(() => []),
           getClientPayments(orgId).catch(() => []),
           getExpenses(orgId).catch(() => []),
-          supabase ? supabase.from('service_extras').select('*').eq('organization_id', orgId).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
-          supabase ? supabase.from('leads').select('*').eq('organization_id', orgId).catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
+          supabase ? Promise.resolve(supabase.from('service_extras').select('*').eq('organization_id', orgId)).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+          supabase ? Promise.resolve(supabase.from('leads').select('*').eq('organization_id', orgId)).catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
         ]);
 
         if (!mounted) return;
@@ -62,7 +62,7 @@ export default function ProjectsList() {
         (estimatesData || []).forEach(e => { estMap[e.id] = e; });
 
         const leadMap: Record<string, any> = {};
-        ((allExtrasData as any)?.data || (allLeadsData as any)?.data || []).forEach((l: any) => { if (l?.id) leadMap[l.id] = l; });
+        (((allLeadsData as any)?.data) || []).forEach((l: any) => { if (l?.id) leadMap[l.id] = l; });
 
         const extrasByJob: Record<string, any[]> = {};
         (((allExtrasData as any)?.data) || []).forEach((ex: any) => {
