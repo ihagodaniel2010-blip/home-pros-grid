@@ -30,6 +30,9 @@ export const createServiceExtra = async (extraData: {
 
     const previousPrice = extraData.previous_contract_price ?? 0;
     const revisedPrice = previousPrice + extraData.amount;
+    const generatedToken = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+        ? crypto.randomUUID().replace(/-/g, '')
+        : `extra_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     const payload: Record<string, any> = {
         organization_id: extraData.organization_id,
@@ -39,6 +42,7 @@ export const createServiceExtra = async (extraData: {
         previous_contract_price: extraData.previous_contract_price ?? null,
         revised_contract_price: revisedPrice,
         schedule_impact: extraData.schedule_impact ?? null,
+        public_token: generatedToken,
         status: 'pending'
     };
 

@@ -139,6 +139,7 @@ export async function getPublicPortfolioMedia() {
 
 /**
  * Generates a short-lived signed URL (default 15 minutes) for a private storage asset.
+ * Tries 'images' bucket first, then 'documents' bucket as fallback.
  */
 export async function createTemporarySignedUrl(bucket: string, storagePath: string, expiresInSeconds: number = 900): Promise<string | null> {
     const { data, error } = await supabase
@@ -147,11 +148,45 @@ export async function createTemporarySignedUrl(bucket: string, storagePath: stri
         .createSignedUrl(storagePath, expiresInSeconds);
 
     if (error) {
-        console.error("Error generating signed URL for storage path:", storagePath, error);
+        console.warn("Error generating signed URL for storage path:", storagePath, "in bucket:", bucket, error.message);
         return null;
     }
 
     return data?.signedUrl || null;
+}
+
+/**
+ * Resolves a signed or public URL for any media storage path cleanly.
+ */
+export async function resolveSignedMediaUrl(storagePath: string): Promise<string | null> {
+    if (!storagePath) return null;
+    if (storagePath.startsWith('http://') || storagePath.startsWith('https://') || storagePath.startsWith('data:')) {
+        return storagePath;
+    }
+
+    // Clean relative path if bucket prefix was included
+    let cleanPath = storagePath;
+    let targetBucket = 'images';
+    if (storagePath.startsWith('documents/')) {
+        cleanPath = storagePath.replace('documents/', '');
+        targetBucket = 'documents';
+    } else if (storagePath.startsWith('images/')) {
+        cleanPath = storagePath.replace('images/', '');
+        targetBucket = 'images';
+    }
+
+    let signedUrl = await createTemporarySignedUrl(targetBucket, cleanPath, 3600);
+    if (!signedUrl && targetBucket === 'images') {
+        // Fallback to documents bucket
+        signedUrl = await createTemporarySignedUrl('documents', cleanPath, 3600);
+    }
+    if (!signedUrl) {
+        // Try public URL as last resort
+        const { data } = supabase.storage.from(targetBucket).getPublicUrl(cleanPath);
+        if (data?.publicUrl) signedUrl = data.publicUrl;
+    }
+
+    return signedUrl;
 }
 
 /**
@@ -170,6 +205,21 @@ export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJ
     }
 
     return (data || []) as ServiceJobMediaRecord[];
+}
+
+/**
+ * Deletes a job media record from the database.
+ */
+export async function deleteJobMediaRecord(mediaId: string): Promise<void> {
+    const { error } = await supabase
+        .from('service_job_media')
+        .delete()
+        .eq('id', mediaId);
+
+    if (error) {
+        console.error("Error deleting job media record:", error);
+        throw error;
+    }
 }
 
 /**
@@ -201,3 +251,60 @@ export async function updateJobMediaVisibility(
         throw error;
     }
 }
+
+/**
+ * Uploads a service extra photo or video media record.
+ */
+export async function uploadExtraMediaRecord(params: {
+    organization_id: string;
+    service_extra_id: string;
+    media_type: MediaType;
+    storage_path: string;
+    file_name: string;
+    mime_type: string;
+    file_size_bytes: number;
+    caption?: string;
+}): Promise<ServiceExtraMediaRecord> {
+    const payload = {
+        organization_id: params.organization_id,
+        service_extra_id: params.service_extra_id,
+        media_type: params.media_type,
+        storage_path: params.storage_path,
+        file_name: params.file_name,
+        mime_type: params.mime_type,
+        file_size_bytes: params.file_size_bytes,
+        caption: params.caption || null
+    };
+
+    const { data, error } = await supabase
+        .from('service_extra_media')
+        .insert(payload)
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error inserting service extra media record:", error);
+        throw error;
+    }
+
+    return data as ServiceExtraMediaRecord;
+}
+
+/**
+ * Fetches all media records for a specific service extra.
+ */
+export async function getExtraMediaRecords(serviceExtraId: string): Promise<ServiceExtraMediaRecord[]> {
+    const { data, error } = await supabase
+        .from('service_extra_media')
+        .select('*')
+        .eq('service_extra_id', serviceExtraId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching extra media records:", error);
+        return [];
+    }
+
+    return (data || []) as ServiceExtraMediaRecord[];
+}
+
