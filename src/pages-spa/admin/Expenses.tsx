@@ -26,11 +26,13 @@ import { format } from "date-fns";
 import { Download, Plus, Receipt, Search, FileText, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { getServiceJobs } from "@/lib/service-jobs";
+import { getOrganizationPartners, OrganizationPartner } from "@/lib/partners";
 
 export default function Expenses() {
   const { user } = useUser();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [partners, setPartners] = useState<OrganizationPartner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Filters
@@ -71,12 +73,14 @@ export default function Expenses() {
     const orgId = user?.organization?.id || DEFAULT_ORG_ID;
     setIsLoading(true);
     try {
-      const [fetchedExpenses, fetchedJobs] = await Promise.all([
+      const [fetchedExpenses, fetchedJobs, fetchedPartners] = await Promise.all([
         getExpenses(orgId).catch(() => []),
-        getServiceJobs(orgId).catch(() => [])
+        getServiceJobs(orgId).catch(() => []),
+        getOrganizationPartners(orgId).catch(() => [])
       ]);
       setExpenses(fetchedExpenses || []);
       setJobs(fetchedJobs || []);
+      setPartners(fetchedPartners || []);
     } catch (error) {
       console.error("Failed to load expenses data:", error);
     } finally {
@@ -347,21 +351,36 @@ export default function Expenses() {
                   <Select
                     value={formData.payment_source}
                     onValueChange={(val: PaymentSource) => {
-                      const isPersonal = val === "owner_personal" || val === "partner_personal";
-                      setFormData(prev => ({
-                        ...prev,
-                        payment_source: val,
-                        paid_by_name: val === "owner_personal" ? "Hugo" : val === "partner_personal" ? "Brother" : prev.paid_by_name,
-                        reimbursable_to_owner: isPersonal ? true : prev.reimbursable_to_owner,
-                        reimbursement_status: isPersonal ? "pending_reimbursement" : prev.reimbursement_status
-                      }));
+                      const selectedPartner = partners.find(p => p.id === val);
+                      if (selectedPartner) {
+                        setFormData(prev => ({
+                          ...prev,
+                          payment_source: "partner_personal",
+                          paid_by_partner_id: selectedPartner.id,
+                          paid_by_name: selectedPartner.name,
+                          reimbursable_to_owner: true,
+                          reimbursement_status: "pending_reimbursement"
+                        }));
+                      } else {
+                        const isPersonal = val === "owner_personal" || val === "partner_personal";
+                        setFormData(prev => ({
+                          ...prev,
+                          payment_source: val,
+                          paid_by_name: val === "owner_personal" ? "Hugo" : val === "partner_personal" ? "Partner" : prev.paid_by_name,
+                          reimbursable_to_owner: isPersonal ? true : prev.reimbursable_to_owner,
+                          reimbursement_status: isPersonal ? "pending_reimbursement" : prev.reimbursement_status
+                        }));
+                      }
                     }}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="company_card">Company Card / Account</SelectItem>
-                      <SelectItem value="owner_personal">Hugo (Personal Card / Cash)</SelectItem>
-                      <SelectItem value="partner_personal">Brother (Personal Card / Cash)</SelectItem>
+                      {partners.filter(p => p.active === true).map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} (Personal Card / Cash)
+                        </SelectItem>
+                      ))}
                       <SelectItem value="customer_paid_direct">Customer Paid Direct</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
