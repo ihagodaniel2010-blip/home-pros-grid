@@ -7,9 +7,10 @@ import { useLanguage } from "@/context/LanguageContext";
 interface EstimateFormProps {
     formData: Partial<Estimate>;
     onChange: (updates: Partial<Estimate>) => void;
+    readOnly?: boolean;
 }
 
-const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
+const EstimateForm = ({ formData, onChange, readOnly = false }: EstimateFormProps) => {
     const { t } = useLanguage();
 
     const projectTypes = [
@@ -44,6 +45,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         placeholder="e.g. John Doe"
                         value={formData.client_name || ""}
                         onChange={(e) => onChange({ client_name: e.target.value })}
+                        disabled={readOnly}
                         required
                     />
                 </div>
@@ -55,6 +57,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         placeholder="john@example.com"
                         value={formData.client_email || ""}
                         onChange={(e) => onChange({ client_email: e.target.value })}
+                        disabled={readOnly}
                     />
                 </div>
                 <div className="space-y-2">
@@ -64,6 +67,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         placeholder="(555) 000-0000"
                         value={formData.client_phone || ""}
                         onChange={(e) => onChange({ client_phone: e.target.value })}
+                        disabled={readOnly}
                     />
                 </div>
             </div>
@@ -76,6 +80,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         placeholder="123 Main St"
                         value={formData.client_address || ""}
                         onChange={(e) => onChange({ client_address: e.target.value })}
+                        disabled={readOnly}
                     />
                 </div>
                 <div className="space-y-2">
@@ -85,6 +90,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         placeholder="City"
                         value={formData.client_city || ""}
                         onChange={(e) => onChange({ client_city: e.target.value })}
+                        disabled={readOnly}
                     />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -95,6 +101,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                             placeholder="ST"
                             value={formData.client_state || ""}
                             onChange={(e) => onChange({ client_state: e.target.value })}
+                            disabled={readOnly}
                         />
                     </div>
                     <div className="space-y-2">
@@ -104,6 +111,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                             placeholder="00000"
                             value={formData.client_zip || ""}
                             onChange={(e) => onChange({ client_zip: e.target.value })}
+                            disabled={readOnly}
                         />
                     </div>
                 </div>
@@ -117,6 +125,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         value={formData.project_type || ""}
                         onChange={(e) => onChange({ project_type: e.target.value })}
+                        disabled={readOnly}
                     >
                         <option value="">Select Project Type</option>
                         {projectTypes.map(type => (
@@ -134,6 +143,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         type="date"
                         value={formData.valid_until ? formData.valid_until.split('T')[0] : ""}
                         onChange={(e) => onChange({ valid_until: e.target.value })}
+                        disabled={readOnly}
                     />
                 </div>
                 <div className="space-y-2">
@@ -143,6 +153,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         value={formData.status || "Draft"}
                         onChange={(e) => onChange({ status: e.target.value as any })}
+                        disabled={readOnly}
                     >
                         {statuses.map(s => (
                             <option key={s} value={s}>{t(`admin.status.${s.toLowerCase()}`)}</option>
@@ -158,6 +169,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                     placeholder="Private notes for your team..."
                     value={formData.notes || ""}
                     onChange={(e) => onChange({ notes: e.target.value })}
+                    disabled={readOnly}
                 />
             </div>
 
@@ -169,6 +181,7 @@ const EstimateForm = ({ formData, onChange }: EstimateFormProps) => {
                     className="min-h-[100px]"
                     value={formData.terms || ""}
                     onChange={(e) => onChange({ terms: e.target.value })}
+                    disabled={readOnly}
                 />
             </div>
         </div>

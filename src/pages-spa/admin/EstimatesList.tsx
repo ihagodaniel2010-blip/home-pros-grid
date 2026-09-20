@@ -140,11 +140,28 @@ const EstimatesList = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Link to={`/admin/estimates/${est.id}`}>
-                                                <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
-                                                    View Details
-                                                </Button>
-                                            </Link>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Link to={`/admin/estimates/${est.id}`}>
+                                                    <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-semibold text-xs">
+                                                        {est.status === 'Draft' ? 'Edit / Send' : 'View Details'}
+                                                    </Button>
+                                                </Link>
+                                                {est.public_token && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const shareUrl = `${window.location.protocol}//${window.location.host}/estimate/${est.public_token}`;
+                                                            navigator.clipboard.writeText(shareUrl);
+                                                            toast.success("Proposal link copied!");
+                                                        }}
+                                                        className="text-xs h-8 text-gray-600 hover:text-blue-600"
+                                                        title="Copy Client Proposal Link"
+                                                    >
+                                                        Copy Link
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

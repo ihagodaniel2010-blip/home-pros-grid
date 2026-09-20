@@ -492,25 +492,27 @@ const EstimateEditor = () => {
                     {id && (
                         <>
                             {formData.status === 'Approved' && (
-                                <Button
-                                    variant="outline"
-                                    className="h-10 gap-2 border-purple-200 text-purple-700 hover:bg-purple-50"
-                                    onClick={() => setIsCountersignModalOpen(true)}
-                                >
-                                    <PenTool className="h-4 w-4" />
-                                    Countersign Estimate
-                                </Button>
-                            )}
-                            {formData.status === 'Approved' && !serviceJob && (
-                                <Button
-                                    variant="outline"
-                                    className="h-10 gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
-                                    onClick={handleCreateJob}
-                                    disabled={isSaving}
-                                >
-                                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
-                                    Create Job
-                                </Button>
+                                <>
+                                    <Button
+                                        variant="outline"
+                                        className="h-10 gap-2 border-purple-200 text-purple-700 hover:bg-purple-50"
+                                        onClick={() => setIsCountersignModalOpen(true)}
+                                    >
+                                        <PenTool className="h-4 w-4" />
+                                        Countersign
+                                    </Button>
+                                    {!serviceJob && (
+                                        <Button
+                                            variant="outline"
+                                            className="h-10 gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
+                                            onClick={handleCreateJob}
+                                            disabled={isSaving}
+                                        >
+                                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                                            Create Job
+                                        </Button>
+                                    )}
+                                </>
                             )}
                             {serviceJob && (
                                 <Button
@@ -528,6 +530,38 @@ const EstimateEditor = () => {
                                     Job Scheduled
                                 </Button>
                             )}
+
+                            {(formData.status === 'Sent' || formData.status === 'Expired' || formData.status === 'Rejected') && (
+                                <Button
+                                    variant="outline"
+                                    className="h-10 gap-2 border-amber-300 text-amber-800 hover:bg-amber-50"
+                                    onClick={() => {
+                                        setFormData(prev => ({ ...prev, status: 'Draft' }));
+                                        toast.info("Estimate status set to Draft for revision. Click Save when finished.");
+                                    }}
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    Revise / Edit Draft
+                                </Button>
+                            )}
+
+                            {formData.status === 'Sent' && (
+                                <Button
+                                    variant="outline"
+                                    className="h-10 gap-2 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                                    onClick={async () => {
+                                        if (confirm("Mark estimate as approved manually by contractor?")) {
+                                            setFormData(prev => ({ ...prev, status: 'Approved' }));
+                                            await updateEstimate(id, { status: 'Approved', approved_at: new Date().toISOString() });
+                                            toast.success("Estimate marked as Approved!");
+                                        }
+                                    }}
+                                >
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                    Mark Approved Manually
+                                </Button>
+                            )}
+
                             <Button
                                 variant="outline"
                                 className="h-10 gap-2 border-gray-200"
@@ -555,7 +589,7 @@ const EstimateEditor = () => {
                                 title={userRole === 'worker' ? "Worker role restricted" : "Send Estimate Email"}
                             >
                                 {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : <Mail className="h-4 w-4 text-blue-600" />}
-                                Send Estimate Email
+                                {formData.status === 'Sent' ? "Resend Email" : "Send Estimate Email"}
                             </Button>
                             <Button
                                 variant="outline"
@@ -574,16 +608,55 @@ const EstimateEditor = () => {
                     >
                         {t("estimate.cancel")}
                     </Button>
-                    <Button
-                        className="h-10 bg-[#0b2a4a] hover:bg-[#081e35] text-white shadow-lg shadow-blue-900/10 min-w-[100px]"
-                        onClick={() => handleSave()}
-                        disabled={isSaving}
-                    >
-                        {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                        {t("estimate.save")}
-                    </Button>
+                    {formData.status !== 'Approved' && (
+                        <Button
+                            className="h-10 bg-[#0b2a4a] hover:bg-[#081e35] text-white shadow-lg shadow-blue-900/10 min-w-[100px]"
+                            onClick={() => handleSave()}
+                            disabled={isSaving}
+                        >
+                            {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                            {t("estimate.save")}
+                        </Button>
+                    )}
                 </div>
             </div>
+
+            {/* Contextual Status Banners */}
+            {formData.status === 'Sent' && (
+                <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3 text-blue-900 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <Mail className="h-5 w-5 text-blue-600 shrink-0" />
+                        <div>
+                            <p className="font-bold text-sm">Estimate Sent to Client</p>
+                            <p className="text-xs text-blue-700">Awaiting client decision or e-signature via public proposal link. You can resend, copy public link, or revise if needed.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {formData.status === 'Approved' && (
+                <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3 text-emerald-900 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                        <div>
+                            <p className="font-bold text-sm">Estimate Approved &amp; Commercial Terms Frozen</p>
+                            <p className="text-xs text-emerald-700">This commercial proposal is approved and locked from direct edits. To adjust scope or pricing, use Change Orders / Service Extras.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {formData.status === 'Expired' && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3 text-amber-900 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-amber-600 shrink-0" />
+                        <div>
+                            <p className="font-bold text-sm">Estimate Expired</p>
+                            <p className="text-xs text-amber-700">The validity period has passed. Click "Revise / Edit Draft" to extend validity or update pricing.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Financial Overview Cards */}
             {id && (
@@ -609,6 +682,7 @@ const EstimateEditor = () => {
                     <EstimateForm
                         formData={formData}
                         onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
+                        readOnly={formData.status === 'Approved'}
                     />
                 </section>
 
@@ -622,6 +696,7 @@ const EstimateEditor = () => {
                     <EstimateItemsTable
                         items={items}
                         onChange={handleItemsChange}
+                        readOnly={formData.status === 'Approved'}
                     />
 
                     <div className="mt-8 border-t border-gray-100 -mx-8">
