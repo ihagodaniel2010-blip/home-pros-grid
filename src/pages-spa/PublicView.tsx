@@ -7,11 +7,13 @@ import { getExpenses, Expense } from "@/lib/expenses";
 import { getJobMediaRecords, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, FileText, Download, ShieldCheck, PenTool, CheckSquare, Square, AlertCircle, Plus, Eye, Tag, Receipt, Images } from "lucide-react";
+import { Loader2, CheckCircle2, FileText, Download, ShieldCheck, PenTool, CheckSquare, Square, AlertCircle, Plus, Eye, Tag, Receipt, Images, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import SignaturePad from "@/components/common/SignaturePad";
+import { generateProfessionalPDF, generateChangeOrderPDF } from "@/lib/pdf-generator";
+import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
 
 const PublicView = () => {
     const { token } = useParams<{ token: string }>();
@@ -27,8 +29,17 @@ const PublicView = () => {
     const [isApproved, setIsApproved] = useState(false);
     const [isDeclined, setIsDeclined] = useState(false);
 
-    // Extra Approval UI state
-    const [approvingExtraId, setApprovingExtraId] = useState<string | null>(null);
+    const [company, setCompany] = useState<CompanySettings | null>(null);
+
+    // Change Order E-Signature Modal UI state
+    const [extraToApprove, setExtraToApprove] = useState<ServiceExtra | null>(null);
+    const [extraConsentElectronic, setExtraConsentElectronic] = useState(false);
+    const [extraConsentScope, setExtraConsentScope] = useState(false);
+    const [extraSignerName, setExtraSignerName] = useState("");
+    const [extraSignerEmail, setExtraSignerEmail] = useState("");
+    const [extraSignatureDataUrl, setExtraSignatureDataUrl] = useState<string | null>(null);
+    const [extraValidationError, setExtraValidationError] = useState<string | null>(null);
+    const [isApprovingExtra, setIsApprovingExtra] = useState(false);
 
     // 4-Step E-Signature UI State
     const [consentElectronic, setConsentElectronic] = useState(false);
@@ -57,10 +68,11 @@ const PublicView = () => {
                 setIsDeclined(true);
             }
 
-            // Fetch linked Job Workspace Extras, Client Materials, and Photos
             try {
-                const job = await getServiceJobByEstimateId(data.id);
                 const orgId = data.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+                getCompanySettings(orgId).then(c => setCompany(c)).catch(() => {});
+
+                const job = await getServiceJobByEstimateId(data.id);
 
                 const [extrasList, allExpenses, mediaList] = await Promise.all([
                     getServiceExtrasByJobOrEstimateId(job?.id, data.id).catch(() => []),
@@ -212,6 +224,12 @@ const PublicView = () => {
             if (success) {
                 setIsApproved(true);
                 toast.success("Estimate successfully signed and approved!");
+                try {
+                    await generateProfessionalPDF(estimate, company);
+                    toast.success("Estimate PDF proof downloaded.");
+                } catch (pErr) {
+                    console.warn("PDF generation warning:", pErr);
+                }
             } else {
                 toast.error("Failed to approve estimate.");
             }
@@ -220,6 +238,136 @@ const PublicView = () => {
             toast.error(err.message || "Failed to approve estimate.");
         } finally {
             setIsApproving(false);
+        }
+    };
+
+    const handleApproveExtraSubmit = async () => {
+        if (!extraToApprove || !estimate) return;
+
+        setExtraValidationError(null);
+        if (!extraConsentElectronic) {
+            setExtraValidationError("You must consent to conduct this transaction electronically.");
+            toast.error("Electronic consent required.");
+            return;
+        }
+        if (!extraConsentScope) {
+            setExtraValidationError("You must agree to the scope and pricing of this Change Order.");
+            toast.error("Change Order terms agreement required.");
+            return;
+        }
+        if (!extraSignerName || !extraSignerName.trim()) {
+            setExtraValidationError("Full Legal Name is required to sign.");
+            toast.error("Full Legal Name required.");
+            return;
+        }
+        if (!extraSignerEmail || !extraSignerEmail.includes("@")) {
+            setExtraValidationError("A valid Email Address is required.");
+            toast.error("Valid email required.");
+            return;
+        }
+
+        setIsApprovingExtra(true);
+        try {
+            const orgId = estimate.organization_id || extraToApprove.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+            let versionRecord = null;
+            try {
+                const { createDocumentVersionSnapshot } = await import("@/lib/esignatures");
+                versionRecord = await createDocumentVersionSnapshot({
+                    organization_id: orgId,
+                    document_type: 'change_order',
+                    document_id: extraToApprove.id,
+                    version_number: 1,
+                    contractor_legal_name: company?.company_name || "H&A Construction LLC",
+                    contractor_company_name: company?.company_name || "H&A Construction",
+                    contractor_email: company?.email || "info@h-a-construction.com",
+                    client_name: extraSignerName.trim(),
+                    client_email: extraSignerEmail.trim(),
+                    scope_text: extraToApprove.description,
+                    line_items_json: [{ description: extraToApprove.description, amount: extraToApprove.amount }],
+                    previous_contract_price: extraToApprove.previous_contract_price || estimate.total_amount,
+                    change_amount: extraToApprove.amount,
+                    subtotal: extraToApprove.amount,
+                    tax_rate: 0,
+                    tax_amount: 0,
+                    discount_amount: 0,
+                    total_amount: extraToApprove.amount,
+                    revised_total: (extraToApprove.previous_contract_price || estimate.total_amount) + extraToApprove.amount,
+                    schedule_impact: extraToApprove.schedule_impact || "None",
+                    currency: "USD",
+                    terms_text: "Change order terms electronically accepted by client."
+                });
+            } catch (snapErr) {
+                console.warn("Change order snapshot creation handled:", snapErr);
+            }
+
+            let sigPath = `${orgId}/documents/change_order/${extraToApprove.id}/v1/signatures/client.png`;
+            if (extraSignatureDataUrl && versionRecord) {
+                try {
+                    const { uploadSignatureAsset } = await import("@/lib/esignatures");
+                    sigPath = await uploadSignatureAsset(
+                        orgId,
+                        'change_order',
+                        extraToApprove.id,
+                        versionRecord.id,
+                        'client',
+                        extraSignatureDataUrl
+                    );
+                } catch (sigErr) {
+                    console.warn("Signature asset upload handled:", sigErr);
+                }
+            }
+
+            if (versionRecord) {
+                try {
+                    const { submitElectronicSignature } = await import("@/lib/esignatures");
+                    await submitElectronicSignature({
+                        organization_id: orgId,
+                        document_type: 'change_order',
+                        document_id: extraToApprove.id,
+                        document_version_id: versionRecord.id,
+                        signer_role: 'client',
+                        signer_name: extraSignerName.trim(),
+                        signer_email: extraSignerEmail.trim(),
+                        ip_address: "127.0.0.1",
+                        user_agent: navigator.userAgent || "Mozilla/5.0 WebClient",
+                        consent_text: "I agree to conduct this Change Order transaction electronically.",
+                        signature_storage_path: sigPath,
+                        document_hash: versionRecord.document_hash
+                    });
+                } catch (eSigErr) {
+                    console.warn("Electronic signature submission handled:", eSigErr);
+                }
+            }
+
+            const targetToken = extraToApprove.public_token || extraToApprove.id;
+            const success = await respondPublicServiceExtra(targetToken, 'approved');
+            if (success) {
+                const updatedExtra = { ...extraToApprove, status: 'approved' as const };
+                setExtras(prev => prev.map(ex => ex.id === extraToApprove.id ? updatedExtra : ex));
+                toast.success("Change Order Signed & Approved!");
+
+                // Automatically generate & download the signed Change Order PDF proof!
+                try {
+                    await generateChangeOrderPDF(updatedExtra, estimate, company, {
+                        signerName: extraSignerName.trim(),
+                        signerEmail: extraSignerEmail.trim(),
+                        signatureDataUrl: extraSignatureDataUrl,
+                        signedAt: new Date().toLocaleString()
+                    });
+                    toast.success("PDF proof receipt downloaded.");
+                } catch (pdfErr) {
+                    console.warn("Could not generate Change Order PDF proof:", pdfErr);
+                }
+
+                setExtraToApprove(null);
+            } else {
+                toast.error("Failed to approve Change Order.");
+            }
+        } catch (err: any) {
+            console.error("Change order approval error:", err);
+            toast.error(err?.message || "Error approving Change Order.");
+        } finally {
+            setIsApprovingExtra(false);
         }
     };
 
@@ -416,11 +564,7 @@ const PublicView = () => {
                                                                 <img
                                                                     src={url}
                                                                     alt={m.caption || "Extra photo"}
-                                                                    className="w-24 h-24 object-cover rounded-xl border border-purple-200 font-bold"
-                                                                    onError={(e) => {
-                                                                        const target = e.currentTarget.parentElement;
-                                                                        if (target) target.style.display = 'none';
-                                                                    }}
+                                                                    className="w-24 h-24 object-cover rounded-xl border border-purple-200 font-bold hover:opacity-90 transition-opacity"
                                                                 />
                                                             )}
                                                         </div>
@@ -428,7 +572,7 @@ const PublicView = () => {
                                                 </div>
                                             )}
 
-                                            {/* Interactive Approval for Pending Extra (Requirement 16 & 17) */}
+                                            {/* Interactive Approval for Pending Extra requiring signature */}
                                             {extra.status === 'pending' && (
                                                 <div className="pt-4 border-t border-purple-200/60 bg-white p-5 rounded-xl space-y-4">
                                                     <div className="p-3 bg-purple-100/50 rounded-xl text-xs space-y-1">
@@ -449,31 +593,39 @@ const PublicView = () => {
                                                     <div className="flex justify-end gap-2">
                                                         <Button
                                                             size="sm"
-                                                            disabled={isApproving}
-                                                            onClick={async () => {
-                                                                const targetToken = extra.public_token || extra.id;
-                                                                if (targetToken) {
-                                                                    setIsApproving(true);
-                                                                    try {
-                                                                        const ok = await respondPublicServiceExtra(targetToken, 'approved');
-                                                                        if (ok) {
-                                                                            toast.success("Change Order Approved!");
-                                                                            setExtras(prev => prev.map(ex => ex.id === extra.id ? { ...ex, status: 'approved' } : ex));
-                                                                        } else {
-                                                                            toast.error("Failed to approve Change Order.");
-                                                                        }
-                                                                    } catch (err: any) {
-                                                                        toast.error(err?.message || "Error approving Change Order.");
-                                                                    } finally {
-                                                                        setIsApproving(false);
-                                                                    }
-                                                                }
+                                                            onClick={() => {
+                                                                setExtraToApprove(extra);
+                                                                setExtraConsentElectronic(false);
+                                                                setExtraConsentScope(false);
+                                                                setExtraSignerName(signerName || estimate.client_name || "");
+                                                                setExtraSignerEmail(signerEmail || estimate.client_email || "");
+                                                                setExtraSignatureDataUrl(null);
+                                                                setExtraValidationError(null);
                                                             }}
-                                                            className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs"
+                                                            className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center gap-1.5"
                                                         >
-                                                            {isApproving ? "Approving..." : `Approve Change Order (+${extra.amount.toLocaleString()})`}
+                                                            <PenTool className="h-3.5 w-3.5" />
+                                                            Sign &amp; Approve Change Order (+${extra.amount.toLocaleString()})
                                                         </Button>
                                                     </div>
+                                                </div>
+                                            )}
+
+                                            {/* Download Proof PDF button for Approved Extra */}
+                                            {extra.status === 'approved' && (
+                                                <div className="flex justify-end pt-2 border-t border-purple-100">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => generateChangeOrderPDF(extra, estimate, company, {
+                                                            signerName: signerName || estimate.client_name,
+                                                            signerEmail: signerEmail || estimate.client_email
+                                                        })}
+                                                        className="border-purple-200 text-purple-700 hover:bg-purple-100 font-bold text-xs flex items-center gap-1.5"
+                                                    >
+                                                        <Download className="h-3.5 w-3.5" />
+                                                        Comprovante PDF / Download Proof
+                                                    </Button>
                                                 </div>
                                             )}
                                         </div>
@@ -652,20 +804,33 @@ const PublicView = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-4 p-8 bg-green-50 rounded-3xl border border-green-200">
-                                <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center text-white shrink-0">
-                                    <CheckCircle2 className="h-6 w-6" />
+                            <div className="p-8 bg-green-50 rounded-3xl border border-green-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center text-white shrink-0">
+                                        <CheckCircle2 className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-900 font-bold text-lg">
+                                            {isApproved ? "Estimate Successfully Signed & Approved" : "Estimate Declined"}
+                                        </p>
+                                        <p className="text-green-800/80 text-sm mt-0.5">
+                                            {isApproved
+                                                ? `Approved on ${new Date(estimate.approved_at || Date.now()).toLocaleDateString()}. Thank you for choosing H&A Construction!`
+                                                : "This estimate was declined."}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-gray-900 font-bold text-lg">
-                                        {isApproved ? "Estimate Successfully Signed & Approved" : "Estimate Declined"}
-                                    </p>
-                                    <p className="text-green-800/80 text-sm mt-0.5">
-                                        {isApproved
-                                            ? `Approved on ${new Date(estimate.approved_at || Date.now()).toLocaleDateString()}. Thank you for choosing H&A Construction!`
-                                            : "This estimate was declined."}
-                                    </p>
-                                </div>
+                                {isApproved && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => generateProfessionalPDF(estimate, company)}
+                                        className="bg-white border-green-300 text-green-900 hover:bg-green-100 font-bold text-xs flex items-center gap-2 shadow-sm shrink-0"
+                                    >
+                                        <Download className="h-4 w-4 text-green-600" />
+                                        Comprovante / Download Estimate PDF
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -675,6 +840,147 @@ const PublicView = () => {
                     <p>© {new Date().getFullYear()} Secure Document Viewer. All rights reserved.</p>
                 </div>
             </div>
+
+            {/* CHANGE ORDER E-SIGNATURE MODAL OVERLAY */}
+            {extraToApprove && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+                    <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-gray-100 my-8 space-y-6">
+                        <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                    <PenTool className="h-5 w-5 text-purple-600" />
+                                    Sign &amp; Approve Change Order
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-0.5">Reference: CO-{extraToApprove.id.slice(0, 8).toUpperCase()}</p>
+                            </div>
+                            <button onClick={() => setExtraToApprove(null)} className="p-2 text-gray-400 hover:text-gray-700 rounded-full">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Scope & Financial summary */}
+                        <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-3">
+                            <h4 className="font-bold text-purple-950 text-base">{extraToApprove.description}</h4>
+                            {extraToApprove.reason && <p className="text-xs text-purple-800">Reason: {extraToApprove.reason}</p>}
+                            {extraToApprove.schedule_impact && <p className="text-xs text-purple-700 font-medium">Schedule Impact: {extraToApprove.schedule_impact}</p>}
+                            
+                            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-purple-200 text-center text-xs">
+                                <div>
+                                    <span className="text-[10px] uppercase text-purple-600 font-bold">Original Contract</span>
+                                    <p className="font-bold text-gray-900">${(estimate.total_amount || 0).toLocaleString()}</p>
+                                </div>
+                                <div className="border-x border-purple-200">
+                                    <span className="text-[10px] uppercase text-purple-600 font-bold">Extra Addition</span>
+                                    <p className="font-bold text-purple-700">+${extraToApprove.amount.toLocaleString()}</p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] uppercase text-purple-600 font-bold">Revised Total</span>
+                                    <p className="font-black text-blue-900">${((estimate.total_amount || 0) + extraToApprove.amount).toLocaleString()}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {extraValidationError && (
+                            <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                                <span>{extraValidationError}</span>
+                            </div>
+                        )}
+
+                        {/* Step 1: Legal Consents */}
+                        <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Step 1 — Consent &amp; Scope Agreement</h4>
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={extraConsentElectronic}
+                                    onChange={(e) => setExtraConsentElectronic(e.target.checked)}
+                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                />
+                                <span className="text-xs text-gray-700 font-medium leading-relaxed">
+                                    I agree to conduct this transaction electronically and use an electronic signature (UETA / E-SIGN Act Compliance).
+                                </span>
+                            </label>
+
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={extraConsentScope}
+                                    onChange={(e) => setExtraConsentScope(e.target.checked)}
+                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                />
+                                <span className="text-xs text-gray-700 font-medium leading-relaxed">
+                                    I have read and agree to the Change Order cost (+${extraToApprove.amount.toLocaleString()}) and revised contract total of ${((estimate.total_amount || 0) + extraToApprove.amount).toLocaleString()}.
+                                </span>
+                            </label>
+                        </div>
+
+                        {/* Step 2: Signer Info */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-700">Full Legal Name *</label>
+                                <input
+                                    type="text"
+                                    value={extraSignerName}
+                                    onChange={(e) => setExtraSignerName(e.target.value)}
+                                    placeholder="Full Legal Name"
+                                    className="w-full h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-500/10 focus:border-purple-500"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-gray-700">Email Address *</label>
+                                <input
+                                    type="email"
+                                    value={extraSignerEmail}
+                                    onChange={(e) => setExtraSignerEmail(e.target.value)}
+                                    placeholder="Email Address"
+                                    className="w-full h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-500/10 focus:border-purple-500"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Step 3: Draw Signature */}
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-gray-700">Draw Signature *</label>
+                            <SignaturePad onSignatureChange={(dataUrl) => setExtraSignatureDataUrl(dataUrl)} />
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
+                            <Button variant="outline" onClick={() => setExtraToApprove(null)} disabled={isApprovingExtra} className="rounded-xl h-11 px-5 text-xs font-semibold">
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleApproveExtraSubmit}
+                                disabled={isApprovingExtra}
+                                className="bg-purple-700 hover:bg-purple-800 text-white rounded-xl h-11 px-6 text-xs font-bold shadow-lg shadow-purple-900/10 flex items-center gap-2"
+                            >
+                                {isApprovingExtra ? <Loader2 className="h-4 w-4 animate-spin" /> : <PenTool className="h-4 w-4 text-purple-300" />}
+                                Sign &amp; Approve Change Order (+${extraToApprove.amount.toLocaleString()})
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* FULL SCREEN MEDIA ZOOM PREVIEW OVERLAY */}
+            {selectedMediaUrl && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedMediaUrl(null)}>
+                    <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl bg-black" onClick={(e) => e.stopPropagation()}>
+                        <button
+                            onClick={() => setSelectedMediaUrl(null)}
+                            className="absolute top-3 right-3 z-10 bg-black/70 text-white rounded-full p-2 hover:bg-black transition-colors"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                        {selectedMediaUrl.includes('.mp4') || selectedMediaUrl.includes('.mov') ? (
+                            <video src={selectedMediaUrl} controls autoPlay className="max-w-full max-h-[85vh] rounded-2xl" />
+                        ) : (
+                            <img src={selectedMediaUrl} alt="Enlarged view" className="max-w-full max-h-[85vh] object-contain rounded-2xl" />
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPublicServiceExtra, respondPublicServiceExtra, type ServiceExtra } from "@/lib/service-extras";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, XCircle, FileText, ShieldCheck, AlertCircle, PenTool, Image as ImageIcon } from "lucide-react";
-import { toast } from "sonner";
+import { Loader2, CheckCircle2, XCircle, FileText, ShieldCheck, AlertCircle, PenTool, Image as ImageIcon, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import SignaturePad from "@/components/common/SignaturePad";
+import { generateChangeOrderPDF } from "@/lib/pdf-generator";
 
 const PublicExtraView = () => {
     const { token } = useParams<{ token: string }>();
@@ -162,8 +163,22 @@ const PublicExtraView = () => {
 
             const success = await respondPublicServiceExtra(token, status);
             if (success) {
-                setExtra({ ...extra, status });
+                const updatedExtra = { ...extra, status };
+                setExtra(updatedExtra);
                 toast.success(`Change Order ${status} successfully!`);
+                if (status === 'approved') {
+                    try {
+                        await generateChangeOrderPDF(updatedExtra, null, null, {
+                            signerName: signerName.trim(),
+                            signerEmail: signerEmail.trim(),
+                            signatureDataUrl,
+                            signedAt: new Date().toLocaleString()
+                        });
+                        toast.success("PDF proof receipt downloaded.");
+                    } catch (pErr) {
+                        console.warn("Could not generate Change Order PDF proof:", pErr);
+                    }
+                }
             } else {
                 toast.error("Failed to respond to Change Order.");
             }
@@ -339,20 +354,36 @@ const PublicExtraView = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-4 p-8 bg-green-50 rounded-3xl border border-green-200">
-                                <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center text-white shrink-0">
-                                    <CheckCircle2 className="h-6 w-6" />
+                            <div className="p-8 bg-green-50 rounded-3xl border border-green-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center text-white shrink-0">
+                                        <CheckCircle2 className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-900 font-bold text-lg">
+                                            {isApproved ? "Change Order Approved" : "Change Order Declined"}
+                                        </p>
+                                        <p className="text-green-800/80 text-sm mt-0.5">
+                                            {isApproved
+                                                ? "You have successfully approved this Change Order."
+                                                : "You have declined this Change Order."}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-gray-900 font-bold text-lg">
-                                        {isApproved ? "Change Order Approved" : "Change Order Declined"}
-                                    </p>
-                                    <p className="text-green-800/80 text-sm mt-0.5">
-                                        {isApproved
-                                            ? "You have successfully approved this Change Order."
-                                            : "You have declined this Change Order."}
-                                    </p>
-                                </div>
+                                {isApproved && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => generateChangeOrderPDF(extra, null, null, {
+                                            signerName: signerName || "Client",
+                                            signerEmail: signerEmail || ""
+                                        })}
+                                        className="bg-white border-green-300 text-green-900 hover:bg-green-100 font-bold text-xs flex items-center gap-2 shadow-sm shrink-0"
+                                    >
+                                        <Download className="h-4 w-4 text-green-600" />
+                                        Comprovante / Download PDF Proof
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </div>

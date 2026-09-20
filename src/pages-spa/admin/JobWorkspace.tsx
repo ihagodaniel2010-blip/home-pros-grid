@@ -438,18 +438,34 @@ export default function JobWorkspace() {
             const fileExt = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
             const relativePath = `${orgId}/extras/${newExtra.id}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${fileExt}`;
 
-            let storedBucket = "images";
+            let finalPath = "";
             const { error: uErr } = await supabase.storage.from("images").upload(relativePath, file, { upsert: true });
             if (uErr) {
-              storedBucket = "documents";
-              await supabase.storage.from("documents").upload(relativePath, file, { upsert: true });
+              const { error: docErr } = await supabase.storage.from("documents").upload(relativePath, file, { upsert: true });
+              if (docErr) {
+                if (!isVideo) {
+                  finalPath = await new Promise<string>((res, rej) => {
+                    const r = new FileReader();
+                    r.onload = () => res(r.result as string);
+                    r.onerror = rej;
+                    r.readAsDataURL(file);
+                  });
+                } else {
+                  console.warn("Extra video storage upload failed:", docErr.message);
+                  continue;
+                }
+              } else {
+                finalPath = `documents/${relativePath}`;
+              }
+            } else {
+              finalPath = `images/${relativePath}`;
             }
 
             await uploadExtraMediaRecord({
               organization_id: orgId,
               service_extra_id: newExtra.id,
               media_type: isVideo ? "video" : "image",
-              storage_path: `${storedBucket}/${relativePath}`,
+              storage_path: finalPath,
               file_name: file.name,
               mime_type: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
               file_size_bytes: file.size,
@@ -620,7 +636,7 @@ export default function JobWorkspace() {
       const fileExt = selectedMediaFile.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
       const relativePath = `${orgId}/jobs/${job.id}/${isVideo ? "videos" : "photos"}/${Date.now()}.${fileExt}`;
 
-      let storedBucket = "images";
+      let finalPath = "";
       const { error: uploadErr } = await supabase.storage
         .from("images")
         .upload(relativePath, selectedMediaFile, { upsert: true, cacheControl: "3600" });
@@ -632,14 +648,24 @@ export default function JobWorkspace() {
           .upload(relativePath, selectedMediaFile, { upsert: true, cacheControl: "3600" });
 
         if (docUploadErr) {
-          console.error("Storage upload failed on both buckets:", docUploadErr.message);
-          toast.error(`Storage upload failed: ${docUploadErr.message}`);
-          return;
+          if (!isVideo) {
+            finalPath = await new Promise<string>((res, rej) => {
+              const r = new FileReader();
+              r.onload = () => res(r.result as string);
+              r.onerror = rej;
+              r.readAsDataURL(selectedMediaFile);
+            });
+          } else {
+            console.error("Storage upload failed on both buckets:", docUploadErr.message);
+            toast.error(`Storage upload failed: ${docUploadErr.message}`);
+            return;
+          }
+        } else {
+          finalPath = `documents/${relativePath}`;
         }
-        storedBucket = "documents";
+      } else {
+        finalPath = `images/${relativePath}`;
       }
-
-      const finalPath = `${storedBucket}/${relativePath}`;
 
       const record = await uploadJobMediaRecord({
         organization_id: orgId,

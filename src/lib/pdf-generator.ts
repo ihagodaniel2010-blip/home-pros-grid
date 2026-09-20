@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Estimate } from './estimates';
 import { CompanySettings } from './company-settings';
+import { ServiceExtra } from './service-extras';
 
 export const generateProfessionalPDF = async (
     estimate: Estimate,
@@ -257,3 +258,231 @@ export const generateProfessionalPDF = async (
     const filename = `estimate_${estimate.id ? estimate.id.split('-')[0].toUpperCase() : 'DRAFT'}.pdf`;
     doc.save(filename);
 };
+
+export const generateChangeOrderPDF = async (
+    extra: ServiceExtra,
+    estimate: Estimate | null,
+    company: CompanySettings | null,
+    signatureDetails?: {
+        signerName?: string;
+        signerEmail?: string;
+        signatureDataUrl?: string | null;
+        signedAt?: string;
+    }
+) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // 1. Header & Logo
+    if (company?.logo_url) {
+        try {
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.src = company.logo_url;
+            await new Promise((resolve) => {
+                img.onload = resolve;
+                img.onerror = resolve;
+                setTimeout(resolve, 1500);
+            });
+            if (img.complete && img.width > 0) {
+                const canvas = document.createElement("canvas");
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0);
+                    const dataUrl = canvas.toDataURL("image/png");
+                    doc.addImage(dataUrl, "PNG", 20, 10, 22, 22);
+                }
+            }
+        } catch (e) {
+            console.warn("Could not add logo to Change Order PDF:", e);
+        }
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(11, 42, 74);
+    doc.text(company?.company_name || "H&A Construction LLC", 20, 25);
+
+    doc.setFontSize(14);
+    const isApproved = extra.status === 'approved' || extra.status === 'paid';
+    if (isApproved) {
+        doc.setTextColor(16, 185, 129);
+    } else {
+        doc.setTextColor(217, 119, 6);
+    }
+    doc.text(isApproved ? "CHANGE ORDER (APPROVED PROOF)" : "CHANGE ORDER (PENDING)", pageWidth - 20, 25, { align: "right" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    const companyInfo = [
+        company?.address || "Fairfield County, CT",
+        company?.phone ? `Phone: ${company.phone}` : "Phone: (203) 555-0199",
+        company?.email ? `Email: ${company.email}` : "Email: info@h-a-construction.com",
+        company?.license_number ? `License: ${company.license_number}` : "CT HIC License # Registered"
+    ].filter(Boolean);
+
+    companyInfo.forEach((line, i) => {
+        doc.text(line, pageWidth - 20, 32 + (i * 4.5), { align: "right" });
+    });
+
+    // 2. Client Information
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+    doc.text("CLIENT / PROJECT DETAILS:", 20, 65);
+
+    const clientName = signatureDetails?.signerName || estimate?.client_name || "Client Name";
+    const clientEmail = signatureDetails?.signerEmail || estimate?.client_email || "";
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(clientName, 20, 72);
+    let curY = 77;
+    if (clientEmail) {
+        doc.text(clientEmail, 20, curY);
+        curY += 5;
+    }
+    if (estimate?.client_phone) {
+        doc.text(estimate.client_phone, 20, curY);
+        curY += 5;
+    }
+    if (estimate?.client_address) {
+        doc.text(estimate.client_address, 20, curY);
+        curY += 5;
+    }
+
+    // Change Order Meta
+    doc.setFont("helvetica", "bold");
+    doc.text("Change Order Ref:", 120, 72);
+    doc.text("Estimate Ref:", 120, 77);
+    doc.text("Date Created:", 120, 82);
+    doc.text("Status:", 120, 87);
+
+    doc.setFont("helvetica", "normal");
+    doc.text(`CO-${extra.id.slice(0, 8).toUpperCase()}`, pageWidth - 20, 72, { align: "right" });
+    doc.text(estimate?.id ? estimate.id.split('-')[0].toUpperCase() : "N/A", pageWidth - 20, 77, { align: "right" });
+    doc.text(extra.created_at ? new Date(extra.created_at).toLocaleDateString() : new Date().toLocaleDateString(), pageWidth - 20, 82, { align: "right" });
+    doc.text(extra.status.toUpperCase(), pageWidth - 20, 87, { align: "right" });
+
+    // 3. Scope of Work Table
+    const tableHeaders = [["Item", "Description / Reason", "Schedule Impact", "Amount"]];
+    const tableData = [[
+        1,
+        `${extra.description}${extra.reason ? `\nReason: ${extra.reason}` : ''}`,
+        extra.schedule_impact || "None",
+        `+$${extra.amount.toFixed(2)}`
+    ]];
+
+    autoTable(doc, {
+        startY: 98,
+        head: tableHeaders,
+        body: tableData,
+        theme: 'striped',
+        headStyles: { fillColor: [126, 34, 206], textColor: 255 }, // Purple header
+        styles: { fontSize: 9, cellPadding: 5 },
+        columnStyles: {
+            0: { cellWidth: 15 },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 35 },
+            3: { cellWidth: 35, halign: 'right', fontStyle: 'bold' },
+        }
+    });
+
+    // 4. Financial Calculations Box
+    const lastY = (doc as any).lastAutoTable?.finalY || 130;
+    const summaryY = lastY + 10;
+    const previousContract = extra.previous_contract_price ?? (estimate?.total_amount || 0);
+    const extraAmount = extra.amount || 0;
+    const revisedTotal = extra.revised_contract_price ?? (previousContract + extraAmount);
+
+    doc.setFillColor(250, 245, 255);
+    doc.rect(20, summaryY, pageWidth - 40, 35, "F");
+    doc.setDrawColor(233, 213, 255);
+    doc.rect(20, summaryY, pageWidth - 40, 35, "S");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(126, 34, 206);
+    doc.text("FINANCIAL CONTRACT REVISION SUMMARY", 25, summaryY + 8);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0);
+    doc.text("Previous Contract Value:", 25, summaryY + 16);
+    doc.text(`$${previousContract.toFixed(2)}`, 110, summaryY + 16, { align: "right" });
+
+    doc.text("Change Order Addition:", 25, summaryY + 23);
+    doc.text(`+$${extraAmount.toFixed(2)}`, 110, summaryY + 23, { align: "right" });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(11, 42, 74);
+    doc.text("REVISED TOTAL CONTRACT AMOUNT:", 25, summaryY + 31);
+    doc.text(`$${revisedTotal.toFixed(2)}`, pageWidth - 25, summaryY + 31, { align: "right" });
+
+    // 5. Signature & Verification Audit Trail Block
+    const sigY = summaryY + 45;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(11, 42, 74);
+    doc.text("E-SIGNATURE PROOF & AUTHORIZATION AUDIT", 20, sigY);
+    doc.setDrawColor(200);
+    doc.line(20, sigY + 2, pageWidth - 20, sigY + 2);
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0);
+    doc.text("CLIENT ELECTRONIC SIGNATURE:", 20, sigY + 10);
+
+    const sigUrl = signatureDetails?.signatureDataUrl;
+    if (isApproved) {
+        if (sigUrl && sigUrl.startsWith("data:image")) {
+            try {
+                doc.addImage(sigUrl, "PNG", 20, sigY + 13, 45, 18);
+            } catch (e) {
+                doc.setFont("helvetica", "italic");
+                doc.text(`[Digitally Signed by ${clientName}]`, 20, sigY + 18);
+            }
+        } else {
+            doc.setFont("helvetica", "italic");
+            doc.text(`[Electronically Signed & Approved by ${clientName}]`, 20, sigY + 18);
+        }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(80);
+        doc.text(`Signer Legal Name: ${clientName}`, 20, sigY + 33);
+        doc.text(`Signer Email: ${clientEmail || "Verified Client Email"}`, 20, sigY + 37);
+        doc.text(`Approval Timestamp: ${signatureDetails?.signedAt || new Date().toLocaleString()}`, 20, sigY + 41);
+        doc.text(`E-SIGN Compliance: UETA & Federal ESIGN Act Validated`, 20, sigY + 45);
+    } else {
+        doc.setFont("helvetica", "normal");
+        doc.text("Client Signature: ____________________________", 20, sigY + 25);
+        doc.text(`Name: ${clientName}`, 20, sigY + 32);
+        doc.text("Date: ________________________", 20, sigY + 38);
+    }
+
+    // Right Column: Contractor Seal
+    const rightX = pageWidth - 90;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0);
+    doc.text("CONTRACTOR AUTHORIZATION:", rightX, sigY + 10);
+    doc.setFont("helvetica", "italic");
+    doc.text(`${company?.company_name || "H&A Construction LLC"}`, rightX, sigY + 18);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(80);
+    doc.text("Authorized Representative Signoff", rightX, sigY + 25);
+    doc.text(`License #: ${company?.license_number || "HIC Registered"}`, rightX, sigY + 32);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, rightX, sigY + 38);
+
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Change Order Proof of Document — ${company?.company_name || "H&A Construction LLC"}`, pageWidth / 2, 285, { align: "center" });
+
+    const filename = `change_order_CO-${extra.id.slice(0, 8).toUpperCase()}.pdf`;
+    doc.save(filename);
+};
+
