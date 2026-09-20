@@ -110,26 +110,43 @@ export const getServiceExtrasByJobId = async (jobId: string) => {
 export const getServiceExtrasByJobOrEstimateId = async (jobId?: string | null, estimateId?: string | null) => {
     if (!supabase) return [];
 
-    let query = supabase.from('service_extras').select('*');
+    const cleanJobId = (jobId && jobId !== 'null' && jobId !== 'undefined' && typeof jobId === 'string') ? jobId.trim() : null;
+    const cleanEstId = (estimateId && estimateId !== 'null' && estimateId !== 'undefined' && typeof estimateId === 'string') ? estimateId.trim() : null;
 
-    if (jobId && estimateId) {
-        query = query.or(`service_job_id.eq.${jobId},estimate_id.eq.${estimateId}`);
-    } else if (jobId) {
-        query = query.eq('service_job_id', jobId);
-    } else if (estimateId) {
-        query = query.eq('estimate_id', estimateId);
-    } else {
+    if (!cleanJobId && !cleanEstId) return [];
+
+    try {
+        let query = supabase.from('service_extras').select('*');
+
+        if (cleanJobId && cleanEstId) {
+            query = query.or(`service_job_id.eq.${cleanJobId},estimate_id.eq.${cleanEstId}`);
+        } else if (cleanJobId) {
+            query = query.eq('service_job_id', cleanJobId);
+        } else if (cleanEstId) {
+            query = query.eq('estimate_id', cleanEstId);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Error getting service extras with primary query:", error);
+            // Fallback: If combined query fails, try by estimate_id alone
+            if (cleanEstId) {
+                const { data: estData } = await supabase
+                    .from('service_extras')
+                    .select('*')
+                    .eq('estimate_id', cleanEstId)
+                    .order('created_at', { ascending: false });
+                if (estData) return estData as ServiceExtra[];
+            }
+            return [];
+        }
+
+        return data as ServiceExtra[];
+    } catch (err) {
+        console.error("Exception getting service extras:", err);
         return [];
     }
-
-    const { data, error } = await query.order('created_at', { ascending: false });
-
-    if (error) {
-        console.error("Error getting service extras:", error);
-        return [];
-    }
-
-    return data as ServiceExtra[];
 };
 
 export const respondPublicServiceExtra = async (tokenOrId: string, status: 'approved' | 'rejected') => {
