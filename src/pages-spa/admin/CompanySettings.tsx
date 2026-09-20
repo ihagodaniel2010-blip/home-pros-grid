@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchAdminSession } from "@/lib/admin-auth";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -64,6 +65,15 @@ const CompanySettings = () => {
         if (!user?.organization?.id) {
             toast.error("Organization ID missing");
             return;
+        }
+
+        if (settings.business_ownership_type === 'partnership') {
+            const partners = settings.partners || [];
+            const totalPct = partners.reduce((sum, p) => sum + (p.percentage || 0), 0);
+            if (totalPct !== 100) {
+                toast.error(`Total Partner Ownership must equal EXACTLY 100%. Current total: ${totalPct}%`);
+                return;
+            }
         }
 
         setIsSaving(true);
@@ -239,6 +249,137 @@ const CompanySettings = () => {
                                     className="h-12 rounded-xl"
                                 />
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Business Ownership & Partners */}
+                    <div className="bg-white rounded-2xl border border-slate-200/60 p-8 shadow-sm">
+                        <h3 className="font-bold text-base text-gray-900 mb-6 flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                Business Ownership & Partner Accounting
+                            </span>
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
+                                {settings.business_ownership_type === 'partnership' ? 'Partnership Structure' : 'Sole Owner'}
+                            </span>
+                        </h3>
+
+                        <div className="space-y-6">
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Business Ownership Type</Label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSettings(prev => ({ ...prev, business_ownership_type: 'single_owner' }))}
+                                        className={`p-4 rounded-xl border text-center font-bold text-sm transition-all ${
+                                            (settings.business_ownership_type || 'single_owner') === 'single_owner'
+                                                ? 'bg-blue-50 border-blue-500 text-blue-900 ring-2 ring-blue-500/20'
+                                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        Single Owner
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const defaultPartners = settings.partners && settings.partners.length > 0 ? settings.partners : [
+                                                { id: 'p1', name: 'Hugo Manager', email: 'hugo@ha-construction.com', percentage: 50 },
+                                                { id: 'p2', name: 'Brother Partner', email: 'partner@ha-construction.com', percentage: 50 }
+                                            ];
+                                            setSettings(prev => ({
+                                                ...prev,
+                                                business_ownership_type: 'partnership',
+                                                partners: defaultPartners
+                                            }));
+                                        }}
+                                        className={`p-4 rounded-xl border text-center font-bold text-sm transition-all ${
+                                            settings.business_ownership_type === 'partnership'
+                                                ? 'bg-blue-50 border-blue-500 text-blue-900 ring-2 ring-blue-500/20'
+                                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        Partnership / Multiple Owners
+                                    </button>
+                                </div>
+                            </div>
+
+                            {settings.business_ownership_type === 'partnership' && (
+                                <div className="space-y-4 pt-4 border-t border-slate-100">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                            Partner Ownership Breakdown
+                                        </Label>
+                                        <div className="text-xs font-bold">
+                                            Total Ownership:{" "}
+                                            <span className={`px-2 py-0.5 rounded ${
+                                                (settings.partners || []).reduce((sum, p) => sum + (p.percentage || 0), 0) === 100
+                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                    : 'bg-red-100 text-red-800'
+                                            }`}>
+                                                {(settings.partners || []).reduce((sum, p) => sum + (p.percentage || 0), 0)}%
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {(settings.partners || []).map((partner, index) => (
+                                        <div key={partner.id || index} className="grid grid-cols-12 gap-3 items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                            <div className="col-span-5">
+                                                <Input
+                                                    placeholder="Partner Name"
+                                                    value={partner.name}
+                                                    onChange={(e) => {
+                                                        const newPartners = [...(settings.partners || [])];
+                                                        newPartners[index] = { ...newPartners[index], name: e.target.value };
+                                                        setSettings(prev => ({ ...prev, partners: newPartners }));
+                                                    }}
+                                                    className="h-10 bg-white"
+                                                />
+                                            </div>
+                                            <div className="col-span-4">
+                                                <Input
+                                                    placeholder="Email (Optional)"
+                                                    value={partner.email || ""}
+                                                    onChange={(e) => {
+                                                        const newPartners = [...(settings.partners || [])];
+                                                        newPartners[index] = { ...newPartners[index], email: e.target.value };
+                                                        setSettings(prev => ({ ...prev, partners: newPartners }));
+                                                    }}
+                                                    className="h-10 bg-white"
+                                                />
+                                            </div>
+                                            <div className="col-span-3 relative">
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    placeholder="%"
+                                                    value={partner.percentage}
+                                                    onChange={(e) => {
+                                                        const newPartners = [...(settings.partners || [])];
+                                                        newPartners[index] = { ...newPartners[index], percentage: parseFloat(e.target.value) || 0 };
+                                                        setSettings(prev => ({ ...prev, partners: newPartners }));
+                                                    }}
+                                                    className="h-10 bg-white pr-7 font-bold text-right"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            const newPartners = [...(settings.partners || []), { id: `p_${Date.now()}`, name: '', email: '', percentage: 0 }];
+                                            setSettings(prev => ({ ...prev, partners: newPartners }));
+                                        }}
+                                        className="text-xs font-bold text-blue-600 border-blue-200"
+                                    >
+                                        + Add Partner
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </div>
 
