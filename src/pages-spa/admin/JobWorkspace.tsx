@@ -257,6 +257,52 @@ export default function JobWorkspace() {
     }
   };
 
+  const handleSignedDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !estimate) return;
+
+    try {
+      toast.loading("Uploading signed document...");
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = ev => resolve(ev.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      let docUrl = dataUrl;
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${orgId}/signed_contracts/${estimate.id}-${Date.now()}.${fileExt}`;
+        const filePath = `documents/${fileName}`;
+        const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, file);
+        if (!uploadErr) {
+          const { data } = supabase.storage.from('documents').getPublicUrl(filePath);
+          if (data?.publicUrl) docUrl = data.publicUrl;
+        }
+      } catch (sErr) {
+        console.warn("Storage upload for signed doc handled, using Data URL fallback:", sErr);
+      }
+
+      await supabase
+        .from('estimates')
+        .update({
+          status: 'Approved',
+          approved_at: new Date().toISOString(),
+          signed_document_url: docUrl
+        })
+        .eq('id', estimate.id);
+
+      toast.dismiss();
+      toast.success("Offline Signed Document attached! Contract marked as Approved.");
+      loadJobWorkspace();
+    } catch (err: any) {
+      toast.dismiss();
+      console.error("Error uploading signed doc:", err);
+      toast.error("Failed to upload signed document.");
+    }
+  };
+
   const handleAddExtraSubmit = async () => {
     if (!job || !extraForm.description.trim() || !extraForm.amount) {
       toast.error("Description and Extra Amount are required.");
@@ -772,10 +818,14 @@ export default function JobWorkspace() {
                   <h3 className="font-bold text-[#0b2a4a] text-base">Commercial Proposal & Contract</h3>
                   <p className="text-xs text-gray-500">Commercial terms frozen upon client signature approval.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={handleGeneratePDF} disabled={isGeneratingPDF} className="h-9 text-xs font-bold">
                     <Printer className="h-3.5 w-3.5 mr-1" /> Download PDF
                   </Button>
+                  <label className="cursor-pointer inline-flex items-center justify-center rounded-md text-xs font-bold h-9 px-3 border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors">
+                    <Upload className="h-3.5 w-3.5 mr-1 text-emerald-700" /> Upload Signed Contract (PDF/Photo)
+                    <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleSignedDocUpload} />
+                  </label>
                   {estimate?.status === 'Approved' && (
                     <Button variant="outline" size="sm" onClick={() => setIsCountersignOpen(true)} className="h-9 text-xs font-bold border-purple-200 text-purple-700">
                       <PenTool className="h-3.5 w-3.5 mr-1" /> Countersign Contract
@@ -801,17 +851,16 @@ export default function JobWorkspace() {
                     </div>
                     <div>
                       <span className="text-gray-400 font-bold uppercase">Public Share Link</span>
-                      {estimate.public_token ? (
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(`${window.location.origin}/estimate/${estimate.public_token}`);
-                            toast.success("Link copied!");
-                          }}
-                          className="font-bold text-blue-600 hover:underline block"
-                        >
-                          Copy Link
-                        </button>
-                      ) : <span>N/A</span>}
+                      <button
+                        onClick={() => {
+                          const targetTk = estimate.public_token || estimate.id;
+                          navigator.clipboard.writeText(`${window.location.origin}/estimate/${targetTk}`);
+                          toast.success("Client Project Portal link copied!");
+                        }}
+                        className="font-bold text-blue-600 hover:underline block"
+                      >
+                        Copy Client Link
+                      </button>
                     </div>
                   </div>
 

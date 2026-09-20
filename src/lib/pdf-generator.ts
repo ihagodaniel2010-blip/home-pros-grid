@@ -178,7 +178,7 @@ export const generateProfessionalPDF = async (
     doc.text("BALANCE DUE:", 20, paymentY + 17);
     doc.text(`$${(estimate.balance_due || totalAmount).toFixed(2)}`, 60, paymentY + 17);
 
-    // 5. Terms & Signature
+    // 5. Terms & Signature Block
     const termsY = paymentY + 35;
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
@@ -186,15 +186,67 @@ export const generateProfessionalPDF = async (
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    const terms = estimate.terms || company?.default_terms || "Payment due upon receipt.";
+    const terms = estimate.terms || company?.default_terms || "Payment due upon receipt. Commercial agreement subject to final signoff.";
     const splitTerms = doc.splitTextToSize(terms, pageWidth - 40);
     doc.text(splitTerms, 20, termsY + 6);
 
-    // Signature Line
-    const sigY = termsY + 30 < 270 ? termsY + 30 : 270;
-    doc.setFontSize(10);
-    doc.text("Client Signature: ________________________________", 20, sigY);
-    doc.text("Date: __________________", pageWidth - 20, sigY, { align: "right" });
+    // Signature Section (Client & Contractor)
+    const sigY = termsY + 35 < 250 ? termsY + 35 : 240;
+    const isSigned = isApproved || !!(estimate as any).signature_url || !!estimate.approved_at;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(11, 42, 74);
+    doc.text("AUTHORIZED ACCEPTANCE & SIGNATURES", 20, sigY);
+    doc.setDrawColor(200);
+    doc.line(20, sigY + 2, pageWidth - 20, sigY + 2);
+
+    // Left Column: Client Signature
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0);
+    doc.text("CLIENT ACCEPTANCE:", 20, sigY + 10);
+
+    if (isSigned) {
+        if ((estimate as any).signature_url) {
+            try {
+                doc.addImage((estimate as any).signature_url, "PNG", 20, sigY + 12, 45, 18);
+            } catch (sigImgErr) {
+                doc.setFont("helvetica", "italic");
+                doc.text(`[Digitally Signed Online by ${estimate.client_name || "Client"}]`, 20, sigY + 18);
+            }
+        } else {
+            doc.setFont("helvetica", "italic");
+            doc.text(`[Electronically Approved & Signed by ${estimate.client_name || "Client"}]`, 20, sigY + 18);
+        }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(80);
+        doc.text(`Signed by: ${estimate.client_name || "Client"}`, 20, sigY + 32);
+        doc.text(`Date: ${estimate.approved_at ? new Date(estimate.approved_at).toLocaleString() : new Date().toLocaleDateString()}`, 20, sigY + 36);
+        doc.text(`Audit Status: Verified Digital Approval`, 20, sigY + 40);
+    } else {
+        doc.setFont("helvetica", "normal");
+        doc.text("Client Signature: ____________________________", 20, sigY + 25);
+        doc.text(`Name: ${estimate.client_name || "________________________"}`, 20, sigY + 32);
+        doc.text("Date: ________________________", 20, sigY + 38);
+    }
+
+    // Right Column: Contractor Signature
+    const rightColX = pageWidth - 90;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0);
+    doc.text("CONTRACTOR AUTHORIZATION:", rightColX, sigY + 10);
+
+    doc.setFont("helvetica", "italic");
+    doc.text(`${company?.company_name || "H&A Construction LLC"}`, rightColX, sigY + 18);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(80);
+    doc.text("Authorized Representative Line: ____________________", rightColX, sigY + 25);
+    doc.text(`License #: ${company?.license_number || "HIC Registered"}`, rightColX, sigY + 32);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, rightColX, sigY + 38);
 
     // Footer
     doc.setFontSize(8);

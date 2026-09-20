@@ -118,14 +118,73 @@ export const respondPublicServiceExtra = async (token: string, status: 'approved
 };
 
 export const getPublicServiceExtra = async (token: string) => {
-    if (!supabase) return null;
+    if (!supabase || !token) return null;
 
-    const { data, error } = await supabase.rpc('get_public_service_extra', { p_token: token });
-
-    if (error || !data || data.length === 0) {
-        console.error("Error getting public service extra via RPC:", error);
-        return null;
+    // 1. Try public RPC first
+    try {
+        const { data, error } = await supabase.rpc('get_public_service_extra', { p_token: token });
+        if (!error && data && data.length > 0) {
+            return data[0];
+        }
+    } catch (rpcErr) {
+        console.warn("RPC get_public_service_extra failed, falling back:", rpcErr);
     }
 
-    return data[0];
+    // 2. Direct query on service_extras table by public_token, id, service_job_id, or estimate_id
+    try {
+        const { data: directExtra } = await supabase
+            .from('service_extras')
+            .select('*')
+            .or(`public_token.eq.${token},id.eq.${token},service_job_id.eq.${token},estimate_id.eq.${token}`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (directExtra) return directExtra;
+    } catch (directErr) {
+        console.warn("Direct query service_extras failed:", directErr);
+    }
+
+    // 3. Fallback check if token is a lead_id
+    try {
+        const { data: jobByLead } = await supabase
+            .from('service_jobs')
+            .select('id, estimate_id')
+            .eq('lead_id', token)
+            .maybeSingle();
+
+        if (jobByLead) {
+            const { data: leadExtra } = await supabase
+                .from('service_extras')
+                .select('*')
+                .or(`service_job_id.eq.${jobByLead.id}${jobByLead.estimate_id ? `,estimate_id.eq.${jobByLead.estimate_id}` : ''}`)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (leadExtra) return leadExtra;
+        }
+
+        const { data: estByLead } = await supabase
+            .from('estimates')
+            .select('id')
+            .eq('lead_id', token)
+            .maybeSingle();
+
+        if (estByLead) {
+            const { data: leadExtra } = await supabase
+                .from('service_extras')
+                .select('*')
+                .eq('estimate_id', estByLead.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (leadExtra) return leadExtra;
+        }
+    } catch (leadErr) {
+        console.warn("Lead fallback for extra token failed:", leadErr);
+    }
+
+    return null;
 };
