@@ -50,6 +50,7 @@ const AdminLayout = () => {
       { label: t("admin.dashboard"), icon: LayoutDashboard, path: "/admin" },
       { label: "Client Requests", icon: Inbox, path: "/admin/inbox", badge: newLeads },
       { label: t("admin.estimates"), icon: FileText, path: "/admin/estimates" },
+      { label: "Projects", icon: Wrench, path: "/admin/jobs" },
       { label: "Client Receipts", icon: Receipt, path: "/admin/client-receipts" },
     ],
     [t, newLeads]
@@ -59,7 +60,7 @@ const AdminLayout = () => {
   const financialNavItems = useMemo(
     () => [
       { label: "Expenses / Material Receipts", icon: FileText, path: "/admin/expenses" },
-      { label: "Reimbursements", icon: DollarSign, path: "/admin/reimbursements" },
+      { label: "Reimbursements / Partner Settlements", icon: DollarSign, path: "/admin/reimbursements" },
       { label: "Reports", icon: PieChart, path: "/admin/reports" },
       { label: "Tax Center", icon: Calculator, path: "/admin/tax-center" },
     ],

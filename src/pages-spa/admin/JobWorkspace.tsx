@@ -167,7 +167,7 @@ export default function JobWorkspace() {
     loadJobWorkspace();
   }, [isUserLoading, loadJobWorkspace]);
 
-  // Derived Financial Math (Requirement 5)
+  // Derived Financial Math (Requirements 5 & 6)
   const financialSummary = useMemo(() => {
     const originalContractValue = estimate?.total_amount || 0;
 
@@ -181,21 +181,48 @@ export default function JobWorkspace() {
 
     const currentContractValue = originalContractValue + approvedExtras;
 
+    // Client Materials (billed directly or reimbursable by client)
+    const clientMaterialsList = expenses.filter(
+      e => e.bill_to_client || (e as any).material_responsibility === 'client'
+    );
+
+    const clientMaterials = clientMaterialsList.reduce((acc, e) => acc + (e.amount || 0), 0);
+
+    const unpaidClientMaterials = clientMaterialsList
+      .filter(e => e.client_reimbursement_status !== 'paid')
+      .reduce((acc, e) => acc + (e.amount || 0), 0);
+
+    const totalClientResponsibility = currentContractValue + clientMaterials;
+
     const amountPaid = payments
       .filter(p => p.status === 'received')
       .reduce((acc, p) => acc + (p.amount || 0), 0);
 
-    const balanceDue = currentContractValue - amountPaid;
+    const balanceDue = Math.max(0, totalClientResponsibility - amountPaid);
+
+    // Company Job Costs (materials & expenses paid by company)
+    const companyMaterialsCost = expenses
+      .filter(e => !e.bill_to_client && (e as any).material_responsibility !== 'client')
+      .reduce((acc, e) => acc + (e.amount || 0), 0);
+
+    const grossJobProfit = totalClientResponsibility - companyMaterialsCost;
+    const profitMargin = totalClientResponsibility > 0 ? (grossJobProfit / totalClientResponsibility) * 100 : 0;
 
     return {
       originalContractValue,
       approvedExtras,
       pendingExtras,
       currentContractValue,
+      clientMaterials,
+      unpaidClientMaterials,
+      totalClientResponsibility,
       amountPaid,
-      balanceDue: balanceDue < 0 ? 0 : balanceDue
+      balanceDue,
+      companyMaterialsCost,
+      grossJobProfit,
+      profitMargin
     };
-  }, [estimate, extras, payments]);
+  }, [estimate, extras, expenses, payments]);
 
   // Action Handlers
   const handleUpdateJobStatus = async (newStatus: "scheduled" | "in_progress" | "completed") => {
@@ -509,27 +536,39 @@ export default function JobWorkspace() {
             </div>
           </div>
 
-          {/* Header Financial KPI Strip (Requirement 5) */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-white/10 text-xs">
-            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
-              <span className="text-[10px] text-blue-300 uppercase tracking-widest font-bold block">Original Contract</span>
-              <span className="text-base font-bold text-white">${financialSummary.originalContractValue.toLocaleString()}</span>
+          {/* Header Financial KPI Strip (Requirement 6) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 pt-2 border-t border-white/10 text-xs">
+            <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+              <span className="text-[9px] text-blue-300 uppercase tracking-widest font-bold block">Original Contract</span>
+              <span className="text-sm font-bold text-white">${financialSummary.originalContractValue.toLocaleString()}</span>
             </div>
-            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
-              <span className="text-[10px] text-purple-300 uppercase tracking-widest font-bold block">Approved Extras</span>
-              <span className="text-base font-bold text-purple-300">+${financialSummary.approvedExtras.toLocaleString()}</span>
+            <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+              <span className="text-[9px] text-purple-300 uppercase tracking-widest font-bold block">Approved Extras</span>
+              <span className="text-sm font-bold text-purple-300">+${financialSummary.approvedExtras.toLocaleString()}</span>
             </div>
-            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
-              <span className="text-[10px] text-blue-300 uppercase tracking-widest font-bold block">Current Contract</span>
-              <span className="text-base font-black text-white">${financialSummary.currentContractValue.toLocaleString()}</span>
+            <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+              <span className="text-[9px] text-blue-200 uppercase tracking-widest font-bold block">Current Contract</span>
+              <span className="text-sm font-black text-white">${financialSummary.currentContractValue.toLocaleString()}</span>
             </div>
-            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
-              <span className="text-[10px] text-emerald-300 uppercase tracking-widest font-bold block">Amount Paid</span>
-              <span className="text-base font-bold text-emerald-400">${financialSummary.amountPaid.toLocaleString()}</span>
+            <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+              <span className="text-[9px] text-amber-300 uppercase tracking-widest font-bold block">Client Materials</span>
+              <span className="text-sm font-bold text-amber-300">+${financialSummary.clientMaterials.toLocaleString()}</span>
             </div>
-            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10 col-span-2 sm:col-span-1">
-              <span className="text-[10px] text-amber-300 uppercase tracking-widest font-bold block">Balance Due</span>
-              <span className="text-base font-black text-amber-400">${financialSummary.balanceDue.toLocaleString()}</span>
+            <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+              <span className="text-[9px] text-indigo-300 uppercase tracking-widest font-bold block">Total Responsibility</span>
+              <span className="text-sm font-black text-indigo-200">${financialSummary.totalClientResponsibility.toLocaleString()}</span>
+            </div>
+            <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+              <span className="text-[9px] text-emerald-300 uppercase tracking-widest font-bold block">Amount Received</span>
+              <span className="text-sm font-bold text-emerald-400">${financialSummary.amountPaid.toLocaleString()}</span>
+            </div>
+            <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+              <span className="text-[9px] text-amber-200 uppercase tracking-widest font-bold block">Unpaid Materials</span>
+              <span className="text-sm font-bold text-amber-300">${financialSummary.unpaidClientMaterials.toLocaleString()}</span>
+            </div>
+            <div className="bg-white/5 rounded-xl p-2 border border-white/10 col-span-2 sm:col-span-1">
+              <span className="text-[9px] text-orange-400 uppercase tracking-widest font-bold block">Balance Due</span>
+              <span className="text-sm font-black text-orange-400">${financialSummary.balanceDue.toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -1290,17 +1329,44 @@ export default function JobWorkspace() {
         </div>
       )}
 
-      {/* 4. Add Material Expense Modal */}
+      {/* 4. Add Material Expense Modal (Requirement 12 & 13) */}
       {isAddExpenseOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <h3 className="font-bold text-base text-[#0b2a4a]">Log Job Material / Expense</h3>
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <h3 className="font-bold text-base text-[#0b2a4a] border-b border-gray-100 pb-2">Log Job Material / Expense</h3>
 
-            <div className="space-y-3 text-xs">
+            <div className="space-y-4 text-xs">
+              {/* Material Responsibility Selection (Requirement 12) */}
               <div>
-                <Label>Job (Locked)</Label>
-                <Input value={`${clientName} — ${projectType}`} disabled className="bg-gray-100 font-bold" />
+                <Label className="font-bold text-gray-700 block mb-1.5">Who is responsible for this material?</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setExpenseForm(prev => ({ ...prev, billToClient: true, reimbursableToOwner: false }))}
+                    className={`p-3 rounded-xl border text-left font-bold transition-all ${
+                      expenseForm.billToClient
+                        ? "bg-amber-50 border-amber-500 text-amber-900 ring-2 ring-amber-500/20"
+                        : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    <p className="text-xs">Client Material</p>
+                    <p className="text-[10px] text-gray-500 font-normal mt-0.5">Billed to client / increases Client Responsibility</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpenseForm(prev => ({ ...prev, billToClient: false, reimbursableToOwner: true }))}
+                    className={`p-3 rounded-xl border text-left font-bold transition-all ${
+                      !expenseForm.billToClient
+                        ? "bg-purple-50 border-purple-500 text-purple-900 ring-2 ring-purple-500/20"
+                        : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    <p className="text-xs">Company Material</p>
+                    <p className="text-[10px] text-gray-500 font-normal mt-0.5">Company job cost / does not increase client price</p>
+                  </button>
+                </div>
               </div>
+
               <div>
                 <Label>Description / Item</Label>
                 <Input
@@ -1310,7 +1376,7 @@ export default function JobWorkspace() {
                 />
               </div>
               <div>
-                <Label>Vendor / Merchant</Label>
+                <Label>Vendor / Store</Label>
                 <Input
                   placeholder="e.g. Home Depot / Ring's End"
                   value={expenseForm.vendor}
@@ -1339,39 +1405,65 @@ export default function JobWorkspace() {
                 <Input
                   value={expenseForm.paidByName}
                   onChange={e => setExpenseForm({ ...expenseForm, paidByName: e.target.value })}
+                  placeholder="e.g. Hugo / Partner / Company Card"
                 />
+              </div>
+
+              {/* Mobile-First Receipt Photo Capture (Requirement 13 & 28) */}
+              <div className="pt-2 border-t border-gray-100 space-y-2">
+                <Label className="font-bold text-gray-700 block">Receipt Attachment (Mobile Options)</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl border border-blue-200 text-[11px] hover:bg-blue-100">
+                    📷 Take Receipt Photo
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleMediaFileSelect} />
+                  </label>
+                  <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2.5 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 text-[11px] hover:bg-gray-100">
+                    🖼️ Choose File / PDF
+                    <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleMediaFileSelect} />
+                  </label>
+                </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
               <Button variant="outline" size="sm" onClick={() => setIsAddExpenseOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddExpenseSubmit} disabled={isSavingExpense} className="bg-purple-600 text-white font-bold size-sm">
-                {isSavingExpense ? "Saving..." : "Save Job Expense"}
+              <Button onClick={handleAddExpenseSubmit} disabled={isSavingExpense} className="bg-[#0b2a4a] text-white font-bold size-sm">
+                {isSavingExpense ? "Saving..." : "Save Material"}
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 5. Add Job Photo Modal */}
+      {/* 5. Add Job Photo / Video Modal (Requirement 7 & 8) */}
       {isAddMediaOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <h3 className="font-bold text-base text-[#0b2a4a]">Upload Job Progress Photo</h3>
+            <h3 className="font-bold text-base text-[#0b2a4a]">Upload Job Photo / Video</h3>
 
             <div className="space-y-3 text-xs">
-              <div>
-                <Label>Select Image File</Label>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handleMediaFileSelect}
-                  className="w-full text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white"
-                />
+              <Label className="font-bold text-gray-700 block">Select Media File (Mobile Options)</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="cursor-pointer flex items-center justify-center gap-1.5 p-3 bg-blue-50 text-blue-700 font-bold rounded-xl border border-blue-200 text-xs hover:bg-blue-100 text-center">
+                  📷 Take Photo
+                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleMediaFileSelect} />
+                </label>
+                <label className="cursor-pointer flex items-center justify-center gap-1.5 p-3 bg-slate-50 text-slate-700 font-bold rounded-xl border border-slate-200 text-xs hover:bg-slate-100 text-center">
+                  🖼️ Choose Photo
+                  <input type="file" accept="image/*" className="hidden" onChange={handleMediaFileSelect} />
+                </label>
+                <label className="cursor-pointer flex items-center justify-center gap-1.5 p-3 bg-purple-50 text-purple-700 font-bold rounded-xl border border-purple-200 text-xs hover:bg-purple-100 text-center">
+                  🎥 Record Video
+                  <input type="file" accept="video/*" capture="environment" className="hidden" onChange={handleMediaFileSelect} />
+                </label>
+                <label className="cursor-pointer flex items-center justify-center gap-1.5 p-3 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-200 text-xs hover:bg-indigo-100 text-center">
+                  🎬 Choose Video
+                  <input type="file" accept="video/*" className="hidden" onChange={handleMediaFileSelect} />
+                </label>
               </div>
 
               {mediaFileUrl && (
-                <div className="w-24 h-24 rounded-xl overflow-hidden border border-gray-200">
+                <div className="w-28 h-28 rounded-xl overflow-hidden border border-gray-200 mt-2">
                   <img src={mediaFileUrl} alt="Preview" className="w-full h-full object-cover" />
                 </div>
               )}
@@ -1379,7 +1471,7 @@ export default function JobWorkspace() {
               <div>
                 <Label>Caption / Notes</Label>
                 <Input
-                  placeholder="e.g. Framing completed & inspected"
+                  placeholder="e.g. Gutter repair completed & water tested"
                   value={mediaCaption}
                   onChange={e => setMediaCaption(e.target.value)}
                 />
@@ -1389,7 +1481,7 @@ export default function JobWorkspace() {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={() => setIsAddMediaOpen(false)}>Cancel</Button>
               <Button onClick={handleAddMediaSubmit} disabled={isSavingMedia || !mediaFileUrl} className="bg-[#0b2a4a] text-white font-bold size-sm">
-                {isSavingMedia ? "Uploading..." : "Upload Photo"}
+                {isSavingMedia ? "Uploading..." : "Upload Media"}
               </Button>
             </div>
           </div>

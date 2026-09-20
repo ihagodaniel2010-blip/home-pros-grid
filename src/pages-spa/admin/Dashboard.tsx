@@ -166,55 +166,34 @@ const Dashboard = () => {
           <Sparkles className="h-4 w-4 text-blue-600" />
           Quick Actions
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <button
             onClick={() => navigate("/admin/estimates/new")}
-            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-all text-center group"
+            className="flex flex-col items-center justify-center p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-all text-center group"
           >
             <Plus className="h-5 w-5 mb-1 group-hover:scale-110 transition-transform" />
             <span className="text-xs font-bold">+ New Estimate</span>
           </button>
           <button
             onClick={() => navigate("/admin/inbox")}
-            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-sm transition-all text-center group"
+            className="flex flex-col items-center justify-center p-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-sm transition-all text-center group"
           >
             <Users className="h-5 w-5 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold">+ Client Request</span>
+            <span className="text-xs font-bold">Client Requests</span>
           </button>
           <button
-            onClick={() => navigate("/admin/client-receipts")}
-            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition-all text-center group"
+            onClick={() => navigate("/admin/jobs")}
+            className="flex flex-col items-center justify-center p-4 bg-[#0b2a4a] hover:bg-[#081e35] text-white rounded-xl shadow-sm transition-all text-center group"
           >
-            <DollarSign className="h-5 w-5 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold">+ Record Payment</span>
-          </button>
-          <button
-            onClick={() => navigate("/admin/expenses")}
-            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-sm transition-all text-center group"
-          >
-            <FileText className="h-5 w-5 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold">+ New Expense</span>
+            <Wrench className="h-5 w-5 mb-1 group-hover:scale-110 transition-transform text-amber-400" />
+            <span className="text-xs font-bold">Active Projects</span>
           </button>
           <button
             onClick={() => navigate("/admin/estimates")}
-            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 rounded-xl shadow-sm transition-all text-center group"
+            className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 rounded-xl shadow-sm transition-all text-center group"
           >
             <ClipboardList className="h-5 w-5 text-amber-600 mb-1 group-hover:scale-110 transition-transform" />
             <span className="text-xs font-bold">Pending Estimates</span>
-          </button>
-          <button
-            onClick={() => navigate("/admin/client-receipts")}
-            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 rounded-xl shadow-sm transition-all text-center group"
-          >
-            <CheckCircle2 className="h-5 w-5 text-emerald-600 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold">Client Receipts</span>
-          </button>
-          <button
-            onClick={() => navigate("/admin/reimbursements")}
-            className="flex flex-col items-center justify-center p-3 sm:p-4 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 rounded-xl shadow-sm transition-all text-center group col-span-2 sm:col-span-1"
-          >
-            <TrendingUp className="h-5 w-5 text-blue-600 mb-1 group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-bold">Reimbursements</span>
           </button>
         </div>
       </div>
