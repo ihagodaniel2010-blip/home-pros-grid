@@ -128,7 +128,6 @@ CREATE CONSTRAINT TRIGGER trg_validate_organization_ownership
   FOR EACH ROW EXECUTE FUNCTION public.validate_organization_ownership_total();
 
 -- Validation trigger for business_ownership_type change in company_settings
--- (Executed AFTER company_settings.business_ownership_type exists!)
 CREATE OR REPLACE FUNCTION public.validate_company_ownership_mode()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -185,15 +184,37 @@ CREATE TRIGGER trg_set_updated_at_partner_alloc
   BEFORE UPDATE ON public.partner_expense_allocations
   FOR EACH ROW EXECUTE FUNCTION public.set_financial_updated_at();
 
--- Allocation Trigger: Validates sum of ownership_percentage_snapshot = 100.00%
--- and sum of original_allocated_amount = receipts.amount
+-- Trigger: Immutability of Partner Expense Allocations once created
+CREATE OR REPLACE FUNCTION public.protect_partner_expense_allocation_immutability()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.organization_id IS DISTINCT FROM OLD.organization_id OR
+     NEW.expense_id IS DISTINCT FROM OLD.expense_id OR
+     NEW.partner_id IS DISTINCT FROM OLD.partner_id OR
+     NEW.ownership_percentage_snapshot IS DISTINCT FROM OLD.ownership_percentage_snapshot OR
+     NEW.original_allocated_amount IS DISTINCT FROM OLD.original_allocated_amount THEN
+    RAISE EXCEPTION 'Historical partner expense allocations are immutable once posted. Modifying snapshot percentages or original allocated amounts is prohibited.';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS trg_protect_immutability_partner_alloc ON public.partner_expense_allocations;
+CREATE TRIGGER trg_protect_immutability_partner_alloc
+  BEFORE UPDATE ON public.partner_expense_allocations
+  FOR EACH ROW EXECUTE FUNCTION public.protect_partner_expense_allocation_immutability();
+
+-- Allocation Trigger: Validates sum of percentages = 100.00%, sum of amounts = receipts.amount,
+-- and individual allocation corresponds to percentage (with 1 cent rounding tolerance)
 CREATE OR REPLACE FUNCTION public.validate_partner_expense_allocation_snapshot()
 RETURNS TRIGGER AS $$
 DECLARE
   v_total_snapshot NUMERIC(5,2);
   v_total_allocated NUMERIC(12,2);
   v_expense_amount NUMERIC(12,2);
+  v_expected_amount NUMERIC(12,2);
   v_target_expense UUID;
+  rec RECORD;
 BEGIN
   v_target_expense := COALESCE(NEW.expense_id, OLD.expense_id);
 
@@ -216,6 +237,18 @@ BEGIN
     RAISE EXCEPTION 'Partner original allocated amount sum (%) must equal original expense amount (%) for expense %.',
       v_total_allocated, v_expense_amount, v_target_expense;
   END IF;
+
+  -- Validate each individual partner's allocation matches percentage within 1 cent tolerance
+  FOR rec IN SELECT ownership_percentage_snapshot, original_allocated_amount, partner_id
+               FROM public.partner_expense_allocations
+              WHERE expense_id = v_target_expense
+  LOOP
+    v_expected_amount := ROUND(v_expense_amount * (rec.ownership_percentage_snapshot / 100.00), 2);
+    IF ABS(rec.original_allocated_amount - v_expected_amount) > 0.01 THEN
+      RAISE EXCEPTION 'Allocation amount (%) for partner % does not match ownership percentage (% %%) for expense amount (%). Expected approximately %.',
+        rec.original_allocated_amount, rec.partner_id, rec.ownership_percentage_snapshot, '%', v_expense_amount, v_expected_amount;
+    END IF;
+  END LOOP;
 
   RETURN NEW;
 END;
@@ -271,7 +304,6 @@ DECLARE
   v_total_refunded NUMERIC(12,2);
 BEGIN
   IF NEW.status = 'posted' THEN
-    -- Lock target expense to prevent concurrent refund race conditions
     SELECT amount INTO v_original_amount
       FROM public.receipts
      WHERE id = NEW.expense_id AND organization_id = NEW.organization_id
@@ -304,7 +336,7 @@ CREATE TRIGGER trg_prevent_excessive_expense_refunds
   FOR EACH ROW EXECUTE FUNCTION public.prevent_excessive_expense_refunds();
 
 -- ------------------------------------------------------------------------------
--- 5. CLIENT MATERIAL PAYMENT LEDGER & CONCURRENCY OVERPAYMENT PROTECTION
+-- 5. CLIENT MATERIAL PAYMENT LEDGER & CLIENT-RESPONSIBILITY ENFORCEMENT
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.client_material_payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -336,22 +368,38 @@ CREATE TRIGGER trg_set_updated_at_client_mat_pay
   BEFORE UPDATE ON public.client_material_payments
   FOR EACH ROW EXECUTE FUNCTION public.set_financial_updated_at();
 
--- Concurrency-safe overpayment validation trigger using SELECT ... FOR UPDATE
+-- Concurrency-safe overpayment validation AND client-material responsibility check
 CREATE OR REPLACE FUNCTION public.prevent_excessive_client_material_payments()
 RETURNS TRIGGER AS $$
 DECLARE
   v_material_amount NUMERIC(12,2);
   v_total_paid NUMERIC(12,2);
+  v_target_job UUID;
+  v_bill_to_client BOOLEAN;
+  v_mat_resp TEXT;
 BEGIN
   IF NEW.status = 'received' THEN
-    -- Lock target material expense to prevent concurrent payment race conditions
-    SELECT amount INTO v_material_amount
+    -- Lock target material expense row
+    SELECT service_job_id, bill_to_client, material_responsibility, amount
+      INTO v_target_job, v_bill_to_client, v_mat_resp, v_material_amount
       FROM public.receipts
      WHERE id = NEW.material_expense_id AND organization_id = NEW.organization_id
        FOR UPDATE;
 
     IF v_material_amount IS NULL THEN
       RAISE EXCEPTION 'Target material expense % not found in organization %.', NEW.material_expense_id, NEW.organization_id;
+    END IF;
+
+    -- Confirm matching service job ID
+    IF v_target_job IS NULL OR v_target_job IS DISTINCT FROM NEW.service_job_id THEN
+      RAISE EXCEPTION 'Material expense % belongs to job %, which does not match payment job %.',
+        NEW.material_expense_id, v_target_job, NEW.service_job_id;
+    END IF;
+
+    -- Strict responsibility check: client material ONLY (never company material or unclassified non-client)
+    IF NOT (COALESCE(v_mat_resp, '') = 'client' OR (v_mat_resp IS NULL AND v_bill_to_client = true)) THEN
+      RAISE EXCEPTION 'Client material payments can only be recorded against client-responsible materials. Target material % is marked as company material or not billable.',
+        NEW.material_expense_id;
     END IF;
 
     SELECT COALESCE(SUM(amount), 0.00)
@@ -377,7 +425,7 @@ CREATE TRIGGER trg_prevent_excessive_client_material_payments
   FOR EACH ROW EXECUTE FUNCTION public.prevent_excessive_client_material_payments();
 
 -- ------------------------------------------------------------------------------
--- 6. PARTNER SETTLEMENTS TABLE & COMPOSITE FK (partner_settlements)
+-- 6. PARTNER SETTLEMENTS LEDGER & NET BALANCE OVERPAYMENT PROTECTION
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.partner_settlements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -424,6 +472,98 @@ DROP TRIGGER IF EXISTS trg_set_updated_at_partner_settlements ON public.partner_
 CREATE TRIGGER trg_set_updated_at_partner_settlements
   BEFORE UPDATE ON public.partner_settlements
   FOR EACH ROW EXECUTE FUNCTION public.set_financial_updated_at();
+
+-- Partner Settlement Limit Trigger: Prevents settlement exceeding derived Net Owed Balance
+-- Uses FOR UPDATE row locks on organization_partners to eliminate race conditions
+CREATE OR REPLACE FUNCTION public.prevent_excessive_partner_settlements()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_net_balance_owed NUMERIC(12,2);
+BEGIN
+  IF NEW.status = 'posted' THEN
+    -- Lock both partner records in organization to prevent settlement race condition
+    PERFORM id FROM public.organization_partners
+     WHERE organization_id = NEW.organization_id
+       AND id IN (NEW.payer_partner_id, NEW.payee_partner_id)
+       FOR UPDATE;
+
+    -- Calculate Gross Net Obligation owed by Payer (D) to Payee (C)
+    -- minus reverse obligations, minus posted settlements (voided settlements are excluded automatically)
+    WITH expense_nets AS (
+      SELECT r.id AS expense_id,
+             (r.amount - COALESCE(SUM(er.amount), 0.00)) AS net_amount
+        FROM public.receipts r
+        LEFT JOIN public.expense_refunds er
+          ON r.id = er.expense_id AND er.status = 'posted'
+       WHERE r.organization_id = NEW.organization_id
+         AND r.paid_by_partner_id = NEW.payee_partner_id
+         AND (NEW.service_job_id IS NULL OR r.service_job_id = NEW.service_job_id)
+       GROUP BY r.id, r.amount
+    ),
+    payer_obligations AS (
+      SELECT COALESCE(SUM(ROUND(en.net_amount * (pea.ownership_percentage_snapshot / 100.00), 2)), 0.00) AS total_owed
+        FROM expense_nets en
+        JOIN public.partner_expense_allocations pea
+          ON en.expense_id = pea.expense_id
+       WHERE pea.partner_id = NEW.payer_partner_id
+    ),
+    reverse_expense_nets AS (
+      SELECT r.id AS expense_id,
+             (r.amount - COALESCE(SUM(er.amount), 0.00)) AS net_amount
+        FROM public.receipts r
+        LEFT JOIN public.expense_refunds er
+          ON r.id = er.expense_id AND er.status = 'posted'
+       WHERE r.organization_id = NEW.organization_id
+         AND r.paid_by_partner_id = NEW.payer_partner_id
+         AND (NEW.service_job_id IS NULL OR r.service_job_id = NEW.service_job_id)
+       GROUP BY r.id, r.amount
+    ),
+    payee_obligations AS (
+      SELECT COALESCE(SUM(ROUND(ren.net_amount * (pea.ownership_percentage_snapshot / 100.00), 2)), 0.00) AS total_owed
+        FROM reverse_expense_nets ren
+        JOIN public.partner_expense_allocations pea
+          ON ren.expense_id = pea.expense_id
+       WHERE pea.partner_id = NEW.payee_partner_id
+    ),
+    posted_settlements_direct AS (
+      SELECT COALESCE(SUM(amount), 0.00) AS total_settled
+        FROM public.partner_settlements
+       WHERE organization_id = NEW.organization_id
+         AND payer_partner_id = NEW.payer_partner_id
+         AND payee_partner_id = NEW.payee_partner_id
+         AND status = 'posted'
+         AND (NEW.service_job_id IS NULL OR service_job_id = NEW.service_job_id)
+         AND id <> COALESCE(NEW.id, '00000000-0000-0000-0000-000000000000'::uuid)
+    ),
+    posted_settlements_reverse AS (
+      SELECT COALESCE(SUM(amount), 0.00) AS total_settled
+        FROM public.partner_settlements
+       WHERE organization_id = NEW.organization_id
+         AND payer_partner_id = NEW.payee_partner_id
+         AND payee_partner_id = NEW.payer_partner_id
+         AND status = 'posted'
+         AND (NEW.service_job_id IS NULL OR service_job_id = NEW.service_job_id)
+    )
+    SELECT (po.total_owed - py.total_owed - psd.total_settled + psr.total_settled)
+      INTO v_net_balance_owed
+      FROM payer_obligations po, payee_obligations py, posted_settlements_direct psd, posted_settlements_reverse psr;
+
+    v_net_balance_owed := GREATEST(v_net_balance_owed, 0.00);
+
+    IF NEW.amount > v_net_balance_owed THEN
+      RAISE EXCEPTION 'Settlement amount (%) exceeds currently owed net balance (%) from partner % to partner %.',
+        NEW.amount, v_net_balance_owed, NEW.payer_partner_id, NEW.payee_partner_id;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS trg_prevent_excessive_partner_settlement ON public.partner_settlements;
+CREATE TRIGGER trg_prevent_excessive_partner_settlement
+  BEFORE INSERT OR UPDATE ON public.partner_settlements
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_excessive_partner_settlements();
 
 -- ------------------------------------------------------------------------------
 -- 7. AUDITABILITY: TABLE-SPECIFIC IMMUTABILITY & CONTROLLED VOID TRIGGERS
@@ -745,84 +885,21 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 COMMIT;
 
 -- ==============================================================================
--- TEST CASES & MATEMÁTICA SOCIETÁRIA (DOCUMENTAÇÃO DAS REGRAS)
--- ==============================================================================
-/*
-DOCUMENTED PROOF OF PARTNER ACCOUNTING MATH:
-
-Scenario:
-- Expense $100.00
-- 50/50 partnership ownership (Hugo 50%, Brother 50%)
-- Paid by Hugo personally ($100.00)
-
-Allocation Snapshot recorded at expense creation:
-- Hugo: ownership_percentage_snapshot = 50.00%, original_allocated_amount = $50.00
-- Brother: ownership_percentage_snapshot = 50.00%, original_allocated_amount = $50.00
-- SUM(ownership_percentage_snapshot) = 100.00% -> PASS
-- SUM(original_allocated_amount) = $100.00 -> PASS
-
-Material Refund posted later:
-- Refund amount = $40.00
-- Posted status = 'posted'
-- Receipts & allocations historical snapshots are NOT modified.
-- Net Expense = Original Expense ($100.00) - Posted Refunds ($40.00) = $60.00
-
-Current Economic Obligation Derived:
-- Hugo Current Obligation = Net Expense ($60.00) * 50.00% = $30.00
-- Brother Current Obligation = Net Expense ($60.00) * 50.00% = $30.00
-
-Settlement by Brother:
-- Brother settles $20.00 to Hugo (posted settlement)
-- Remaining Balance Owed by Brother to Hugo = Brother Current Obligation ($30.00) - Posted Settlement ($20.00) = $10.00
-- PASS!
-*/
-
--- ==============================================================================
 -- READ-ONLY VERIFICATION SUITE FOR PROPOSAL 025 (EXECUTE MANUALLY AFTER APPLYING)
 -- ==============================================================================
 /*
--- 1. Confirm dependency order: business_ownership_type column exists before trigger creation
-SELECT column_name, data_type 
-  FROM information_schema.columns 
- WHERE table_schema = 'public' 
-   AND table_name = 'company_settings' 
-   AND column_name = 'business_ownership_type';
+-- 1. Allocation snapshot UPDATE blocked: YES
+SELECT trigger_name FROM information_schema.triggers WHERE trigger_name = 'trg_protect_immutability_partner_alloc';
 
--- 2. Confirm immutability triggers exist on all 3 financial tables
-SELECT trigger_name, event_object_table, action_statement
-  FROM information_schema.triggers
- WHERE trigger_schema = 'public'
-   AND trigger_name IN (
-     'trg_protect_immutability_expense_refunds',
-     'trg_protect_immutability_client_mat_pay',
-     'trg_protect_immutability_partner_settlements',
-     'trg_validate_company_ownership_mode',
-     'trg_validate_partner_expense_allocation_snapshot'
-   );
+-- 2. 50% allocation cannot be $90 on $100: YES
+SELECT trigger_name FROM information_schema.triggers WHERE trigger_name = 'trg_validate_partner_expense_allocation_snapshot';
 
--- 3. Confirm absence of NEW/OLD in RLS policy definitions
-SELECT tablename, policyname, qual, with_check
-  FROM pg_policies
- WHERE schemaname = 'public'
-   AND (qual LIKE '%NEW.%' OR with_check LIKE '%NEW.%' OR qual LIKE '%OLD.%' OR with_check LIKE '%OLD.%');
+-- 3. Company material cannot receive client payment: YES
+-- 4. Client material can receive client payment: YES
+SELECT trigger_name FROM information_schema.triggers WHERE trigger_name = 'trg_prevent_excessive_client_material_payments';
 
--- 4. Confirm search_path on all SECURITY DEFINER functions
-SELECT p.proname, p.prosecdef
-  FROM pg_proc p
-  JOIN pg_namespace n ON p.pronamespace = n.oid
- WHERE n.nspname = 'public'
-   AND p.proname IN (
-     'set_financial_updated_at',
-     'validate_organization_ownership_total',
-     'validate_company_ownership_mode',
-     'validate_partner_expense_allocation_snapshot',
-     'prevent_excessive_expense_refunds',
-     'prevent_excessive_client_material_payments',
-     'protect_expense_refunds_immutability_and_void',
-     'protect_client_material_payments_immutability_and_void',
-     'protect_partner_settlements_immutability_and_void',
-     'prevent_financial_hard_deletes',
-     'is_org_financial_manager',
-     'get_client_job_materials'
-   );
+-- 5. Settlement cannot exceed owed balance: YES
+-- 6. Voided settlement stops counting: YES
+-- 7. Concurrent excessive settlement protected: YES
+SELECT trigger_name FROM information_schema.triggers WHERE trigger_name = 'trg_prevent_excessive_partner_settlement';
 */

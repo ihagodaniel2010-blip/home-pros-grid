@@ -16,9 +16,11 @@ DROP TRIGGER IF EXISTS trg_no_delete_client_mat_pay ON public.client_material_pa
 DROP TRIGGER IF EXISTS trg_no_delete_expense_refunds ON public.expense_refunds;
 DROP TRIGGER IF EXISTS trg_no_delete_expense_alloc ON public.partner_expense_allocations;
 
+DROP TRIGGER IF EXISTS trg_prevent_excessive_partner_settlement ON public.partner_settlements;
 DROP TRIGGER IF EXISTS trg_protect_immutability_partner_settlements ON public.partner_settlements;
 DROP TRIGGER IF EXISTS trg_protect_immutability_client_mat_pay ON public.client_material_payments;
 DROP TRIGGER IF EXISTS trg_protect_immutability_expense_refunds ON public.expense_refunds;
+DROP TRIGGER IF EXISTS trg_protect_immutability_partner_alloc ON public.partner_expense_allocations;
 
 DROP TRIGGER IF EXISTS trg_prevent_excessive_client_material_payments ON public.client_material_payments;
 DROP TRIGGER IF EXISTS trg_prevent_excessive_expense_refunds ON public.expense_refunds;
@@ -38,6 +40,8 @@ DROP FUNCTION IF EXISTS public.prevent_financial_hard_deletes();
 DROP FUNCTION IF EXISTS public.protect_partner_settlements_immutability_and_void();
 DROP FUNCTION IF EXISTS public.protect_client_material_payments_immutability_and_void();
 DROP FUNCTION IF EXISTS public.protect_expense_refunds_immutability_and_void();
+DROP FUNCTION IF EXISTS public.protect_partner_expense_allocation_immutability();
+DROP FUNCTION IF EXISTS public.prevent_excessive_partner_settlements();
 DROP FUNCTION IF EXISTS public.prevent_excessive_client_material_payments();
 DROP FUNCTION IF EXISTS public.prevent_excessive_expense_refunds();
 DROP FUNCTION IF EXISTS public.validate_partner_expense_allocation_snapshot();
