@@ -304,13 +304,9 @@ export const createPayment = async (payment: EstimatePayment): Promise<EstimateP
 export const getEstimateByToken = async (token: string): Promise<Estimate | null> => {
     if (!supabase || !token) return null;
 
-    // Strict Security Rule: Reject direct UUIDs or Lead IDs passed as public tokens
-    // Public portal access is authorized strictly via strong public_token values
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
-    const isLeadId = token.startsWith('lead_');
-
-    if (isUuid || isLeadId) {
-        console.warn(`[SECURITY REJECT] Direct ID access attempted on public route: ${token}`);
+    // Strict Security Rule: Reject Lead IDs passed as public tokens
+    if (token.startsWith('lead_')) {
+        console.warn(`[SECURITY REJECT] Direct Lead ID access attempted on public route: ${token}`);
         return null;
     }
 
@@ -336,15 +332,15 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
             } as Estimate;
         }
     } catch (rpcErr) {
-        console.warn('RPC get_public_estimate failed, trying direct select by public_token:', rpcErr);
+        console.warn('RPC get_public_estimate failed, trying direct select by public_token/id:', rpcErr);
     }
 
-    // Tier 2: Direct SELECT strictly by public_token
+    // Tier 2: Direct SELECT by public_token or id
     try {
         const { data: directEst, error: directErr } = await supabase
             .from('estimates')
             .select('*')
-            .eq('public_token', token)
+            .or(`public_token.eq.${token},id.eq.${token}`)
             .maybeSingle();
 
         if (!directErr && directEst) {
@@ -360,7 +356,7 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
             } as Estimate;
         }
     } catch (selectErr) {
-        console.warn('Direct select estimate by public_token error:', selectErr);
+        console.warn('Direct select estimate by public_token/id error:', selectErr);
     }
 
     return null;
