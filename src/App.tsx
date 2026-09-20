@@ -17,16 +17,36 @@ import Privacy from "./pages-spa/Privacy";
 import Disclaimer from "./pages-spa/Disclaimer";
 import RefundPolicy from "./pages-spa/RefundPolicy";
 import Contact from "./pages-spa/Contact";
+import ErrorBoundary from "./components/admin/ErrorBoundary";
 import NotFound from "./pages-spa/NotFound";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { Loader2 } from "lucide-react";
 
+// Global window listener for unhandled chunk rejections across deployments
+if (typeof window !== "undefined") {
+  window.addEventListener("unhandledrejection", (event) => {
+    const error = event.reason;
+    const msg = String(error?.message || error || "").toLowerCase();
+    if (
+      msg.includes("loading chunk") ||
+      msg.includes("failed to fetch dynamically imported module") ||
+      msg.includes("chunkloaderror")
+    ) {
+      const lastReload = Number(sessionStorage.getItem("spa_chunk_reload_timestamp") || "0");
+      if (Date.now() - lastReload > 15000) {
+        console.warn("[App] Chunk load rejection caught. Triggering automatic hard reload...");
+        sessionStorage.setItem("spa_chunk_reload_timestamp", String(Date.now()));
+        window.location.reload();
+      }
+    }
+  });
+}
+
 // Lazy-loaded heavy Admin & Portal Components for Optimal Public Page Load & Performance
 const AdminLogin = lazy(() => import("./pages-spa/admin/AdminLogin"));
 const AdminLayout = lazy(() => import("./components/admin/AdminLayout"));
-const ErrorBoundary = lazy(() => import("./components/admin/ErrorBoundary"));
 const Dashboard = lazy(() => import("./pages-spa/admin/Dashboard"));
 const AdminInbox = lazy(() => import("./pages-spa/admin/Inbox"));
 const Analytics = lazy(() => import("./pages-spa/admin/Analytics"));

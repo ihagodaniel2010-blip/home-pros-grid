@@ -6,10 +6,12 @@ import { EstimateLineItem } from "@/lib/estimates";
 interface EstimateItemsTableProps {
     items: EstimateLineItem[];
     onChange: (items: EstimateLineItem[]) => void;
+    readOnly?: boolean;
 }
 
-const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
+const EstimateItemsTable = ({ items, onChange, readOnly = false }: EstimateItemsTableProps) => {
     const addItem = () => {
+        if (readOnly) return;
         const newItem: EstimateLineItem = {
             description: "",
             quantity: 1,
@@ -20,11 +22,13 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
     };
 
     const removeItem = (index: number) => {
+        if (readOnly) return;
         const newItems = items.filter((_, i) => i !== index);
         onChange(newItems);
     };
 
     const updateItem = (index: number, updates: Partial<EstimateLineItem>) => {
+        if (readOnly) return;
         const newItems = items.map((item, i) => {
             if (i === index) {
                 const updated = { ...item, ...updates };
@@ -43,17 +47,19 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
         <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-gray-900">Service Items</h3>
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    id="add-item-btn"
-                    onClick={addItem}
-                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                </Button>
+                {!readOnly && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        id="add-item-btn"
+                        onClick={addItem}
+                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                    >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Item
+                    </Button>
+                )}
             </div>
 
             <div id="estimate-items-section" className="border border-gray-200 rounded-lg overflow-x-auto">
@@ -64,14 +70,14 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                             <th className="px-4 py-3 w-24">Qty</th>
                             <th className="px-4 py-3 w-32">Unit Price</th>
                             <th className="px-4 py-3 w-32">Total</th>
-                            <th className="px-4 py-3 w-12"></th>
+                            {!readOnly && <th className="px-4 py-3 w-12"></th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 bg-white">
                         {items.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm italic">
-                                    No items added yet. Click "Add Item" to start.
+                                <td colSpan={readOnly ? 4 : 5} className="px-4 py-8 text-center text-gray-400 text-sm italic">
+                                    No items added yet.
                                 </td>
                             </tr>
                         ) : (
@@ -83,6 +89,7 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                                             placeholder="e.g. Interior Painting - Living Room"
                                             value={item.description}
                                             onChange={(e) => updateItem(index, { description: e.target.value })}
+                                            disabled={readOnly}
                                             className="border-none focus-visible:ring-1 shadow-none px-0 h-8"
                                         />
                                     </td>
@@ -94,6 +101,7 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                                             step="0.01"
                                             value={item.quantity}
                                             onChange={(e) => updateItem(index, { quantity: parseFloat(e.target.value) || 0 })}
+                                            disabled={readOnly}
                                             className="border-none focus-visible:ring-1 shadow-none px-0 h-8 font-medium"
                                         />
                                     </td>
@@ -107,6 +115,7 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                                                 step="0.01"
                                                 value={item.unit_price}
                                                 onChange={(e) => updateItem(index, { unit_price: parseFloat(e.target.value) || 0 })}
+                                                disabled={readOnly}
                                                 className="border-none focus-visible:ring-1 shadow-none px-0 h-8 font-medium"
                                             />
                                         </div>
@@ -114,15 +123,17 @@ const EstimateItemsTable = ({ items, onChange }: EstimateItemsTableProps) => {
                                     <td className="px-4 py-3 text-sm font-semibold text-gray-900">
                                         ${(item.total_price ?? ((item.quantity || 0) * (item.unit_price || 0))).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <button
-                                            type="button"
-                                            onClick={() => removeItem(index)}
-                                            className="text-gray-300 hover:text-red-500 transition-colors"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </button>
-                                    </td>
+                                    {!readOnly && (
+                                        <td className="px-4 py-3 text-right">
+                                            <button
+                                                type="button"
+                                                onClick={() => removeItem(index)}
+                                                className="text-gray-300 hover:text-red-500 transition-colors"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </td>
+                                    )}
                                 </tr>
                             ))
                         )}
