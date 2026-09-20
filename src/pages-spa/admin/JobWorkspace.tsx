@@ -861,6 +861,19 @@ export default function JobWorkspace() {
             {/* Quick Actions Header Bar */}
             <div className="flex flex-wrap items-center gap-2">
               <Button
+                onClick={() => {
+                  const portalToken = estimate?.public_token || job?.id || estimate?.id;
+                  if (portalToken) {
+                    const url = `${window.location.origin}/estimate/${portalToken}`;
+                    navigator.clipboard.writeText(url);
+                    toast.success("Client Project Portal link copied to clipboard!");
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold h-9 px-3 rounded-xl shadow-sm gap-1.5"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Client Portal
+              </Button>
+              <Button
                 onClick={() => setIsAddExtraOpen(true)}
                 className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold h-9 px-3 rounded-xl shadow-sm gap-1.5"
               >
