@@ -7,8 +7,40 @@
 BEGIN;
 
 -- ------------------------------------------------------------------------------
--- 0. UPDATED_AT TRIGGER HELPER FUNCTION
+-- 0. PREPARATION: EXTEND PRE-EXISTING TABLES FIRST (CORRECT MIGRATION ORDER)
 -- ------------------------------------------------------------------------------
+
+-- Add business_ownership_type to company_settings FIRST so triggers can reference it
+ALTER TABLE public.company_settings
+  ADD COLUMN IF NOT EXISTS business_ownership_type TEXT DEFAULT 'single_owner'
+    CHECK (business_ownership_type IN ('single_owner', 'partnership'));
+
+-- Add composite unique constraints required for composite foreign keys
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_service_jobs_id_org'
+  ) THEN
+    ALTER TABLE public.service_jobs ADD CONSTRAINT uq_service_jobs_id_org UNIQUE (id, organization_id);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_receipts_id_org'
+  ) THEN
+    ALTER TABLE public.receipts ADD CONSTRAINT uq_receipts_id_org UNIQUE (id, organization_id);
+  END IF;
+END $$;
+
+-- Receipts legacy: material_responsibility defaults to NULL (Unclassified) to avoid misclassifying historical records
+ALTER TABLE public.receipts
+  ADD COLUMN IF NOT EXISTS material_responsibility TEXT DEFAULT NULL
+    CHECK (material_responsibility IS NULL OR material_responsibility IN ('client', 'company')),
+  ADD COLUMN IF NOT EXISTS paid_by_partner_id UUID DEFAULT NULL;
+
+-- Helper function for updated_at timestamps
 CREATE OR REPLACE FUNCTION public.set_financial_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -40,8 +72,22 @@ CREATE TRIGGER trg_set_updated_at_org_partners
   BEFORE UPDATE ON public.organization_partners
   FOR EACH ROW EXECUTE FUNCTION public.set_financial_updated_at();
 
+-- Add composite FK from receipts to organization_partners now that organization_partners exists
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_receipts_partner_org'
+  ) THEN
+    ALTER TABLE public.receipts
+      ADD CONSTRAINT fk_receipts_partner_org
+      FOREIGN KEY (paid_by_partner_id, organization_id)
+      REFERENCES public.organization_partners(id, organization_id)
+      ON DELETE RESTRICT;
+  END IF;
+END $$;
+
 -- ------------------------------------------------------------------------------
--- 2. OWNERSHIP VALIDATION TRIGGER (FECHAMENTO DE 100.00% POR TIPO DE EMPRESA)
+-- 2. OWNERSHIP VALIDATION TRIGGERS (100.00% ENFORCEMENT FOR PARTNERSHIPS)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.validate_organization_ownership_total()
 RETURNS TRIGGER AS $$
@@ -52,7 +98,6 @@ DECLARE
 BEGIN
   v_target_org := COALESCE(NEW.organization_id, OLD.organization_id);
 
-  -- Obter modo de propriedade configurado em company_settings
   SELECT business_ownership_type INTO v_ownership_type
     FROM public.company_settings
    WHERE organization_id = v_target_org;
@@ -63,7 +108,6 @@ BEGIN
    WHERE organization_id = v_target_org
      AND active = true;
 
-  -- Se for Sociedade (partnership), ativamente exige que a soma dos sócios ativos seja EXATAMENTE 100.00%
   IF v_ownership_type = 'partnership' THEN
     IF v_total <> 100.00 THEN
       RAISE EXCEPTION 'Partnership ownership invalid for Organization %. Active partner percentages sum to % %%, but must equal exactly 100.00 %%.',
@@ -83,7 +127,8 @@ CREATE CONSTRAINT TRIGGER trg_validate_organization_ownership
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION public.validate_organization_ownership_total();
 
--- Validação de mudança de modo em company_settings (impede mudar para partnership com 0% ativos)
+-- Validation trigger for business_ownership_type change in company_settings
+-- (Executed AFTER company_settings.business_ownership_type exists!)
 CREATE OR REPLACE FUNCTION public.validate_company_ownership_mode()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -112,55 +157,9 @@ CREATE TRIGGER trg_validate_company_ownership_mode
   FOR EACH ROW EXECUTE FUNCTION public.validate_company_ownership_mode();
 
 -- ------------------------------------------------------------------------------
--- 3. EXTEND COMPANY SETTINGS & RECEIPTS WITH COMPOSITE KEYS & LEGACY SAFE NULL
--- ------------------------------------------------------------------------------
-ALTER TABLE public.company_settings
-  ADD COLUMN IF NOT EXISTS business_ownership_type TEXT DEFAULT 'single_owner'
-    CHECK (business_ownership_type IN ('single_owner', 'partnership'));
-
--- Garantir chave composta em service_jobs para composite FK
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'uq_service_jobs_id_org'
-  ) THEN
-    ALTER TABLE public.service_jobs ADD CONSTRAINT uq_service_jobs_id_org UNIQUE (id, organization_id);
-  END IF;
-END $$;
-
--- Garantir chave composta em receipts para composite FK
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'uq_receipts_id_org'
-  ) THEN
-    ALTER TABLE public.receipts ADD CONSTRAINT uq_receipts_id_org UNIQUE (id, organization_id);
-  END IF;
-END $$;
-
--- Receipts legado: material_responsibility inicia NULL (Unclassified) sem forçar 'company'
-ALTER TABLE public.receipts
-  ADD COLUMN IF NOT EXISTS material_responsibility TEXT DEFAULT NULL
-    CHECK (material_responsibility IS NULL OR material_responsibility IN ('client', 'company')),
-  ADD COLUMN IF NOT EXISTS paid_by_partner_id UUID DEFAULT NULL;
-
--- Composite FK: (paid_by_partner_id, organization_id) -> organization_partners(id, organization_id)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'fk_receipts_partner_org'
-  ) THEN
-    ALTER TABLE public.receipts
-      ADD CONSTRAINT fk_receipts_partner_org
-      FOREIGN KEY (paid_by_partner_id, organization_id)
-      REFERENCES public.organization_partners(id, organization_id)
-      ON DELETE RESTRICT;
-  END IF;
-END $$;
-
--- ------------------------------------------------------------------------------
--- 4. HISTORICAL PARTNER EXPENSE ALLOCATIONS (partner_expense_allocations)
--- Preserva snapshot exato do momento em que a despesa foi lançada
+-- 3. HISTORICAL PARTNER EXPENSE ALLOCATIONS (partner_expense_allocations)
+-- Preserves immutable historical ownership percentage & original allocated amount
+-- Net Economic Obligation is derived dynamically: (Original Expense - Posted Refunds) * Percentage
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.partner_expense_allocations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -168,7 +167,7 @@ CREATE TABLE IF NOT EXISTS public.partner_expense_allocations (
   expense_id UUID NOT NULL,
   partner_id UUID NOT NULL,
   ownership_percentage_snapshot NUMERIC(5,2) NOT NULL CHECK (ownership_percentage_snapshot >= 0.00 AND ownership_percentage_snapshot <= 100.00),
-  allocated_amount NUMERIC(12,2) NOT NULL CHECK (allocated_amount >= 0.00),
+  original_allocated_amount NUMERIC(12,2) NOT NULL CHECK (original_allocated_amount >= 0.00),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_expense_partner UNIQUE (expense_id, partner_id),
@@ -186,7 +185,8 @@ CREATE TRIGGER trg_set_updated_at_partner_alloc
   BEFORE UPDATE ON public.partner_expense_allocations
   FOR EACH ROW EXECUTE FUNCTION public.set_financial_updated_at();
 
--- Trigger de Integridade da Alocação (Soma Snapshots = 100.00% e Soma Valora = Original Expense)
+-- Allocation Trigger: Validates sum of ownership_percentage_snapshot = 100.00%
+-- and sum of original_allocated_amount = receipts.amount
 CREATE OR REPLACE FUNCTION public.validate_partner_expense_allocation_snapshot()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -202,7 +202,7 @@ BEGIN
    WHERE id = v_target_expense;
 
   SELECT COALESCE(SUM(ownership_percentage_snapshot), 0.00),
-         COALESCE(SUM(allocated_amount), 0.00)
+         COALESCE(SUM(original_allocated_amount), 0.00)
     INTO v_total_snapshot, v_total_allocated
     FROM public.partner_expense_allocations
    WHERE expense_id = v_target_expense;
@@ -213,7 +213,7 @@ BEGIN
   END IF;
 
   IF v_total_allocated <> v_expense_amount THEN
-    RAISE EXCEPTION 'Partner allocated amount sum (%) must equal original expense amount (%) for expense %.',
+    RAISE EXCEPTION 'Partner original allocated amount sum (%) must equal original expense amount (%) for expense %.',
       v_total_allocated, v_expense_amount, v_target_expense;
   END IF;
 
@@ -228,7 +228,7 @@ CREATE CONSTRAINT TRIGGER trg_validate_partner_expense_allocation_snapshot
   FOR EACH ROW EXECUTE FUNCTION public.validate_partner_expense_allocation_snapshot();
 
 -- ------------------------------------------------------------------------------
--- 5. EXPENSE REFUNDS / MATERIAL RETURNS & CONCURRENCY PROTECTION (expense_refunds)
+-- 4. EXPENSE REFUNDS / MATERIAL RETURNS & CONCURRENCY PROTECTION (expense_refunds)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.expense_refunds (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -263,7 +263,7 @@ CREATE TRIGGER trg_set_updated_at_expense_refunds
   BEFORE UPDATE ON public.expense_refunds
   FOR EACH ROW EXECUTE FUNCTION public.set_financial_updated_at();
 
--- Trigger de Validação de Limite com Lock Transacional Concorrente (SELECT FOR UPDATE)
+-- Concurrency-safe limit validation trigger using SELECT ... FOR UPDATE
 CREATE OR REPLACE FUNCTION public.prevent_excessive_expense_refunds()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -271,7 +271,7 @@ DECLARE
   v_total_refunded NUMERIC(12,2);
 BEGIN
   IF NEW.status = 'posted' THEN
-    -- Lock transacional da despesa pai para impedir race conditions de refund concorrente
+    -- Lock target expense to prevent concurrent refund race conditions
     SELECT amount INTO v_original_amount
       FROM public.receipts
      WHERE id = NEW.expense_id AND organization_id = NEW.organization_id
@@ -304,7 +304,7 @@ CREATE TRIGGER trg_prevent_excessive_expense_refunds
   FOR EACH ROW EXECUTE FUNCTION public.prevent_excessive_expense_refunds();
 
 -- ------------------------------------------------------------------------------
--- 6. CLIENT MATERIAL PAYMENT LEDGER & CONCURRENCY OVERPAYMENT PROTECTION
+-- 5. CLIENT MATERIAL PAYMENT LEDGER & CONCURRENCY OVERPAYMENT PROTECTION
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.client_material_payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -336,7 +336,7 @@ CREATE TRIGGER trg_set_updated_at_client_mat_pay
   BEFORE UPDATE ON public.client_material_payments
   FOR EACH ROW EXECUTE FUNCTION public.set_financial_updated_at();
 
--- Trigger de Overpayment com Lock Transacional Concorrente (SELECT FOR UPDATE)
+-- Concurrency-safe overpayment validation trigger using SELECT ... FOR UPDATE
 CREATE OR REPLACE FUNCTION public.prevent_excessive_client_material_payments()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -344,7 +344,7 @@ DECLARE
   v_total_paid NUMERIC(12,2);
 BEGIN
   IF NEW.status = 'received' THEN
-    -- Lock transacional da despesa pai para impedir race conditions de pagamentos simultâneos
+    -- Lock target material expense to prevent concurrent payment race conditions
     SELECT amount INTO v_material_amount
       FROM public.receipts
      WHERE id = NEW.material_expense_id AND organization_id = NEW.organization_id
@@ -377,7 +377,7 @@ CREATE TRIGGER trg_prevent_excessive_client_material_payments
   FOR EACH ROW EXECUTE FUNCTION public.prevent_excessive_client_material_payments();
 
 -- ------------------------------------------------------------------------------
--- 7. PARTNER SETTLEMENTS TABLE & COMPOSITE FK (partner_settlements)
+-- 6. PARTNER SETTLEMENTS TABLE & COMPOSITE FK (partner_settlements)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.partner_settlements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -403,7 +403,6 @@ CREATE TABLE IF NOT EXISTS public.partner_settlements (
     REFERENCES public.organization_partners(id, organization_id) ON DELETE RESTRICT
 );
 
--- Composite FK para job quando especificado
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -427,35 +426,45 @@ CREATE TRIGGER trg_set_updated_at_partner_settlements
   FOR EACH ROW EXECUTE FUNCTION public.set_financial_updated_at();
 
 -- ------------------------------------------------------------------------------
--- 8. AUDITABILITY: FINANCIAL IMMUTABILITY & CONTROLLED VOID TRIGGER
--- Impede edição de valores financeiros gravados e exige motivo para anulação (void)
+-- 7. AUDITABILITY: TABLE-SPECIFIC IMMUTABILITY & CONTROLLED VOID TRIGGERS
+-- Prevents modification of ALL core financial fields once posted/received
+-- Allows only controlled voiding with required non-empty void_reason
 -- ------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.protect_financial_immutability_and_void()
+
+-- A. EXPENSE REFUNDS IMMUTABILITY TRIGGER
+CREATE OR REPLACE FUNCTION public.protect_expense_refunds_immutability_and_void()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Se o registro já estava anulado (voided), proibir qualquer alteração adicional ou reativação
   IF OLD.status = 'voided' THEN
-    RAISE EXCEPTION 'Record in table % is voided and immutable.', TG_TABLE_NAME;
+    RAISE EXCEPTION 'Expense refund record % is voided and immutable.', OLD.id;
   END IF;
 
-  -- Se transacionar de posted/received para voided:
-  IF NEW.status = 'voided' AND OLD.status IN ('posted', 'received') THEN
+  IF NEW.status = 'voided' AND OLD.status = 'posted' THEN
     IF NEW.void_reason IS NULL OR char_length(trim(NEW.void_reason)) = 0 THEN
-      RAISE EXCEPTION 'A non-empty void_reason is required to void a financial transaction in table %.', TG_TABLE_NAME;
+      RAISE EXCEPTION 'A non-empty void_reason is required to void an expense refund.';
     END IF;
 
     NEW.voided_at := NOW();
     NEW.voided_by := auth.uid();
 
-    -- Manter campos financeiros imutáveis durante a anulação
-    NEW.amount := OLD.amount;
+    -- Restore all immutable operational & financial fields to OLD values
     NEW.organization_id := OLD.organization_id;
+    NEW.service_job_id := OLD.service_job_id;
+    NEW.expense_id := OLD.expense_id;
+    NEW.amount := OLD.amount;
+    NEW.refund_date := OLD.refund_date;
+    NEW.created_by := OLD.created_by;
     RETURN NEW;
   END IF;
 
-  -- Se tentar alterar valores financeiros em um registro ativo (sem anulação):
-  IF NEW.amount <> OLD.amount OR NEW.organization_id <> OLD.organization_id THEN
-    RAISE EXCEPTION 'Direct modification of financial values in table % is prohibited. Void transaction and issue a new record instead.', TG_TABLE_NAME;
+  -- Block any edit to core fields while active ('posted')
+  IF NEW.organization_id IS DISTINCT FROM OLD.organization_id OR
+     NEW.service_job_id IS DISTINCT FROM OLD.service_job_id OR
+     NEW.expense_id IS DISTINCT FROM OLD.expense_id OR
+     NEW.amount IS DISTINCT FROM OLD.amount OR
+     NEW.refund_date IS DISTINCT FROM OLD.refund_date OR
+     NEW.created_by IS DISTINCT FROM OLD.created_by THEN
+    RAISE EXCEPTION 'Modification of core fields in expense_refunds (organization, job, expense, amount, date, created_by) is prohibited. Void record and issue a new transaction instead.';
   END IF;
 
   RETURN NEW;
@@ -465,23 +474,109 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 DROP TRIGGER IF EXISTS trg_protect_immutability_expense_refunds ON public.expense_refunds;
 CREATE TRIGGER trg_protect_immutability_expense_refunds
   BEFORE UPDATE ON public.expense_refunds
-  FOR EACH ROW EXECUTE FUNCTION public.protect_financial_immutability_and_void();
+  FOR EACH ROW EXECUTE FUNCTION public.protect_expense_refunds_immutability_and_void();
+
+-- B. CLIENT MATERIAL PAYMENTS IMMUTABILITY TRIGGER
+CREATE OR REPLACE FUNCTION public.protect_client_material_payments_immutability_and_void()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.status = 'voided' THEN
+    RAISE EXCEPTION 'Client material payment record % is voided and immutable.', OLD.id;
+  END IF;
+
+  IF NEW.status = 'voided' AND OLD.status = 'received' THEN
+    IF NEW.void_reason IS NULL OR char_length(trim(NEW.void_reason)) = 0 THEN
+      RAISE EXCEPTION 'A non-empty void_reason is required to void a client material payment.';
+    END IF;
+
+    NEW.voided_at := NOW();
+    NEW.voided_by := auth.uid();
+
+    -- Restore all immutable operational & financial fields to OLD values
+    NEW.organization_id := OLD.organization_id;
+    NEW.service_job_id := OLD.service_job_id;
+    NEW.material_expense_id := OLD.material_expense_id;
+    NEW.amount := OLD.amount;
+    NEW.payment_date := OLD.payment_date;
+    NEW.payment_method := OLD.payment_method;
+    NEW.created_by := OLD.created_by;
+    RETURN NEW;
+  END IF;
+
+  -- Block any edit to core fields while active ('received')
+  IF NEW.organization_id IS DISTINCT FROM OLD.organization_id OR
+     NEW.service_job_id IS DISTINCT FROM OLD.service_job_id OR
+     NEW.material_expense_id IS DISTINCT FROM OLD.material_expense_id OR
+     NEW.amount IS DISTINCT FROM OLD.amount OR
+     NEW.payment_date IS DISTINCT FROM OLD.payment_date OR
+     NEW.payment_method IS DISTINCT FROM OLD.payment_method OR
+     NEW.created_by IS DISTINCT FROM OLD.created_by THEN
+    RAISE EXCEPTION 'Modification of core fields in client_material_payments (organization, job, material_expense, amount, date, method, created_by) is prohibited. Void record and issue a new transaction instead.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS trg_protect_immutability_client_mat_pay ON public.client_material_payments;
 CREATE TRIGGER trg_protect_immutability_client_mat_pay
   BEFORE UPDATE ON public.client_material_payments
-  FOR EACH ROW EXECUTE FUNCTION public.protect_financial_immutability_and_void();
+  FOR EACH ROW EXECUTE FUNCTION public.protect_client_material_payments_immutability_and_void();
+
+-- C. PARTNER SETTLEMENTS IMMUTABILITY TRIGGER
+CREATE OR REPLACE FUNCTION public.protect_partner_settlements_immutability_and_void()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.status = 'voided' THEN
+    RAISE EXCEPTION 'Partner settlement record % is voided and immutable.', OLD.id;
+  END IF;
+
+  IF NEW.status = 'voided' AND OLD.status = 'posted' THEN
+    IF NEW.void_reason IS NULL OR char_length(trim(NEW.void_reason)) = 0 THEN
+      RAISE EXCEPTION 'A non-empty void_reason is required to void a partner settlement.';
+    END IF;
+
+    NEW.voided_at := NOW();
+    NEW.voided_by := auth.uid();
+
+    -- Restore all immutable operational & financial fields to OLD values
+    NEW.organization_id := OLD.organization_id;
+    NEW.service_job_id := OLD.service_job_id;
+    NEW.payer_partner_id := OLD.payer_partner_id;
+    NEW.payee_partner_id := OLD.payee_partner_id;
+    NEW.amount := OLD.amount;
+    NEW.settlement_date := OLD.settlement_date;
+    NEW.payment_method := OLD.payment_method;
+    NEW.created_by := OLD.created_by;
+    RETURN NEW;
+  END IF;
+
+  -- Block any edit to core fields while active ('posted')
+  IF NEW.organization_id IS DISTINCT FROM OLD.organization_id OR
+     NEW.service_job_id IS DISTINCT FROM OLD.service_job_id OR
+     NEW.payer_partner_id IS DISTINCT FROM OLD.payer_partner_id OR
+     NEW.payee_partner_id IS DISTINCT FROM OLD.payee_partner_id OR
+     NEW.amount IS DISTINCT FROM OLD.amount OR
+     NEW.settlement_date IS DISTINCT FROM OLD.settlement_date OR
+     NEW.payment_method IS DISTINCT FROM OLD.payment_method OR
+     NEW.created_by IS DISTINCT FROM OLD.created_by THEN
+    RAISE EXCEPTION 'Modification of core fields in partner_settlements (organization, job, payer, payee, amount, date, method, created_by) is prohibited. Void record and issue a new transaction instead.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS trg_protect_immutability_partner_settlements ON public.partner_settlements;
 CREATE TRIGGER trg_protect_immutability_partner_settlements
   BEFORE UPDATE ON public.partner_settlements
-  FOR EACH ROW EXECUTE FUNCTION public.protect_financial_immutability_and_void();
+  FOR EACH ROW EXECUTE FUNCTION public.protect_partner_settlements_immutability_and_void();
 
--- Impede HARD DELETE físico de registros financeiros
+-- Physical hard delete prohibition trigger for financial tables
 CREATE OR REPLACE FUNCTION public.prevent_financial_hard_deletes()
 RETURNS TRIGGER AS $$
 BEGIN
-  RAISE EXCEPTION 'Hard deletion of financial records (%) is strictly prohibited for compliance & auditing. Mark status as voided instead.', TG_TABLE_NAME;
+  RAISE EXCEPTION 'Hard deletion of financial records in table % is strictly prohibited for compliance & auditing. Mark status as voided instead.', TG_TABLE_NAME;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
@@ -506,8 +601,7 @@ CREATE TRIGGER trg_no_delete_partner_settlements
   FOR EACH ROW EXECUTE FUNCTION public.prevent_financial_hard_deletes();
 
 -- ------------------------------------------------------------------------------
--- 9. ROLE-AWARE RLS POLICIES & CONTROLES DE SEGURANÇA
--- Workers comuns NÃO visualizam balanços de sócios nem participações societárias
+-- 8. ROLE-AWARE RLS POLICIES & SECURITY CONTROLS
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.organization_partners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.partner_expense_allocations ENABLE ROW LEVEL SECURITY;
@@ -515,7 +609,7 @@ ALTER TABLE public.expense_refunds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.client_material_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.partner_settlements ENABLE ROW LEVEL SECURITY;
 
--- Helper Function para verificar se usuário possui role financeira autorizada (owner, admin, contractor)
+-- Helper Function to verify if user has a financial management role ('owner', 'admin', 'contractor')
 CREATE OR REPLACE FUNCTION public.is_org_financial_manager(p_org_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -528,21 +622,21 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- Policies para organization_partners (Visualização RESTREITA a gestores financeiros)
+-- Policies for organization_partners (RESTRICTED to financial managers)
 CREATE POLICY "Partners Financial Select Policy" ON public.organization_partners
   FOR SELECT USING (public.is_org_financial_manager(organization_id));
 
 CREATE POLICY "Partners Financial Admin Write Policy" ON public.organization_partners
   FOR ALL USING (public.is_org_financial_manager(organization_id));
 
--- Policies para partner_expense_allocations (RESTREITO a gestores financeiros)
+-- Policies for partner_expense_allocations (RESTRICTED to financial managers)
 CREATE POLICY "Expense Allocations Financial Select Policy" ON public.partner_expense_allocations
   FOR SELECT USING (public.is_org_financial_manager(organization_id));
 
 CREATE POLICY "Expense Allocations Insert Policy" ON public.partner_expense_allocations
   FOR INSERT WITH CHECK (public.is_org_financial_manager(organization_id));
 
--- Policies para expense_refunds (Sem referências NEW/OLD na expressão RLS)
+-- Policies for expense_refunds (No NEW/OLD references in RLS policy expression)
 CREATE POLICY "Expense Refunds Select Policy" ON public.expense_refunds
   FOR SELECT USING (
     organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid())
@@ -555,7 +649,7 @@ CREATE POLICY "Expense Refunds Void Policy" ON public.expense_refunds
   FOR UPDATE USING (public.is_org_financial_manager(organization_id))
              WITH CHECK (public.is_org_financial_manager(organization_id));
 
--- Policies para client_material_payments (Sem referências NEW/OLD na expressão RLS)
+-- Policies for client_material_payments (No NEW/OLD references in RLS policy expression)
 CREATE POLICY "Client Material Payments Select Policy" ON public.client_material_payments
   FOR SELECT USING (
     organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid())
@@ -568,7 +662,7 @@ CREATE POLICY "Client Material Payments Void Policy" ON public.client_material_p
   FOR UPDATE USING (public.is_org_financial_manager(organization_id))
              WITH CHECK (public.is_org_financial_manager(organization_id));
 
--- Policies para partner_settlements (RESTREITO a gestores financeiros, sem referências NEW/OLD)
+-- Policies for partner_settlements (RESTRICTED to financial managers, no NEW/OLD references)
 CREATE POLICY "Partner Settlements Financial Select Policy" ON public.partner_settlements
   FOR SELECT USING (public.is_org_financial_manager(organization_id));
 
@@ -580,8 +674,8 @@ CREATE POLICY "Partner Settlements Void Policy" ON public.partner_settlements
              WITH CHECK (public.is_org_financial_manager(organization_id));
 
 -- ------------------------------------------------------------------------------
--- 10. HARDENED SECURITY DEFINER RPC FOR CLIENT PUBLIC PORTAL MATERIALS & RECEIPTS
--- CTE impede duplicação cartesiana e NÃO expõe raw storage paths
+-- 9. HARDENED SECURITY DEFINER RPC FOR CLIENT PUBLIC PORTAL MATERIALS & RECEIPTS
+-- CTE prevents cartesian duplication & DOES NOT expose private raw storage paths
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.get_client_job_materials(p_job_token TEXT)
 RETURNS TABLE (
@@ -600,7 +694,6 @@ DECLARE
   v_job_id UUID;
   v_org_id UUID;
 BEGIN
-  -- Validar public token contra a tabela de estimates
   SELECT sj.id, sj.organization_id
     INTO v_job_id, v_org_id
     FROM public.service_jobs sj
@@ -655,47 +748,81 @@ COMMIT;
 -- TEST CASES & MATEMÁTICA SOCIETÁRIA (DOCUMENTAÇÃO DAS REGRAS)
 -- ==============================================================================
 /*
-REAL ROLE AUDIT:
-- REAL ROLES IN SYSTEM: 'owner', 'admin', 'contractor', 'worker'
-- FINANCIAL MANAGERS: 'owner', 'admin', 'contractor'
-- RESTRICTED WORKERS: 'worker'
+DOCUMENTED PROOF OF PARTNER ACCOUNTING MATH:
 
-TEST CASES VALIDATION SUITE:
---------------------------------------------------------------------------------
-CASE A: CREATE POLICY não usa NEW/OLD nas cláusulas RLS -> PASS
-CASE B: Received payment $100 -> tentar editar amount para $200 -> REJEITADO pelo trigger protect_financial_immutability_and_void
-CASE C: Void payment com motivo -> ACEITO
-CASE D: Tentar restaurar voided para received -> REJEITADO
-CASE E: Material $500 -> 2 pagamentos concorrentes $300 + $300 -> Apenas 1º passa; 2º REJEITADO pelo lock FOR UPDATE
-CASE F: Receipt com 2 payments + 2 attachments -> total_paid NÃO duplica devido ao uso de CTE na RPC get_client_job_materials
-CASE G: RPC pública -> NÃO retorna storage_path privado raw
-CASE H: Token de job A tentando receipt de job B -> REJEITADO pela validação de token na RPC
-CASE I: partnership + total ownership 0% -> REJEITADO pelo trigger validate_company_ownership_mode
-CASE J: allocation 50 + 40 -> REJEITADO pelo trigger validate_partner_expense_allocation_snapshot
-CASE K: allocation 50/50 para net expense $100 -> $50/$50
-CASE L: refund $40 -> net expense $60 -> economic obligation $30/$30 -> snapshot percentage continua 50/50
+Scenario:
+- Expense $100.00
+- 50/50 partnership ownership (Hugo 50%, Brother 50%)
+- Paid by Hugo personally ($100.00)
+
+Allocation Snapshot recorded at expense creation:
+- Hugo: ownership_percentage_snapshot = 50.00%, original_allocated_amount = $50.00
+- Brother: ownership_percentage_snapshot = 50.00%, original_allocated_amount = $50.00
+- SUM(ownership_percentage_snapshot) = 100.00% -> PASS
+- SUM(original_allocated_amount) = $100.00 -> PASS
+
+Material Refund posted later:
+- Refund amount = $40.00
+- Posted status = 'posted'
+- Receipts & allocations historical snapshots are NOT modified.
+- Net Expense = Original Expense ($100.00) - Posted Refunds ($40.00) = $60.00
+
+Current Economic Obligation Derived:
+- Hugo Current Obligation = Net Expense ($60.00) * 50.00% = $30.00
+- Brother Current Obligation = Net Expense ($60.00) * 50.00% = $30.00
+
+Settlement by Brother:
+- Brother settles $20.00 to Hugo (posted settlement)
+- Remaining Balance Owed by Brother to Hugo = Brother Current Obligation ($30.00) - Posted Settlement ($20.00) = $10.00
+- PASS!
 */
 
 -- ==============================================================================
 -- READ-ONLY VERIFICATION SUITE FOR PROPOSAL 025 (EXECUTE MANUALLY AFTER APPLYING)
 -- ==============================================================================
 /*
--- 1. Verificar ausência de NEW/OLD em RLS Policies
+-- 1. Confirm dependency order: business_ownership_type column exists before trigger creation
+SELECT column_name, data_type 
+  FROM information_schema.columns 
+ WHERE table_schema = 'public' 
+   AND table_name = 'company_settings' 
+   AND column_name = 'business_ownership_type';
+
+-- 2. Confirm immutability triggers exist on all 3 financial tables
+SELECT trigger_name, event_object_table, action_statement
+  FROM information_schema.triggers
+ WHERE trigger_schema = 'public'
+   AND trigger_name IN (
+     'trg_protect_immutability_expense_refunds',
+     'trg_protect_immutability_client_mat_pay',
+     'trg_protect_immutability_partner_settlements',
+     'trg_validate_company_ownership_mode',
+     'trg_validate_partner_expense_allocation_snapshot'
+   );
+
+-- 3. Confirm absence of NEW/OLD in RLS policy definitions
 SELECT tablename, policyname, qual, with_check
   FROM pg_policies
  WHERE schemaname = 'public'
    AND (qual LIKE '%NEW.%' OR with_check LIKE '%NEW.%' OR qual LIKE '%OLD.%' OR with_check LIKE '%OLD.%');
 
--- 2. Verificar triggers de imutabilidade e concorrência
-SELECT trigger_name, event_object_table, action_statement
-  FROM information_schema.triggers
- WHERE trigger_schema = 'public'
-   AND trigger_name IN ('trg_protect_immutability_client_mat_pay', 'trg_prevent_excessive_client_material_payments', 'trg_validate_company_ownership_mode');
-
--- 3. Verificar search_path em funções SECURITY DEFINER
-SELECT p.proname, p.prosecdef, pg_get_functiondef(p.oid)
+-- 4. Confirm search_path on all SECURITY DEFINER functions
+SELECT p.proname, p.prosecdef
   FROM pg_proc p
   JOIN pg_namespace n ON p.pronamespace = n.oid
  WHERE n.nspname = 'public'
-   AND p.proname IN ('set_financial_updated_at', 'validate_organization_ownership_total', 'prevent_excessive_expense_refunds', 'prevent_excessive_client_material_payments', 'protect_financial_immutability_and_void', 'is_org_financial_manager', 'get_client_job_materials');
+   AND p.proname IN (
+     'set_financial_updated_at',
+     'validate_organization_ownership_total',
+     'validate_company_ownership_mode',
+     'validate_partner_expense_allocation_snapshot',
+     'prevent_excessive_expense_refunds',
+     'prevent_excessive_client_material_payments',
+     'protect_expense_refunds_immutability_and_void',
+     'protect_client_material_payments_immutability_and_void',
+     'protect_partner_settlements_immutability_and_void',
+     'prevent_financial_hard_deletes',
+     'is_org_financial_manager',
+     'get_client_job_materials'
+   );
 */
