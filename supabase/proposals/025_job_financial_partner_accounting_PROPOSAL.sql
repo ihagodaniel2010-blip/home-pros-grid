@@ -111,7 +111,7 @@ BEGIN
   IF v_ownership_type = 'partnership' THEN
     IF v_total <> 100.00 THEN
       RAISE EXCEPTION 'Partnership ownership invalid for Organization %. Active partner percentages sum to % %%, but must equal exactly 100.00 %%.',
-        v_target_org, v_total, '%';
+        v_target_org, v_total;
     END IF;
   ELSIF v_total > 100.00 THEN
     RAISE EXCEPTION 'Ownership total (%) cannot exceed 100.00 %% for Organization %.', v_total, v_target_org;
@@ -142,7 +142,7 @@ BEGIN
 
     IF v_total <> 100.00 THEN
       RAISE EXCEPTION 'Cannot set business_ownership_type to partnership for Organization %. Active partner ownership sums to % %%, but must equal exactly 100.00 %%.',
-        NEW.organization_id, v_total, '%';
+        NEW.organization_id, v_total;
     END IF;
   END IF;
 
@@ -245,7 +245,7 @@ BEGIN
     v_expected_amount := ROUND(v_expense_amount * (rec.ownership_percentage_snapshot / 100.00), 2);
     IF ABS(rec.original_allocated_amount - v_expected_amount) > 0.01 THEN
       RAISE EXCEPTION 'Allocation amount (%) for partner % does not match ownership percentage (% %%) for expense amount (%). Expected approximately %.',
-        rec.original_allocated_amount, rec.partner_id, rec.ownership_percentage_snapshot, '%', v_expense_amount, v_expected_amount;
+        rec.original_allocated_amount, rec.partner_id, rec.ownership_percentage_snapshot, v_expense_amount, v_expected_amount;
     END IF;
   END LOOP;
 
