@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Estimate } from "@/lib/estimates";
+import { getServiceJobByEstimateId } from "@/lib/service-jobs";
+import { getServiceExtrasByJobId, respondPublicServiceExtra, ServiceExtra } from "@/lib/service-extras";
+import { getExpenses, Expense } from "@/lib/expenses";
+import { getJobMediaRecords, ServiceJobMediaRecord } from "@/lib/job-media";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, FileText, Download, ShieldCheck, PenTool, CheckSquare, Square, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle2, FileText, Download, ShieldCheck, PenTool, CheckSquare, Square, AlertCircle, Plus, Eye, Tag, Receipt, Images } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -11,9 +16,17 @@ import SignaturePad from "@/components/common/SignaturePad";
 const PublicView = () => {
     const { token } = useParams<{ token: string }>();
     const [estimate, setEstimate] = useState<Estimate | null>(null);
+    const [extras, setExtras] = useState<ServiceExtra[]>([]);
+    const [clientMaterials, setClientMaterials] = useState<Expense[]>([]);
+    const [clientMedia, setClientMedia] = useState<ServiceJobMediaRecord[]>([]);
+    const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isApproving, setIsApproving] = useState(false);
     const [isApproved, setIsApproved] = useState(false);
+    const [isDeclined, setIsDeclined] = useState(false);
+
+    // Extra Approval UI state
+    const [approvingExtraId, setApprovingExtraId] = useState<string | null>(null);
 
     // 4-Step E-Signature UI State
     const [consentElectronic, setConsentElectronic] = useState(false);
@@ -38,6 +51,25 @@ const PublicView = () => {
             if (data.client_email) setSignerEmail(data.client_email);
             if (data.status === 'Approved' || data.status === 'Paid') {
                 setIsApproved(true);
+            } else if (data.status === 'Rejected') {
+                setIsDeclined(true);
+            }
+
+            // Fetch linked Job Workspace Extras, Client Materials, and Photos
+            try {
+                const job = await getServiceJobByEstimateId(data.id);
+                if (job) {
+                    const [extrasList, allExpenses, mediaList] = await Promise.all([
+                        getServiceExtrasByJobId(job.id).catch(() => []),
+                        getExpenses(data.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd").catch(() => []),
+                        getJobMediaRecords(job.id).catch(() => [])
+                    ]);
+                    setExtras(extrasList || []);
+                    setClientMaterials((allExpenses || []).filter(e => (e.service_job_id === job.id || e.estimate_id === data.id) && e.bill_to_client));
+                    setClientMedia((mediaList || []).filter(m => m.visible_to_client));
+                }
+            } catch (err) {
+                console.warn("Could not load linked job details in Client Portal:", err);
             }
         }
         setIsLoading(false);
@@ -203,8 +235,6 @@ const PublicView = () => {
         );
     }
 
-    const isDeclined = estimate.status === 'Rejected';
-
     return (
         <div className="min-h-screen bg-gray-50 py-12 px-4">
             <div className="max-w-4xl mx-auto">
@@ -298,6 +328,133 @@ const PublicView = () => {
                                 <span className="text-blue-600">${estimate.total_amount.toLocaleString()}</span>
                             </div>
                         </div>
+
+                        {/* EXTRAS / CHANGE ORDERS SECTION (Requirement 14 & 15) */}
+                        {extras.length > 0 && (
+                            <div className="mb-12 pt-8 border-t border-gray-100">
+                                <h2 className="text-xs font-bold text-purple-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Tag className="h-4 w-4 text-purple-600" />
+                                    Change Orders & Extras ({extras.length})
+                                </h2>
+                                <div className="space-y-4">
+                                    {extras.map((extra) => (
+                                        <div key={extra.id} className="p-6 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-4">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                <div>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase inline-block mb-1.5 ${
+                                                        extra.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                                                        extra.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                                                    }`}>
+                                                        {extra.status}
+                                                    </span>
+                                                    <h3 className="font-bold text-gray-900 text-base">{extra.description}</h3>
+                                                    {extra.reason && <p className="text-xs text-gray-500 mt-1">Reason: {extra.reason}</p>}
+                                                    {extra.schedule_impact && <p className="text-xs text-purple-700 font-medium mt-0.5">Schedule Impact: {extra.schedule_impact}</p>}
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="text-xl font-black text-purple-900">+${extra.amount.toLocaleString()}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Interactive Approval for Pending Extra (Requirement 16 & 17) */}
+                                            {extra.status === 'pending' && (
+                                                <div className="pt-4 border-t border-purple-200/60 bg-white p-5 rounded-xl space-y-4">
+                                                    <div className="p-3 bg-purple-100/50 rounded-xl text-xs space-y-1">
+                                                        <div className="flex justify-between text-purple-900">
+                                                            <span>Contract Before Extra:</span>
+                                                            <span className="font-bold">${(estimate.total_amount || 0).toLocaleString()}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-purple-700 font-semibold">
+                                                            <span>Change Order Amount:</span>
+                                                            <span>+${extra.amount.toLocaleString()}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-purple-950 font-black text-sm pt-1 border-t border-purple-200">
+                                                            <span>Revised Contract Total:</span>
+                                                            <span>${((estimate.total_amount || 0) + extra.amount).toLocaleString()}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={async () => {
+                                                                if (extra.public_token) {
+                                                                    const ok = await respondPublicServiceExtra(extra.public_token, 'approved');
+                                                                    if (ok) {
+                                                                        toast.success("Extra Approved!");
+                                                                        setExtras(prev => prev.map(ex => ex.id === extra.id ? { ...ex, status: 'approved' } : ex));
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs"
+                                                        >
+                                                            Approve Change Order (+${extra.amount.toLocaleString()})
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CLIENT MATERIALS SECTION (Requirement 23) */}
+                        {clientMaterials.length > 0 && (
+                            <div className="mb-12 pt-8 border-t border-gray-100">
+                                <h2 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Receipt className="h-4 w-4 text-amber-600" />
+                                    Client Materials & Reimbursables ({clientMaterials.length})
+                                </h2>
+                                <div className="border border-amber-200/80 rounded-2xl overflow-hidden bg-amber-50/30">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-amber-100/50 border-b border-amber-200 font-bold text-amber-900 uppercase">
+                                            <tr>
+                                                <th className="py-3 px-4">Vendor / Store</th>
+                                                <th className="py-3 px-4">Date</th>
+                                                <th className="py-3 px-4">Category</th>
+                                                <th className="py-3 px-4 text-right">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-amber-100/60">
+                                            {clientMaterials.map((mat) => (
+                                                <tr key={mat.id}>
+                                                    <td className="py-3 px-4 font-bold text-gray-900">{mat.vendor}</td>
+                                                    <td className="py-3 px-4 text-gray-600">{mat.receipt_date ? new Date(mat.receipt_date).toLocaleDateString() : 'N/A'}</td>
+                                                    <td className="py-3 px-4 text-amber-800 capitalize font-medium">{mat.tax_category || 'Client Material'}</td>
+                                                    <td className="py-3 px-4 text-right font-bold text-amber-900">${mat.amount.toLocaleString()}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CLIENT VISIBLE PHOTOS SECTION (Requirement 9) */}
+                        {clientMedia.length > 0 && (
+                            <div className="mb-12 pt-8 border-t border-gray-100">
+                                <h2 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Images className="h-4 w-4 text-blue-600" />
+                                    Project Photos & Documentation ({clientMedia.length})
+                                </h2>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                    {clientMedia.map((m) => {
+                                        const mediaUrl = m.storage_path.startsWith('http') ? m.storage_path :
+                                            supabase?.storage.from('images').getPublicUrl(m.storage_path).data.publicUrl;
+                                        return (
+                                            <div
+                                                key={m.id}
+                                                onClick={() => setSelectedMediaUrl(mediaUrl || null)}
+                                                className="aspect-square rounded-xl overflow-hidden border border-gray-200 bg-slate-900 cursor-pointer hover:opacity-90 transition-opacity"
+                                            >
+                                                <img src={mediaUrl} alt={m.caption || "Job photo"} className="w-full h-full object-cover" />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Terms */}
                         {estimate.terms && (

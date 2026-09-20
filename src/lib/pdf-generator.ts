@@ -12,11 +12,31 @@ export const generateProfessionalPDF = async (
     const pageWidth = doc.internal.pageSize.getWidth();
 
     // 1. Header & Logo
+    let logoOffsetY = 25;
     if (company?.logo_url) {
         try {
-            // Logo image loading handled gracefully if valid base64/url
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.src = company.logo_url;
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                setTimeout(resolve, 1500); // 1.5s timeout safety
+            });
+            if (img.complete && img.width > 0) {
+                const canvas = document.createElement("canvas");
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0);
+                    const dataUrl = canvas.toDataURL("image/png");
+                    doc.addImage(dataUrl, "PNG", 20, 10, 22, 22);
+                    logoOffsetY = 38;
+                }
+            }
         } catch (e) {
-            console.warn("Could not add logo to PDF", e);
+            console.warn("Could not add logo to PDF:", e);
         }
     }
 

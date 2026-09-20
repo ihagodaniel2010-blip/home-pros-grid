@@ -1036,43 +1036,71 @@ export default function JobWorkspace() {
                 <p className="text-xs text-gray-400 italic">No photos uploaded matching current filter.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {filteredMedia.map(m => (
-                    <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col group">
-                      <div className="aspect-video relative overflow-hidden bg-slate-900">
-                        <img src={m.storage_path} alt={m.caption || "Job photo"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                        <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-                          {m.visible_to_client ? (
-                            <Badge className="bg-emerald-500/90 text-white text-[9px] px-1.5 py-0.5">
-                              <Eye className="h-3 w-3 mr-1" /> Client Visible
-                            </Badge>
+                  {filteredMedia.map(m => {
+                    const mediaUrl = m.storage_path.startsWith('http') || m.storage_path.startsWith('data:')
+                      ? m.storage_path
+                      : supabase.storage.from('images').getPublicUrl(m.storage_path).data.publicUrl;
+
+                    const portfolioStatus = m.portfolio_approved
+                      ? 'Approved'
+                      : m.visible_on_public_site
+                      ? 'Pending Review'
+                      : 'Not Submitted';
+
+                    return (
+                      <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col group">
+                        <div className="aspect-video relative overflow-hidden bg-slate-900 flex items-center justify-center">
+                          {m.media_type === 'video' ? (
+                            <video src={mediaUrl} controls className="w-full h-full object-cover" />
                           ) : (
-                            <Badge className="bg-slate-700/90 text-white text-[9px] px-1.5 py-0.5">
-                              <EyeOff className="h-3 w-3 mr-1" /> Admin Only
-                            </Badge>
+                            <img
+                              src={mediaUrl}
+                              alt={m.caption || "Job photo"}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.onerror = null;
+                                target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+                              }}
+                            />
                           )}
+                          <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+                            {m.visible_to_client ? (
+                              <Badge className="bg-emerald-500/90 text-white text-[9px] px-1.5 py-0.5">
+                                <Eye className="h-3 w-3 mr-1" /> Client Visible
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-slate-700/90 text-white text-[9px] px-1.5 py-0.5">
+                                <EyeOff className="h-3 w-3 mr-1" /> Admin Only
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="p-3 flex-1 flex flex-col justify-between space-y-2 text-xs">
+                          <div>
+                            <p className="font-bold text-gray-900">{m.caption || "Job progress documentation"}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">Portfolio Status: <span className="font-bold text-purple-700">{portfolioStatus}</span></p>
+                          </div>
+
+                          <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-1 text-[10px]">
+                            <button
+                              onClick={() => handleToggleMediaVisibility(m.id, "client")}
+                              className={`px-2 py-0.5 rounded border font-semibold ${m.visible_to_client ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-600'}`}
+                            >
+                              Client: {m.visible_to_client ? 'ON' : 'OFF'}
+                            </button>
+                            <button
+                              onClick={() => handleToggleMediaVisibility(m.id, "public")}
+                              className={`px-2 py-0.5 rounded border font-semibold ${m.visible_on_public_site ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
+                            >
+                              Public Candidate: {m.visible_on_public_site ? 'ON' : 'OFF'}
+                            </button>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="p-3 flex-1 flex flex-col justify-between space-y-2 text-xs">
-                        <p className="font-bold text-gray-900">{m.caption || "Job progress documentation"}</p>
-
-                        <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-1 text-[10px]">
-                          <button
-                            onClick={() => handleToggleMediaVisibility(m.id, "client")}
-                            className={`px-2 py-0.5 rounded border font-semibold ${m.visible_to_client ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-600'}`}
-                          >
-                            Client: {m.visible_to_client ? 'ON' : 'OFF'}
-                          </button>
-                          <button
-                            onClick={() => handleToggleMediaVisibility(m.id, "public")}
-                            className={`px-2 py-0.5 rounded border font-semibold ${m.visible_on_public_site ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
-                          >
-                            Public: {m.visible_on_public_site ? 'ON' : 'OFF'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1082,45 +1110,112 @@ export default function JobWorkspace() {
         {/* TAB 7: MATERIALS / EXPENSES */}
         {activeTab === "materials" && (
           <div className="space-y-6 animate-in fade-in">
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+            {/* CLIENT MATERIALS SECTION (Requirement 20 - 23) */}
+            <div className="bg-white rounded-2xl border border-amber-200 p-6 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-amber-100 pb-4">
                 <div>
-                  <h3 className="font-bold text-[#0b2a4a] text-base">Job Materials &amp; Site Expenses</h3>
-                  <p className="text-xs text-gray-500">Expenses automatically locked to this job context.</p>
+                  <h3 className="font-bold text-amber-900 text-base flex items-center gap-2">
+                    <Receipt className="h-5 w-5 text-amber-600" />
+                    Client Materials & Reimbursables (Billed to Client)
+                  </h3>
+                  <p className="text-xs text-amber-700">Materials purchased for job to be reimbursed by customer. Increases Total Client Responsibility.</p>
                 </div>
-                <Button onClick={() => setIsAddExpenseOpen(true)} className="bg-purple-600 text-white font-bold text-xs h-9">
-                  <Plus className="h-3.5 w-3.5 mr-1" /> + Add Job Expense
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-amber-100 text-amber-900 font-bold text-xs px-3 py-1">
+                    Total: ${financialSummary.clientMaterials.toLocaleString()}
+                  </Badge>
+                  <Button onClick={() => setIsAddExpenseOpen(true)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9">
+                    <Plus className="h-3.5 w-3.5 mr-1" /> + Add Client Material
+                  </Button>
+                </div>
               </div>
 
-              {expenses.length === 0 ? (
-                <p className="text-xs text-gray-400 italic">No job materials or expenses logged for this job yet.</p>
+              {expenses.filter(e => e.bill_to_client).length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No client-billed materials logged for this job yet.</p>
+              ) : (
+                <div className="border border-amber-200 rounded-xl overflow-hidden bg-amber-50/20">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-amber-100/60 border-b border-amber-200 font-bold text-amber-900 uppercase">
+                      <tr>
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Vendor</th>
+                        <th className="p-3">Who Paid</th>
+                        <th className="p-3">Client Status</th>
+                        <th className="p-3 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-100/80">
+                      {expenses.filter(e => e.bill_to_client).map(mat => (
+                        <tr key={mat.id}>
+                          <td className="p-3 font-semibold text-gray-900">{new Date(mat.receipt_date).toLocaleDateString()}</td>
+                          <td className="p-3 font-bold text-gray-900">{mat.vendor}</td>
+                          <td className="p-3 text-gray-600">{mat.paid_by_name || "Company Account"}</td>
+                          <td className="p-3">
+                            <Badge className="bg-amber-100 text-amber-900 capitalize font-bold text-[10px]">
+                              {mat.client_reimbursement_status || "pending"}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-right font-bold text-amber-900 text-sm">${mat.amount.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* COMPANY MATERIALS SECTION (Requirement 26 - 28) */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-[#0b2a4a] text-base flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-purple-600" />
+                    Company Materials & Job Costs (Internal Only — Hidden from Client)
+                  </h3>
+                  <p className="text-xs text-gray-500">Internal company job expenses used for job cost profitability & partner accounting.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-purple-100 text-purple-900 font-bold text-xs px-3 py-1">
+                    Company Job Cost: ${financialSummary.companyMaterialsCost.toLocaleString()}
+                  </Badge>
+                  <Button onClick={() => setIsAddExpenseOpen(true)} className="bg-[#0b2a4a] text-white font-bold text-xs h-9">
+                    <Plus className="h-3.5 w-3.5 mr-1" /> + Add Company Material
+                  </Button>
+                </div>
+              </div>
+
+              {expenses.filter(e => !e.bill_to_client).length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No internal company materials logged for this job.</p>
               ) : (
                 <div className="border border-gray-200 rounded-xl overflow-hidden">
                   <table className="w-full text-xs text-left">
                     <thead className="bg-gray-50 border-b border-gray-200 font-bold text-gray-600 uppercase">
                       <tr>
                         <th className="p-3">Date</th>
-                        <th className="p-3">Vendor / Merchant</th>
+                        <th className="p-3">Vendor</th>
                         <th className="p-3">Who Paid</th>
-                        <th className="p-3">Reimbursement</th>
-                        <th className="p-3 text-right">Amount</th>
+                        <th className="p-3">Economic Allocation (50/50)</th>
+                        <th className="p-3 text-right">Net Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {expenses.map(expense => (
-                        <tr key={expense.id}>
-                          <td className="p-3 font-semibold text-gray-900">{new Date(expense.receipt_date).toLocaleDateString()}</td>
-                          <td className="p-3 text-gray-900 font-medium">{expense.vendor}</td>
-                          <td className="p-3 text-gray-600">{expense.paid_by_name || "Company Account"}</td>
-                          <td className="p-3">
-                            <Badge className={expense.reimbursable_to_owner ? "bg-amber-100 text-amber-800 font-bold text-[10px]" : "bg-gray-100 text-gray-600 text-[10px]"}>
-                              {expense.reimbursement_status}
-                            </Badge>
-                          </td>
-                          <td className="p-3 text-right font-bold text-gray-900 text-sm">${expense.amount.toLocaleString()}</td>
-                        </tr>
-                      ))}
+                      {expenses.filter(e => !e.bill_to_client).map(exp => {
+                        const halfAmount = exp.amount / 2;
+                        const paidByName = exp.paid_by_name || "Company Account";
+                        return (
+                          <tr key={exp.id}>
+                            <td className="p-3 font-semibold text-gray-900">{new Date(exp.receipt_date).toLocaleDateString()}</td>
+                            <td className="p-3 font-medium text-gray-900">{exp.vendor}</td>
+                            <td className="p-3 text-purple-700 font-bold">{paidByName}</td>
+                            <td className="p-3 text-gray-600 font-mono text-[11px]">
+                              {exp.payment_source === 'partner_personal' || exp.reimbursable_to_owner
+                                ? `${paidByName}: $${exp.amount.toFixed(2)} advanced (Hugo: $${halfAmount.toFixed(2)} / Brother: $${halfAmount.toFixed(2)})`
+                                : `Company Card ($${exp.amount.toFixed(2)})`}
+                            </td>
+                            <td className="p-3 text-right font-bold text-gray-900 text-sm">${exp.amount.toLocaleString()}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

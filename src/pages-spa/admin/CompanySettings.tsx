@@ -155,11 +155,21 @@ const CompanySettings = () => {
                 .from('images')
                 .getPublicUrl(filePath);
 
-            setSettings(prev => ({ ...prev, logo_url: publicUrl }));
-            toast.success("Logo uploaded successfully");
-        } catch (error) {
+            const updatedSettings = {
+                ...settings,
+                logo_url: publicUrl,
+                organization_id: targetOrgId
+            };
+
+            setSettings(updatedSettings);
+
+            // Auto-persist logo_url to company_settings DB table immediately
+            await saveCompanySettings(updatedSettings);
+
+            toast.success("Logo uploaded and saved successfully!");
+        } catch (error: any) {
             console.error("Upload error:", error);
-            toast.error("Failed to upload logo");
+            toast.error(error.message || "Failed to upload logo");
         } finally {
             setIsUploading(false);
         }

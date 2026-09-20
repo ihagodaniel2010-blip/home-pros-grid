@@ -56,15 +56,7 @@ export const getServiceJobs = async (organizationId: string) => {
 
     const { data, error } = await supabase
         .from('service_jobs')
-        .select(`
-            id,
-            status,
-            created_at,
-            leads (
-                id,
-                title
-            )
-        `)
+        .select('*')
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
 
@@ -73,9 +65,8 @@ export const getServiceJobs = async (organizationId: string) => {
         return [];
     }
 
-    // Map lead title as job title
-    return data.map((job: any) => ({
+    return (data || []).map((job: any) => ({
         ...job,
-        title: job.leads?.title || `Job #${job.id.slice(0,8)}`
+        title: job.title || `Job #${job.id.slice(0,8)}`
     }));
 };
