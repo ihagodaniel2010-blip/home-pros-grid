@@ -28,7 +28,33 @@ const PublicExtraView = () => {
     const loadExtra = async (tk: string) => {
         setIsLoading(true);
         const data = await getPublicServiceExtra(tk);
-        if (data) setExtra(data);
+        if (data) {
+            setExtra(data);
+            // Try to locate linked estimate or job to redirect to Unified Client Portal
+            try {
+                const { supabase } = await import("@/lib/supabase");
+                if (supabase) {
+                    let targetToken = null;
+                    if (data.estimate_id) {
+                        const { data: est } = await supabase.from('estimates').select('public_token, id').eq('id', data.estimate_id).maybeSingle();
+                        if (est) targetToken = est.public_token || est.id;
+                    } else if (data.service_job_id) {
+                        const { data: job } = await supabase.from('service_jobs').select('estimate_id').eq('id', data.service_job_id).maybeSingle();
+                        if (job?.estimate_id) {
+                            const { data: est } = await supabase.from('estimates').select('public_token, id').eq('id', job.estimate_id).maybeSingle();
+                            if (est) targetToken = est.public_token || est.id;
+                        }
+                    }
+
+                    if (targetToken) {
+                        window.location.replace(`/estimate/${targetToken}#extras`);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.warn("Could not auto-redirect to unified portal:", err);
+            }
+        }
         setIsLoading(false);
     };
 
