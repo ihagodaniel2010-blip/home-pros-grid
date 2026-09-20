@@ -376,18 +376,11 @@ export default function Expenses() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="company_card">Company Card / Account</SelectItem>
-                      {partners.filter(p => p.active !== false).length > 0 ? (
-                        partners.filter(p => p.active !== false).map(p => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name} (Personal Card / Cash)
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <>
-                          <SelectItem value="owner_personal">Hugo (Personal Card / Cash)</SelectItem>
-                          <SelectItem value="partner_personal">Brother (Personal Card / Cash)</SelectItem>
-                        </>
-                      )}
+                      {partners.filter(p => p.active === true).map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} (Personal Card / Cash)
+                        </SelectItem>
+                      ))}
                       <SelectItem value="customer_paid_direct">Customer Paid Direct</SelectItem>
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>

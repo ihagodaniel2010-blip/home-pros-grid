@@ -41,9 +41,17 @@ export async function getOrganizationPartners(orgId: string): Promise<Organizati
 }
 
 /**
- * Transactionally/atomically save company ownership structure & organization partners.
- * When partnership is selected, active partners MUST sum to exactly 100.00%.
- * Partners are saved FIRST to satisfy database triggers on company_settings.
+ * Safe ordered save of company ownership structure & organization partners.
+ * Sends ALL altered partners in a single bulk array upsert request.
+ *
+ * Execution order:
+ * SINGLE_OWNER -> PARTNERSHIP or PARTNERSHIP -> PARTNERSHIP:
+ * 1. Bulk upsert of all partners with total final 100% in a single array payload
+ * 2. Update company_settings business_ownership_type to 'partnership'
+ *
+ * PARTNERSHIP -> SINGLE_OWNER:
+ * 1. Update company_settings business_ownership_type to 'single_owner'
+ * 2. Bulk upsert partner roster changes/deactivations (if any)
  */
 export async function saveCompanyOwnershipStructure(
   orgId: string,
@@ -53,6 +61,16 @@ export async function saveCompanyOwnershipStructure(
   if (!orgId) return { success: false, error: "Missing Organization ID" };
 
   try {
+    const payloadToUpsert = partners.map(p => ({
+      ...(p.id && !p.id.startsWith("temp_") ? { id: p.id } : {}),
+      organization_id: orgId,
+      name: p.name?.trim() || "Partner",
+      email: p.email?.trim() || null,
+      ownership_percentage: Number(p.ownership_percentage || 0),
+      active: p.active !== false,
+      updated_at: new Date().toISOString()
+    }));
+
     if (ownershipType === 'partnership') {
       const activePartners = partners.filter(p => p.active !== false);
       const totalPct = activePartners.reduce((sum, p) => sum + (Number(p.ownership_percentage) || 0), 0);
@@ -64,29 +82,19 @@ export async function saveCompanyOwnershipStructure(
         };
       }
 
-      // Save/upsert organization_partners FIRST to satisfy DB trigger validate_company_ownership_mode
-      const payloadToUpsert = partners.map(p => ({
-        ...(p.id && !p.id.startsWith("temp_") ? { id: p.id } : {}),
-        organization_id: orgId,
-        name: p.name?.trim() || "Partner",
-        email: p.email?.trim() || null,
-        ownership_percentage: Number(p.ownership_percentage || 0),
-        active: p.active !== false,
-        updated_at: new Date().toISOString()
-      }));
-
+      // 1. Bulk upsert ALL partners in a SINGLE array payload request
       if (payloadToUpsert.length > 0) {
         const { error: partnerUpsertError } = await supabase
           .from("organization_partners")
           .upsert(payloadToUpsert);
 
         if (partnerUpsertError) {
-          console.error("Error saving organization_partners:", partnerUpsertError);
+          console.error("Error saving organization_partners bulk array:", partnerUpsertError);
           return { success: false, error: partnerUpsertError.message || "Failed to save partner records" };
         }
       }
 
-      // THEN update company_settings business_ownership_type to 'partnership'
+      // 2. THEN update company_settings business_ownership_type to 'partnership'
       const { error: settingsError } = await supabase
         .from("company_settings")
         .upsert(
@@ -103,7 +111,8 @@ export async function saveCompanyOwnershipStructure(
         return { success: false, error: settingsError.message };
       }
     } else {
-      // Single Owner mode: Update company_settings FIRST. Preserve existing partner records without hard deletion
+      // PARTNERSHIP -> SINGLE_OWNER mode:
+      // 1. Update company_settings FIRST to single_owner
       const { error: settingsError } = await supabase
         .from("company_settings")
         .upsert(
@@ -118,6 +127,18 @@ export async function saveCompanyOwnershipStructure(
       if (settingsError) {
         console.error("Error updating company_settings to single_owner:", settingsError);
         return { success: false, error: settingsError.message };
+      }
+
+      // 2. THEN bulk upsert partner roster changes (if any) to preserve partner records without hard deletion
+      if (payloadToUpsert.length > 0) {
+        const { error: partnerUpsertError } = await supabase
+          .from("organization_partners")
+          .upsert(payloadToUpsert);
+
+        if (partnerUpsertError) {
+          console.error("Error saving organization_partners in single_owner mode:", partnerUpsertError);
+          return { success: false, error: partnerUpsertError.message || "Failed to save partner records" };
+        }
       }
     }
 

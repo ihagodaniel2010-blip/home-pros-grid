@@ -1412,18 +1412,11 @@ export default function JobWorkspace() {
                   className="w-full h-10 px-3 rounded-xl border border-gray-200 text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="Company Card">Company Card / Account</option>
-                  {partners.filter(p => p.active !== false).length > 0 ? (
-                    partners.filter(p => p.active !== false).map(p => (
-                      <option key={p.id} value={p.name}>
-                        {p.name} (Partner Personal Card / Cash)
-                      </option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="Hugo Manager">Hugo (Personal Card / Cash)</option>
-                      <option value="Brother Partner">Brother (Personal Card / Cash)</option>
-                    </>
-                  )}
+                  {partners.filter(p => p.active === true).map(p => (
+                    <option key={p.id} value={p.name}>
+                      {p.name} (Partner Personal Card / Cash)
+                    </option>
+                  ))}
                   <option value="Customer Paid Direct">Customer Paid Direct</option>
                   <option value="Other">Other</option>
                 </select>
