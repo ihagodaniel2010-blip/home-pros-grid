@@ -47,11 +47,13 @@ export default function ProjectsList() {
       try {
         const { getExpenses } = await import("@/lib/expenses");
 
-        const [jobsData, estimatesData, paymentsData, expensesData] = await Promise.all([
+        const [jobsData, estimatesData, paymentsData, expensesData, allExtrasData, allLeadsData] = await Promise.all([
           getServiceJobs(orgId).catch(() => []),
           getEstimates(orgId).catch(() => []),
           getClientPayments(orgId).catch(() => []),
-          getExpenses(orgId).catch(() => [])
+          getExpenses(orgId).catch(() => []),
+          supabase ? supabase.from('service_extras').select('*').eq('organization_id', orgId).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+          supabase ? supabase.from('leads').select('*').eq('organization_id', orgId).catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
         ]);
 
         if (!mounted) return;
@@ -59,39 +61,44 @@ export default function ProjectsList() {
         const estMap: Record<string, Estimate> = {};
         (estimatesData || []).forEach(e => { estMap[e.id] = e; });
 
-        // Map jobs to project summaries
-        const summaries: ProjectSummary[] = await Promise.all(
-          (jobsData || []).map(async (job: any) => {
-            const linkedEst = job.estimate_id ? estMap[job.estimate_id] : null;
+        const leadMap: Record<string, any> = {};
+        ((allExtrasData as any)?.data || (allLeadsData as any)?.data || []).forEach((l: any) => { if (l?.id) leadMap[l.id] = l; });
 
-            // Fetch extras for this job
-            const extrasData = job.id ? await getServiceExtrasByJobId(job.id).catch(() => []) : [];
-            const approvedExtras = (extrasData || [])
-              .filter((ex: any) => ex.status === 'approved')
-              .reduce((acc: number, ex: any) => acc + (ex.amount || 0), 0);
+        const extrasByJob: Record<string, any[]> = {};
+        (((allExtrasData as any)?.data) || []).forEach((ex: any) => {
+          if (ex.service_job_id) {
+            if (!extrasByJob[ex.service_job_id]) extrasByJob[ex.service_job_id] = [];
+            extrasByJob[ex.service_job_id].push(ex);
+          }
+        });
 
-            // Calculate client materials for this job
-            const clientMaterials = (expensesData || [])
-              .filter((ex: any) => ex.status === 'active' && (ex.service_job_id === job.id || ex.estimate_id === job.estimate_id) && ex.bill_to_client)
-              .reduce((acc: number, ex: any) => acc + (ex.amount || 0), 0);
+        // Map jobs to project summaries instantly in memory
+        const summaries: ProjectSummary[] = (jobsData || []).map((job: any) => {
+          const linkedEst = job.estimate_id ? estMap[job.estimate_id] : null;
 
-            // Fetch lead info if needed
-            let clientName = linkedEst?.client_name || "Client Project";
-            let address = linkedEst?.client_address || "Sinop / Local Address";
-            let projectType = linkedEst?.project_type || "General Construction";
+          const extrasData = (job.id && extrasByJob[job.id]) ? extrasByJob[job.id] : [];
+          const approvedExtras = extrasData
+            .filter((ex: any) => ex.status === 'approved')
+            .reduce((acc: number, ex: any) => acc + (ex.amount || 0), 0);
 
-            if (job.lead_id && supabase) {
-              const { data: leadData } = await supabase.from('leads').select('*').eq('id', job.lead_id).maybeSingle();
-              if (leadData) {
-                if (!linkedEst?.client_name && leadData.fullName) clientName = leadData.fullName;
-                if (!linkedEst?.client_address && leadData.address) address = leadData.address;
-                if (!linkedEst?.project_type && leadData.selectedServiceOption) projectType = leadData.selectedServiceOption;
-              }
-            }
+          const clientMaterials = (expensesData || [])
+            .filter((ex: any) => ex.status === 'active' && (ex.service_job_id === job.id || ex.estimate_id === job.estimate_id) && (ex.bill_to_client || ex.material_responsibility === 'client'))
+            .reduce((acc: number, ex: any) => acc + (ex.amount || 0), 0);
 
-            const originalContract = linkedEst?.total_amount || 0;
-            const currentContract = originalContract + approvedExtras;
-            const totalResponsibility = currentContract + clientMaterials;
+          let clientName = linkedEst?.client_name || "Client Project";
+          let address = linkedEst?.client_address || "Sinop / Local Address";
+          let projectType = linkedEst?.project_type || "General Construction";
+
+          if (job.lead_id && leadMap[job.lead_id]) {
+            const leadData = leadMap[job.lead_id];
+            if (!linkedEst?.client_name && leadData.fullName) clientName = leadData.fullName;
+            if (!linkedEst?.client_address && leadData.address) address = leadData.address;
+            if (!linkedEst?.project_type && leadData.selectedServiceOption) projectType = leadData.selectedServiceOption;
+          }
+
+          const originalContract = linkedEst?.total_amount || 0;
+          const currentContract = originalContract + approvedExtras;
+          const totalResponsibility = currentContract + clientMaterials;
 
             // Calculate paid for this job
             const paidForJob = (paymentsData || [])
@@ -117,8 +124,7 @@ export default function ProjectsList() {
               amount_paid: paidForJob,
               balance_due: balanceDue
             };
-          })
-        );
+          });
 
         setProjects(summaries);
       } catch (err: any) {

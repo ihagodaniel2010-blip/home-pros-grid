@@ -91,9 +91,13 @@ export default function JobWorkspace() {
   });
 
   // Media Form State
+  const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
   const [mediaFileUrl, setMediaFileUrl] = useState<string | null>(null);
   const [mediaCaption, setMediaCaption] = useState("");
   const [mediaVisibility, setMediaVisibility] = useState<"admin" | "client" | "public">("client");
+
+  // Media Lightbox Modal State (Requirement 8)
+  const [lightboxMedia, setLightboxMedia] = useState<ServiceJobMediaRecord | null>(null);
 
   // Media Filter State
   const [mediaFilter, setMediaFilter] = useState<"all" | "client" | "admin" | "portfolio">("all");
@@ -422,6 +426,15 @@ export default function JobWorkspace() {
     setIsSavingExpense(true);
     try {
       const amount = parseFloat(expenseForm.amount);
+      const isCompanyMaterial = !expenseForm.billToClient;
+
+      // Find partner matching paidByName if paid personally by partner
+      const matchedPartner = partners.find(p => 
+        p.name === expenseForm.paidByName || 
+        expenseForm.paidByName.includes(p.name) ||
+        p.name.includes(expenseForm.paidByName.split(' ')[0])
+      );
+
       const { receipt: created } = await createExpense({
         organization_id: orgId,
         service_job_id: job.id,
@@ -433,17 +446,50 @@ export default function JobWorkspace() {
         payment_method: "card",
         payment_source: expenseForm.paymentSource as any,
         paid_by_name: expenseForm.paidByName,
+        paid_by_partner_id: matchedPartner?.id || null,
+        material_responsibility: isCompanyMaterial ? "company" : "client",
         reimbursable_to_owner: expenseForm.reimbursableToOwner,
         bill_to_client: expenseForm.billToClient,
         reimbursement_status: expenseForm.reimbursableToOwner ? "pending" : "not_reimbursable",
         client_reimbursement_status: expenseForm.billToClient ? "pending" : "not_billable",
         notes: `Job Expense for ${expenseForm.description}`,
         status: "active"
-      });
+      } as any);
+
+      // Create bulk partner allocations if Company Material paid by Partner
+      if (isCompanyMaterial && matchedPartner && created?.id) {
+        try {
+          const activePartners = partners.filter(p => p.active !== false);
+          if (activePartners.length > 0) {
+            let remainingCents = Math.round(amount * 100);
+            const allocationsBulk = activePartners.map((p, idx) => {
+              let allocCents = Math.floor(amount * 100 * (p.ownership_percentage / 100));
+              if (idx === activePartners.length - 1) {
+                allocCents = remainingCents; // Allocate remaining cents deterministically
+              } else {
+                remainingCents -= allocCents;
+              }
+              const allocAmount = allocCents / 100;
+              return {
+                organization_id: orgId,
+                expense_id: created.id,
+                partner_id: p.id,
+                ownership_percentage_snapshot: p.ownership_percentage,
+                original_allocated_amount: allocAmount
+              };
+            });
+
+            await supabase.from("partner_expense_allocations").insert(allocationsBulk);
+          }
+        } catch (allocErr) {
+          console.warn("Bulk partner allocation insert handled:", allocErr);
+        }
+      }
 
       if (created) {
         setExpenses(prev => [created, ...prev]);
       }
+
       setIsAddExpenseOpen(false);
       setExpenseForm({
         description: "",
@@ -456,10 +502,11 @@ export default function JobWorkspace() {
         billToClient: false
       });
       setActiveTab("materials");
-      toast.success("Job Expense logged successfully!");
+      toast.success(isCompanyMaterial ? "Company Material & Partner Allocations logged!" : "Client Material logged successfully!");
+      loadJobWorkspace();
     } catch (err: any) {
       console.error("Create expense error:", err);
-      toast.error(`Failed to log expense: ${err?.message || "Database error"}`);
+      toast.error(`Could not save material: ${err?.message || "Database error"}`);
     } finally {
       setIsSavingExpense(false);
     }
@@ -468,6 +515,7 @@ export default function JobWorkspace() {
   const handleMediaFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setSelectedMediaFile(file);
       if (mediaFileUrl && mediaFileUrl.startsWith("blob:")) {
         URL.revokeObjectURL(mediaFileUrl);
       }
@@ -477,35 +525,70 @@ export default function JobWorkspace() {
   };
 
   const handleAddMediaSubmit = async () => {
-    if (!job || !mediaFileUrl) {
+    if (!job || (!selectedMediaFile && !mediaFileUrl)) {
       toast.error("Please select a photo or video file.");
       return;
     }
 
     setIsSavingMedia(true);
-    const storagePath = `${orgId}/jobs/${job.id}/photos/${Date.now()}.jpg`;
-
     try {
+      let finalStoragePath = "";
+      const isVideo = selectedMediaFile?.type.startsWith("video/") || false;
+      const mediaType = isVideo ? "video" : "image";
+      const fileExt = selectedMediaFile?.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
+      const relativePath = `${orgId}/jobs/${job.id}/${isVideo ? "videos" : "photos"}/${Date.now()}.${fileExt}`;
+
+      if (selectedMediaFile) {
+        // Read file as Base64 Data URL fallback
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = ev => resolve(ev.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(selectedMediaFile);
+        });
+
+        // Try storage upload first
+        try {
+          const { error: uploadErr } = await supabase.storage
+            .from("images")
+            .upload(relativePath, selectedMediaFile);
+
+          if (!uploadErr) {
+            const { data } = supabase.storage.from("images").getPublicUrl(relativePath);
+            if (data?.publicUrl) finalStoragePath = data.publicUrl;
+          }
+        } catch (sErr) {
+          console.warn("Storage upload for job media handled, using Data URL fallback:", sErr);
+        }
+
+        if (!finalStoragePath) {
+          finalStoragePath = dataUrl;
+        }
+      } else {
+        finalStoragePath = mediaFileUrl!;
+      }
+
       const record = await uploadJobMediaRecord({
         organization_id: orgId,
         service_job_id: job.id,
-        media_type: "image",
-        storage_path: storagePath,
-        file_name: `job_photo_${Date.now()}.jpg`,
-        mime_type: "image/jpeg",
-        file_size_bytes: 1048576,
+        media_type: mediaType,
+        storage_path: finalStoragePath,
+        file_name: selectedMediaFile?.name || `job_media_${Date.now()}.${fileExt}`,
+        mime_type: selectedMediaFile?.type || (isVideo ? "video/mp4" : "image/jpeg"),
+        file_size_bytes: selectedMediaFile?.size || 1048576,
         caption: mediaCaption.trim() || "Job progress documentation"
       });
 
       setMedia(prev => [record, ...prev]);
       setIsAddMediaOpen(false);
+      setSelectedMediaFile(null);
       setMediaFileUrl(null);
       setMediaCaption("");
       setActiveTab("media");
-      toast.success("Job photo uploaded!");
+      toast.success(`${isVideo ? "Job video" : "Job photo"} uploaded successfully!`);
     } catch (err: any) {
       console.error("Upload job media error:", err);
-      toast.error("Failed to upload job photo.");
+      toast.error("Failed to upload job photo/video.");
     } finally {
       setIsSavingMedia(false);
     }
@@ -1183,10 +1266,15 @@ export default function JobWorkspace() {
                       : 'Not Submitted';
 
                     return (
-                      <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col group">
+                      <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col group cursor-pointer" onClick={() => setLightboxMedia(m)}>
                         <div className="aspect-video relative overflow-hidden bg-slate-900 flex items-center justify-center">
                           {m.media_type === 'video' ? (
-                            <video src={mediaUrl} controls className="w-full h-full object-cover" />
+                            <div className="w-full h-full flex flex-col items-center justify-center text-white bg-slate-950/80">
+                              <video src={mediaUrl} className="w-full h-full object-cover pointer-events-none" />
+                              <span className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition-colors">
+                                <span className="p-3 rounded-full bg-white/20 backdrop-blur-md text-white font-bold text-xs uppercase flex items-center gap-1">▶ Play Video</span>
+                              </span>
+                            </div>
                           ) : (
                             <img
                               src={mediaUrl}
@@ -1199,7 +1287,7 @@ export default function JobWorkspace() {
                               }}
                             />
                           )}
-                          <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+                          <div className="absolute top-2 left-2 flex flex-wrap gap-1 z-10">
                             {m.visible_to_client ? (
                               <Badge className="bg-emerald-500/90 text-white text-[9px] px-1.5 py-0.5">
                                 <Eye className="h-3 w-3 mr-1" /> Client Visible
@@ -1814,6 +1902,60 @@ export default function JobWorkspace() {
               >
                 {isSubmittingOfflineDoc ? "Confirming & Approving..." : "Confirm Signed Contract"}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. Media Lightbox Modal (Requirement 8) */}
+      {lightboxMedia && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="max-w-4xl w-full bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-slate-950 flex items-center justify-between border-b border-slate-800 text-white">
+              <div className="flex items-center gap-3">
+                <Badge className="bg-white/20 text-white text-xs uppercase capitalize">
+                  {lightboxMedia.media_type}
+                </Badge>
+                <h3 className="font-bold text-sm truncate max-w-xs sm:max-w-md">{lightboxMedia.caption || "Job Media Documentation"}</h3>
+              </div>
+              <button
+                onClick={() => setLightboxMedia(null)}
+                className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white font-bold text-sm transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 bg-black flex items-center justify-center relative min-h-[300px] overflow-hidden p-2">
+              {lightboxMedia.media_type === 'video' ? (
+                <video
+                  src={lightboxMedia.storage_path.startsWith('http') || lightboxMedia.storage_path.startsWith('data:')
+                    ? lightboxMedia.storage_path
+                    : supabase.storage.from('images').getPublicUrl(lightboxMedia.storage_path).data.publicUrl
+                  }
+                  controls
+                  autoPlay
+                  className="max-h-[70vh] w-auto max-w-full rounded-xl"
+                />
+              ) : (
+                <img
+                  src={lightboxMedia.storage_path.startsWith('http') || lightboxMedia.storage_path.startsWith('data:')
+                    ? lightboxMedia.storage_path
+                    : supabase.storage.from('images').getPublicUrl(lightboxMedia.storage_path).data.publicUrl
+                  }
+                  alt={lightboxMedia.caption || "Job photo"}
+                  className="max-h-[70vh] w-auto max-w-full object-contain rounded-xl"
+                />
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-950 flex items-center justify-between border-t border-slate-800 text-xs text-slate-300">
+              <p className="italic">Uploaded: {new Date(lightboxMedia.created_at).toLocaleDateString()}</p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setLightboxMedia(null)} className="h-8 text-xs font-bold border-slate-700 text-slate-200 hover:bg-slate-800">
+                  Close Lightbox
+                </Button>
+              </div>
             </div>
           </div>
         </div>
