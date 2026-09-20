@@ -430,8 +430,9 @@ export default function JobWorkspace() {
         reason: extraForm.reason.trim() || undefined
       });
 
-      // Upload attached media files for extra
+      // Upload attached media files for extra and embed media URLs into reason for public access
       if (extraSelectedFiles.length > 0 && newExtra?.id) {
+        const uploadedUrls: string[] = [];
         for (const file of extraSelectedFiles) {
           try {
             const isVideo = file.type.startsWith("video/");
@@ -471,9 +472,25 @@ export default function JobWorkspace() {
               file_size_bytes: file.size,
               caption: extraForm.description.trim()
             });
+
+            const resolvedUrl = await resolveSignedMediaUrl(finalPath);
+            if (resolvedUrl) uploadedUrls.push(resolvedUrl);
           } catch (mediaErr: any) {
             console.warn("Extra media upload handled:", mediaErr);
           }
+        }
+
+        if (uploadedUrls.length > 0) {
+          const baseReason = extraForm.reason.trim() || "";
+          const mediaTags = uploadedUrls.map(u => `[media:${u}]`).join(" ");
+          const combinedReason = baseReason ? `${baseReason} ${mediaTags}` : mediaTags;
+          
+          await supabase
+            .from('service_extras')
+            .update({ reason: combinedReason })
+            .eq('id', newExtra.id);
+
+          newExtra.reason = combinedReason;
         }
       }
 

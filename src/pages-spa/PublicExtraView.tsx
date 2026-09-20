@@ -241,12 +241,43 @@ const PublicExtraView = () => {
                                 <p className="text-lg font-semibold text-gray-900 leading-relaxed">{extra.description}</p>
                             </div>
 
-                            {extra.reason && (
-                                <div className="p-4 bg-purple-50/60 rounded-2xl border border-purple-100">
-                                    <h3 className="text-xs font-bold text-purple-700 uppercase tracking-widest mb-1">Reason for Change Order</h3>
-                                    <p className="text-sm text-purple-900">{extra.reason}</p>
-                                </div>
-                            )}
+                            {(() => {
+                                let cleanReason = extra.reason || "";
+                                const mediaUrls: string[] = [];
+
+                                if (cleanReason && cleanReason.includes('[media:')) {
+                                    const regex = /\[media:([^\]]+)\]/g;
+                                    let match;
+                                    while ((match = regex.exec(cleanReason)) !== null) {
+                                        if (match[1] && !mediaUrls.includes(match[1])) mediaUrls.push(match[1]);
+                                    }
+                                    cleanReason = cleanReason.replace(/\[media:[^\]]+\]/g, '').trim();
+                                }
+
+                                return (
+                                    <>
+                                        {cleanReason && (
+                                            <div className="p-4 bg-purple-50/60 rounded-2xl border border-purple-100">
+                                                <h3 className="text-xs font-bold text-purple-700 uppercase tracking-widest mb-1">Reason for Change Order</h3>
+                                                <p className="text-sm text-purple-900">{cleanReason}</p>
+                                            </div>
+                                        )}
+
+                                        {mediaUrls.length > 0 && (
+                                            <div className="space-y-2">
+                                                <h3 className="text-xs font-bold text-purple-700 uppercase tracking-widest">Attached Photo Evidence ({mediaUrls.length})</h3>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {mediaUrls.map((url, idx) => (
+                                                        <div key={idx} className="relative aspect-square w-24 rounded-xl overflow-hidden border border-purple-200">
+                                                            <img src={url} alt="Extra photo" className="w-full h-full object-cover" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
 
                         {/* Action & E-Signature Section */}

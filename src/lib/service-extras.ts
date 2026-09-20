@@ -108,7 +108,20 @@ export const getServiceExtrasByJobOrEstimateId = async (jobId?: string | null, e
 export const respondPublicServiceExtra = async (tokenOrId: string, status: 'approved' | 'rejected') => {
     if (!supabase || !tokenOrId) return false;
 
-    // 1. Try public RPC first
+    // 1. Try public RPC with p_response first (matching PostgreSQL function definition)
+    try {
+        const { error } = await supabase.rpc('respond_public_service_extra', { 
+            p_token: tokenOrId,
+            p_response: status
+        });
+
+        if (!error) return true;
+        console.warn("RPC respond_public_service_extra with p_response returned error:", error.message);
+    } catch (rpcErr) {
+        console.warn("RPC respond_public_service_extra with p_response failed:", rpcErr);
+    }
+
+    // 2. Try public RPC with p_status parameter fallback
     try {
         const { error } = await supabase.rpc('respond_public_service_extra', { 
             p_token: tokenOrId,
@@ -116,15 +129,20 @@ export const respondPublicServiceExtra = async (tokenOrId: string, status: 'appr
         });
 
         if (!error) return true;
-    } catch (rpcErr) {
-        console.warn("RPC respond_public_service_extra failed, using direct update fallback:", rpcErr);
+    } catch (rpcErr2) {
+        console.warn("RPC respond_public_service_extra with p_status failed:", rpcErr2);
     }
 
-    // 2. Direct table update fallback by public_token OR id
+    // 3. Direct table update fallback by public_token OR id
     try {
         const { error } = await supabase
             .from('service_extras')
-            .update({ status, updated_at: new Date().toISOString() })
+            .update({ 
+                status, 
+                approved_at: status === 'approved' ? new Date().toISOString() : null,
+                rejected_at: status === 'rejected' ? new Date().toISOString() : null,
+                updated_at: new Date().toISOString() 
+            })
             .or(`public_token.eq.${tokenOrId},id.eq.${tokenOrId}`);
 
         if (!error) return true;
