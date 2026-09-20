@@ -329,12 +329,14 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
         console.warn('RPC get_public_estimate failed, trying direct select:', rpcErr);
     }
 
-    // Tier 2: Direct SELECT by public_token OR id
+    // Tier 2: Direct SELECT by public_token, id, OR lead_id
     try {
         const { data: directEst, error: directErr } = await supabase
             .from('estimates')
             .select('*')
-            .or(`public_token.eq.${token},id.eq.${token}`)
+            .or(`public_token.eq.${token},id.eq.${token},lead_id.eq.${token}`)
+            .order('created_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
 
         if (!directErr && directEst) {
@@ -353,12 +355,13 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
         console.warn('Direct select estimate error:', selectErr);
     }
 
-    // Tier 3: Fallback check if token is a service_job_id
+    // Tier 3: Fallback check if token is a service_job_id or lead_id on service_jobs
     try {
         const { data: jobRecord } = await supabase
             .from('service_jobs')
             .select('estimate_id')
-            .eq('id', token)
+            .or(`id.eq.${token},lead_id.eq.${token}`)
+            .limit(1)
             .maybeSingle();
 
         if (jobRecord?.estimate_id) {

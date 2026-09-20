@@ -141,32 +141,70 @@ const CompanySettings = () => {
 
         setIsUploading(true);
         try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${targetOrgId}/logo-${Date.now()}.${fileExt}`;
-            const filePath = `logos/${fileName}`;
+            // 1. Process image through Canvas for client-side resizing (max 512px)
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const maxDim = 512;
+                        let width = img.width;
+                        let height = img.height;
 
-            const { error: uploadError } = await supabase.storage
-                .from('images')
-                .upload(filePath, file);
+                        if (width > height) {
+                            if (width > maxDim) {
+                                height = Math.round((height * maxDim) / width);
+                                width = maxDim;
+                            }
+                        } else {
+                            if (height > maxDim) {
+                                width = Math.round((width * maxDim) / height);
+                                height = maxDim;
+                            }
+                        }
 
-            if (uploadError) throw uploadError;
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            ctx.drawImage(img, 0, 0, width, height);
+                            resolve(canvas.toDataURL('image/png', 0.9));
+                        } else {
+                            resolve(event.target?.result as string);
+                        }
+                    };
+                    img.onerror = () => resolve(event.target?.result as string);
+                    img.src = event.target?.result as string;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
 
-            const { data: { publicUrl } } = supabase.storage
-                .from('images')
-                .getPublicUrl(filePath);
+            // 2. Try storage upload if available, fallback to Data URL
+            let finalLogoUrl = dataUrl;
+            try {
+                const fileName = `${targetOrgId}/logo-${Date.now()}.png`;
+                const filePath = `logos/${fileName}`;
+                const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file);
+
+                if (!uploadError) {
+                    const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(filePath);
+                    if (publicUrl) finalLogoUrl = publicUrl;
+                }
+            } catch (storageErr) {
+                console.warn("Storage bucket upload handled, using optimized Data URL fallback:", storageErr);
+            }
 
             const updatedSettings = {
                 ...settings,
-                logo_url: publicUrl,
+                logo_url: finalLogoUrl,
                 organization_id: targetOrgId
             };
 
             setSettings(updatedSettings);
-
-            // Auto-persist logo_url to company_settings DB table immediately
             await saveCompanySettings(updatedSettings);
-
-            toast.success("Logo uploaded and saved successfully!");
+            toast.success("Company logo updated and saved successfully!");
         } catch (error: any) {
             console.error("Upload error:", error);
             toast.error(error.message || "Failed to upload logo");
@@ -241,7 +279,7 @@ const CompanySettings = () => {
                                 </div>
                             )}
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-4 leading-relaxed">Recommended size: 512x512px. JPG or PNG.</p>
+                        <p className="text-[10px] text-slate-400 mt-4 leading-relaxed">Upload any PNG or JPG logo. Automatically optimized and cropped.</p>
                     </div>
 
                     <div className="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm">

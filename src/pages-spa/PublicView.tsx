@@ -277,9 +277,25 @@ const PublicView = () => {
                             </div>
                             <div className="md:text-right">
                                 <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Estimate Details</h2>
-                                <p className="text-gray-600"><span className="font-semibold text-gray-900">Date:</span> {new Date(estimate.created_at).toLocaleDateString()}</p>
+                                <p className="text-gray-600">
+                                    <span className="font-semibold text-gray-900">Date:</span> {
+                                        (() => {
+                                            const rawDate = estimate.created_at || (estimate as any).date;
+                                            if (!rawDate) return new Date().toLocaleDateString();
+                                            const parsed = new Date(rawDate);
+                                            return isNaN(parsed.getTime()) ? new Date().toLocaleDateString() : parsed.toLocaleDateString();
+                                        })()
+                                    }
+                                </p>
                                 {estimate.valid_until && (
-                                    <p className="text-gray-600"><span className="font-semibold text-gray-900">Valid Until:</span> {new Date(estimate.valid_until).toLocaleDateString()}</p>
+                                    <p className="text-gray-600">
+                                        <span className="font-semibold text-gray-900">Valid Until:</span> {
+                                            (() => {
+                                                const parsed = new Date(estimate.valid_until);
+                                                return isNaN(parsed.getTime()) ? "N/A" : parsed.toLocaleDateString();
+                                            })()
+                                        }
+                                    </p>
                                 )}
                             </div>
                         </div>
