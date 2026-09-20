@@ -153,3 +153,51 @@ export async function createTemporarySignedUrl(bucket: string, storagePath: stri
 
     return data?.signedUrl || null;
 }
+
+/**
+ * Fetches all job media records for a given service job ID.
+ */
+export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJobMediaRecord[]> {
+    const { data, error } = await supabase
+        .from('service_job_media')
+        .select('*')
+        .eq('service_job_id', serviceJobId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching job media records:", error);
+        throw error;
+    }
+
+    return (data || []) as ServiceJobMediaRecord[];
+}
+
+/**
+ * Updates visibility and approval flags for a job media record.
+ */
+export async function updateJobMediaVisibility(
+    mediaId: string,
+    updates: {
+        visible_to_client?: boolean;
+        visible_on_public_site?: boolean;
+        portfolio_approved?: boolean;
+    }
+): Promise<void> {
+    const payload: Record<string, any> = {
+        updated_at: new Date().toISOString()
+    };
+
+    if (typeof updates.visible_to_client === 'boolean') payload.visible_to_client = updates.visible_to_client;
+    if (typeof updates.visible_on_public_site === 'boolean') payload.visible_on_public_site = updates.visible_on_public_site;
+    if (typeof updates.portfolio_approved === 'boolean') payload.portfolio_approved = updates.portfolio_approved;
+
+    const { error } = await supabase
+        .from('service_job_media')
+        .update(payload)
+        .eq('id', mediaId);
+
+    if (error) {
+        console.error("Error updating job media visibility:", error);
+        throw error;
+    }
+}
