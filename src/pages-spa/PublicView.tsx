@@ -534,43 +534,62 @@ const PublicView = () => {
                                     Change Orders & Extras ({extras.length})
                                 </h2>
                                 <div className="space-y-4">
-                                    {extras.map((extra) => (
-                                        <div key={extra.id} className="p-6 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-4">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                <div>
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase inline-block mb-1.5 ${
-                                                        extra.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
-                                                        extra.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                                                    }`}>
-                                                        {extra.status}
-                                                    </span>
-                                                    <h3 className="font-bold text-gray-900 text-base">{extra.description}</h3>
-                                                    {extra.reason && <p className="text-xs text-gray-500 mt-1">Reason: {extra.reason}</p>}
-                                                    {extra.schedule_impact && <p className="text-xs text-purple-700 font-medium mt-0.5">Schedule Impact: {extra.schedule_impact}</p>}
-                                                </div>
-                                                <div className="text-right">
-                                                    <span className="text-xl font-black text-purple-900">+${extra.amount.toLocaleString()}</span>
-                                                </div>
-                                            </div>
+                                    {extras.map((extra) => {
+                                        const dbMedia = extraMediaMap[extra.id] || [];
+                                        let cleanReason = extra.reason || "";
+                                        const mediaUrls: string[] = [];
 
-                                            {/* Attached Extra Photos/Videos */}
-                                            {extraMediaMap[extra.id] && extraMediaMap[extra.id].length > 0 && (
-                                                <div className="flex flex-wrap gap-2 pt-2 border-t border-purple-100">
-                                                    {extraMediaMap[extra.id].map(({ record: m, url }) => (
-                                                        <div key={m.id} className="relative group cursor-pointer" onClick={() => setSelectedMediaUrl(url)}>
-                                                            {m.media_type === 'video' ? (
-                                                                <video src={url} className="w-24 h-24 object-cover rounded-xl border border-purple-200" />
-                                                            ) : (
-                                                                <img
-                                                                    src={url}
-                                                                    alt={m.caption || "Extra photo"}
-                                                                    className="w-24 h-24 object-cover rounded-xl border border-purple-200 font-bold hover:opacity-90 transition-opacity"
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                        dbMedia.forEach(item => {
+                                            if (item.url && !mediaUrls.includes(item.url)) mediaUrls.push(item.url);
+                                        });
+
+                                        if (cleanReason && cleanReason.includes('[media:')) {
+                                            const regex = /\[media:([^\]]+)\]/g;
+                                            let match;
+                                            while ((match = regex.exec(cleanReason)) !== null) {
+                                                const u = match[1];
+                                                if (u && !mediaUrls.includes(u)) mediaUrls.push(u);
+                                            }
+                                            cleanReason = cleanReason.replace(/\[media:[^\]]+\]/g, '').trim();
+                                        }
+
+                                        return (
+                                            <div key={extra.id} className="p-6 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-4">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                    <div>
+                                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase inline-block mb-1.5 ${
+                                                            extra.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                                                            extra.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                                                        }`}>
+                                                            {extra.status}
+                                                        </span>
+                                                        <h3 className="font-bold text-gray-900 text-base">{extra.description}</h3>
+                                                        {cleanReason && <p className="text-xs text-gray-500 mt-1">Reason: {cleanReason}</p>}
+                                                        {extra.schedule_impact && <p className="text-xs text-purple-700 font-medium mt-0.5">Schedule Impact: {extra.schedule_impact}</p>}
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className="text-xl font-black text-purple-900">+${extra.amount.toLocaleString()}</span>
+                                                    </div>
                                                 </div>
-                                            )}
+
+                                                {/* Attached Extra Photos/Videos */}
+                                                {mediaUrls.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-purple-100">
+                                                        {mediaUrls.map((url, idx) => (
+                                                            <div key={idx} className="relative group cursor-pointer" onClick={() => setSelectedMediaUrl(url)}>
+                                                                {url.includes('.mp4') || url.includes('.mov') ? (
+                                                                    <video src={url} className="w-24 h-24 object-cover rounded-xl border border-purple-200" />
+                                                                ) : (
+                                                                    <img
+                                                                        src={url}
+                                                                        alt="Extra photo attachment"
+                                                                        className="w-24 h-24 object-cover rounded-xl border border-purple-200 font-bold hover:opacity-90 transition-opacity"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
 
                                             {/* Interactive Approval for Pending Extra requiring signature */}
                                             {extra.status === 'pending' && (
@@ -629,10 +648,11 @@ const PublicView = () => {
                                                 </div>
                                             )}
                                         </div>
-                                    ))}
-                                </div>
+                                    );
+                                })}
                             </div>
-                        )}
+                        </div>
+                    )}
 
                         {/* CLIENT MATERIALS SECTION (Requirement 23) */}
                         {clientMaterials.length > 0 && (
