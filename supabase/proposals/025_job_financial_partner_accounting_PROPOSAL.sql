@@ -238,7 +238,6 @@ BEGIN
       v_total_allocated, v_expense_amount, v_target_expense;
   END IF;
 
-  -- Validate each individual partner's allocation matches percentage within 1 cent tolerance
   FOR rec IN SELECT ownership_percentage_snapshot, original_allocated_amount, partner_id
                FROM public.partner_expense_allocations
               WHERE expense_id = v_target_expense
@@ -379,7 +378,6 @@ DECLARE
   v_mat_resp TEXT;
 BEGIN
   IF NEW.status = 'received' THEN
-    -- Lock target material expense row
     SELECT service_job_id, bill_to_client, material_responsibility, amount
       INTO v_target_job, v_bill_to_client, v_mat_resp, v_material_amount
       FROM public.receipts
@@ -390,13 +388,11 @@ BEGIN
       RAISE EXCEPTION 'Target material expense % not found in organization %.', NEW.material_expense_id, NEW.organization_id;
     END IF;
 
-    -- Confirm matching service job ID
     IF v_target_job IS NULL OR v_target_job IS DISTINCT FROM NEW.service_job_id THEN
       RAISE EXCEPTION 'Material expense % belongs to job %, which does not match payment job %.',
         NEW.material_expense_id, v_target_job, NEW.service_job_id;
     END IF;
 
-    -- Strict responsibility check: client material ONLY (never company material or unclassified non-client)
     IF NOT (COALESCE(v_mat_resp, '') = 'client' OR (v_mat_resp IS NULL AND v_bill_to_client = true)) THEN
       RAISE EXCEPTION 'Client material payments can only be recorded against client-responsible materials. Target material % is marked as company material or not billable.',
         NEW.material_expense_id;
@@ -425,7 +421,7 @@ CREATE TRIGGER trg_prevent_excessive_client_material_payments
   FOR EACH ROW EXECUTE FUNCTION public.prevent_excessive_client_material_payments();
 
 -- ------------------------------------------------------------------------------
--- 6. PARTNER SETTLEMENTS LEDGER & NET BALANCE OVERPAYMENT PROTECTION
+-- 6. PARTNER SETTLEMENTS LEDGER (STRICT COMPANY-WIDE ACCOUNTING MODEL)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.partner_settlements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -473,22 +469,23 @@ CREATE TRIGGER trg_set_updated_at_partner_settlements
   BEFORE UPDATE ON public.partner_settlements
   FOR EACH ROW EXECUTE FUNCTION public.set_financial_updated_at();
 
--- Partner Settlement Limit Trigger: Prevents settlement exceeding derived Net Owed Balance
--- Uses FOR UPDATE row locks on organization_partners to eliminate race conditions
+-- Strict Company-Wide Partner Settlement Validation Trigger
+-- Eliminates double-settlement by validating settlement amounts against Company-Wide Net Balance Owed
+-- Uses FOR UPDATE row locks on organization_partners to prevent concurrency race conditions
 CREATE OR REPLACE FUNCTION public.prevent_excessive_partner_settlements()
 RETURNS TRIGGER AS $$
 DECLARE
   v_net_balance_owed NUMERIC(12,2);
 BEGIN
   IF NEW.status = 'posted' THEN
-    -- Lock both partner records in organization to prevent settlement race condition
+    -- Lock both partner records in organization to prevent settlement race conditions
     PERFORM id FROM public.organization_partners
      WHERE organization_id = NEW.organization_id
        AND id IN (NEW.payer_partner_id, NEW.payee_partner_id)
        FOR UPDATE;
 
-    -- Calculate Gross Net Obligation owed by Payer (D) to Payee (C)
-    -- minus reverse obligations, minus posted settlements (voided settlements are excluded automatically)
+    -- Company-wide Net Obligation calculation between Payer (D) and Payee (C)
+    -- service_job_id in partner_settlements is informational attribution only; limit calculation is ALWAYS company-wide
     WITH expense_nets AS (
       SELECT r.id AS expense_id,
              (r.amount - COALESCE(SUM(er.amount), 0.00)) AS net_amount
@@ -497,7 +494,6 @@ BEGIN
           ON r.id = er.expense_id AND er.status = 'posted'
        WHERE r.organization_id = NEW.organization_id
          AND r.paid_by_partner_id = NEW.payee_partner_id
-         AND (NEW.service_job_id IS NULL OR r.service_job_id = NEW.service_job_id)
        GROUP BY r.id, r.amount
     ),
     payer_obligations AS (
@@ -515,7 +511,6 @@ BEGIN
           ON r.id = er.expense_id AND er.status = 'posted'
        WHERE r.organization_id = NEW.organization_id
          AND r.paid_by_partner_id = NEW.payer_partner_id
-         AND (NEW.service_job_id IS NULL OR r.service_job_id = NEW.service_job_id)
        GROUP BY r.id, r.amount
     ),
     payee_obligations AS (
@@ -532,7 +527,6 @@ BEGIN
          AND payer_partner_id = NEW.payer_partner_id
          AND payee_partner_id = NEW.payee_partner_id
          AND status = 'posted'
-         AND (NEW.service_job_id IS NULL OR service_job_id = NEW.service_job_id)
          AND id <> COALESCE(NEW.id, '00000000-0000-0000-0000-000000000000'::uuid)
     ),
     posted_settlements_reverse AS (
@@ -542,7 +536,6 @@ BEGIN
          AND payer_partner_id = NEW.payee_partner_id
          AND payee_partner_id = NEW.payer_partner_id
          AND status = 'posted'
-         AND (NEW.service_job_id IS NULL OR service_job_id = NEW.service_job_id)
     )
     SELECT (po.total_owed - py.total_owed - psd.total_settled + psr.total_settled)
       INTO v_net_balance_owed
@@ -551,7 +544,7 @@ BEGIN
     v_net_balance_owed := GREATEST(v_net_balance_owed, 0.00);
 
     IF NEW.amount > v_net_balance_owed THEN
-      RAISE EXCEPTION 'Settlement amount (%) exceeds currently owed net balance (%) from partner % to partner %.',
+      RAISE EXCEPTION 'Settlement amount (%) exceeds currently owed company-wide net balance (%) from partner % to partner %.',
         NEW.amount, v_net_balance_owed, NEW.payer_partner_id, NEW.payee_partner_id;
     END IF;
   END IF;
@@ -567,8 +560,6 @@ CREATE TRIGGER trg_prevent_excessive_partner_settlement
 
 -- ------------------------------------------------------------------------------
 -- 7. AUDITABILITY: TABLE-SPECIFIC IMMUTABILITY & CONTROLLED VOID TRIGGERS
--- Prevents modification of ALL core financial fields once posted/received
--- Allows only controlled voiding with required non-empty void_reason
 -- ------------------------------------------------------------------------------
 
 -- A. EXPENSE REFUNDS IMMUTABILITY TRIGGER
@@ -587,7 +578,6 @@ BEGIN
     NEW.voided_at := NOW();
     NEW.voided_by := auth.uid();
 
-    -- Restore all immutable operational & financial fields to OLD values
     NEW.organization_id := OLD.organization_id;
     NEW.service_job_id := OLD.service_job_id;
     NEW.expense_id := OLD.expense_id;
@@ -597,7 +587,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Block any edit to core fields while active ('posted')
   IF NEW.organization_id IS DISTINCT FROM OLD.organization_id OR
      NEW.service_job_id IS DISTINCT FROM OLD.service_job_id OR
      NEW.expense_id IS DISTINCT FROM OLD.expense_id OR
@@ -632,7 +621,6 @@ BEGIN
     NEW.voided_at := NOW();
     NEW.voided_by := auth.uid();
 
-    -- Restore all immutable operational & financial fields to OLD values
     NEW.organization_id := OLD.organization_id;
     NEW.service_job_id := OLD.service_job_id;
     NEW.material_expense_id := OLD.material_expense_id;
@@ -643,7 +631,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Block any edit to core fields while active ('received')
   IF NEW.organization_id IS DISTINCT FROM OLD.organization_id OR
      NEW.service_job_id IS DISTINCT FROM OLD.service_job_id OR
      NEW.material_expense_id IS DISTINCT FROM OLD.material_expense_id OR
@@ -679,7 +666,6 @@ BEGIN
     NEW.voided_at := NOW();
     NEW.voided_by := auth.uid();
 
-    -- Restore all immutable operational & financial fields to OLD values
     NEW.organization_id := OLD.organization_id;
     NEW.service_job_id := OLD.service_job_id;
     NEW.payer_partner_id := OLD.payer_partner_id;
@@ -691,7 +677,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Block any edit to core fields while active ('posted')
   IF NEW.organization_id IS DISTINCT FROM OLD.organization_id OR
      NEW.service_job_id IS DISTINCT FROM OLD.service_job_id OR
      NEW.payer_partner_id IS DISTINCT FROM OLD.payer_partner_id OR
@@ -898,7 +883,7 @@ SELECT trigger_name FROM information_schema.triggers WHERE trigger_name = 'trg_v
 -- 4. Client material can receive client payment: YES
 SELECT trigger_name FROM information_schema.triggers WHERE trigger_name = 'trg_prevent_excessive_client_material_payments';
 
--- 5. Settlement cannot exceed owed balance: YES
+-- 5. Settlement cannot exceed owed company-wide balance: YES
 -- 6. Voided settlement stops counting: YES
 -- 7. Concurrent excessive settlement protected: YES
 SELECT trigger_name FROM information_schema.triggers WHERE trigger_name = 'trg_prevent_excessive_partner_settlement';
