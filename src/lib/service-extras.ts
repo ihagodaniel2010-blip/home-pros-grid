@@ -105,20 +105,34 @@ export const getServiceExtrasByJobOrEstimateId = async (jobId?: string | null, e
     return data as ServiceExtra[];
 };
 
-export const respondPublicServiceExtra = async (token: string, status: 'approved' | 'rejected') => {
-    if (!supabase) return false;
+export const respondPublicServiceExtra = async (tokenOrId: string, status: 'approved' | 'rejected') => {
+    if (!supabase || !tokenOrId) return false;
 
-    const { error } = await supabase.rpc('respond_public_service_extra', { 
-        p_token: token,
-        p_status: status
-    });
+    // 1. Try public RPC first
+    try {
+        const { error } = await supabase.rpc('respond_public_service_extra', { 
+            p_token: tokenOrId,
+            p_status: status
+        });
 
-    if (error) {
-        console.error("Error responding to service extra via RPC:", error);
-        return false;
+        if (!error) return true;
+    } catch (rpcErr) {
+        console.warn("RPC respond_public_service_extra failed, using direct update fallback:", rpcErr);
     }
 
-    return true;
+    // 2. Direct table update fallback by public_token OR id
+    try {
+        const { error } = await supabase
+            .from('service_extras')
+            .update({ status, updated_at: new Date().toISOString() })
+            .or(`public_token.eq.${tokenOrId},id.eq.${tokenOrId}`);
+
+        if (!error) return true;
+    } catch (updateErr) {
+        console.error("Direct update service_extras failed:", updateErr);
+    }
+
+    return false;
 };
 
 export const getPublicServiceExtra = async (token: string) => {
