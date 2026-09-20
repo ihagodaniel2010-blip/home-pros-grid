@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
@@ -107,49 +107,58 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (isSupabaseConfigured && supabase) {
       let isMounted = true;
-
-      supabase.auth.getSession().then(async ({ data }) => {
-        if (!isMounted) return;
-        try {
-          if (data.session?.user) {
-            const mappedUser = await mapSupabaseUser(data.session.user);
-            setUser(mappedUser);
-          } else {
-            const stored = localStorage.getItem(USER_STORAGE_KEY);
-            if (stored) {
-              setUser(JSON.parse(stored));
-            } else {
-              setUser(null);
-            }
-          }
-        } catch (error) {
-          console.error("Auth initialization error:", error);
-          setUser(null);
-        } finally {
-          setIsLoading(false);
-          clearTimeout(timeoutId);
-        }
-      });
+      let initialCheckDone = false;
 
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (_event, session) => {
         if (!isMounted) return;
+        initialCheckDone = true;
         try {
           if (session?.user) {
             const mappedUser = await mapSupabaseUser(session.user);
-            setUser(mappedUser);
+            if (isMounted) setUser(mappedUser);
             localStorage.removeItem(USER_STORAGE_KEY);
           } else {
-            setUser(null);
-            localStorage.removeItem(USER_STORAGE_KEY);
+            const stored = localStorage.getItem(USER_STORAGE_KEY);
+            if (stored && isMounted) {
+              setUser(JSON.parse(stored));
+            } else if (isMounted) {
+              setUser(null);
+            }
           }
         } catch (error) {
           console.error("Auth state change error:", error);
+          if (isMounted) setUser(null);
         } finally {
-          setIsLoading(false);
+          if (isMounted) {
+            setIsLoading(false);
+            clearTimeout(timeoutId);
+          }
         }
       });
+
+      // Fallback if onAuthStateChange hasn't fired in 1 second
+      setTimeout(() => {
+        if (isMounted && !initialCheckDone) {
+          supabase.auth.getSession().then(async ({ data }) => {
+            if (!isMounted || initialCheckDone) return;
+            try {
+              if (data.session?.user) {
+                const mappedUser = await mapSupabaseUser(data.session.user);
+                if (isMounted) setUser(mappedUser);
+              }
+            } catch (err) {
+              console.error("Auth fallback check error:", err);
+            } finally {
+              if (isMounted) {
+                setIsLoading(false);
+                clearTimeout(timeoutId);
+              }
+            }
+          });
+        }
+      }, 1000);
 
       return () => {
         isMounted = false;
@@ -171,28 +180,31 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const login = async (userData: UserSession) => {
+  const login = useCallback(async (userData: UserSession) => {
     setUser(userData);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     if (isSupabaseConfigured && supabase) {
       await supabase.auth.signOut();
     }
     setUser(null);
     localStorage.removeItem(USER_STORAGE_KEY);
-  };
+  }, []);
 
-  const switchOrganization = (orgId: string) => {
-    if (!user || !user.organizations) return;
-    const org = user.organizations.find(o => o.id === orgId);
-    if (org) {
-      setUser({ ...user, organization: org });
-    }
-  };
+  const switchOrganization = useCallback((orgId: string) => {
+    setUser(prevUser => {
+      if (!prevUser || !prevUser.organizations) return prevUser;
+      const org = prevUser.organizations.find(o => o.id === orgId);
+      if (org) {
+        return { ...prevUser, organization: org };
+      }
+      return prevUser;
+    });
+  }, []);
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
       throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
     }
@@ -207,10 +219,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       throw error;
     }
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    user,
+    isLoading,
+    login,
+    logout,
+    signInWithGoogle,
+    switchOrganization
+  }), [user, isLoading, login, logout, signInWithGoogle, switchOrganization]);
 
   return (
-    <UserContext.Provider value={{ user, isLoading, login, logout, signInWithGoogle, switchOrganization }}>
+    <UserContext.Provider value={contextValue}>
       {children}
     </UserContext.Provider>
   );
@@ -223,3 +244,4 @@ export const useUser = () => {
   }
   return context;
 };
+
