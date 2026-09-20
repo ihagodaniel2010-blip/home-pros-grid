@@ -16,6 +16,33 @@ export type ServiceExtra = {
     created_at: string;
 };
 
+/**
+ * Extracts embedded [media:URL] tags from text (reason/description) and returns clean text & media URLs.
+ */
+export function extractMediaFromText(text: string | null | undefined): { cleanText: string; mediaUrls: string[] } {
+    if (!text) return { cleanText: '', mediaUrls: [] };
+    const mediaUrls: string[] = [];
+    if (text.includes('[media:')) {
+        const regex = /\[media:([^\]]+)\]/g;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const url = match[1];
+            if (url && !mediaUrls.includes(url)) {
+                mediaUrls.push(url);
+            }
+        }
+    }
+    const cleanText = text.replace(/\[media:[^\]]+\]/g, '').trim();
+    return { cleanText, mediaUrls };
+}
+
+/**
+ * Returns reason/description text stripped of all embedded [media:...] tags for display or PDF generation.
+ */
+export function cleanReasonForDisplay(text: string | null | undefined): string {
+    return extractMediaFromText(text).cleanText;
+}
+
 export const createServiceExtra = async (extraData: {
     organization_id: string;
     service_job_id: string;
