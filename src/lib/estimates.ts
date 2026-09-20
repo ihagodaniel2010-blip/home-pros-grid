@@ -304,6 +304,16 @@ export const createPayment = async (payment: EstimatePayment): Promise<EstimateP
 export const getEstimateByToken = async (token: string): Promise<Estimate | null> => {
     if (!supabase || !token) return null;
 
+    // Strict Security Rule: Reject direct UUIDs or Lead IDs passed as public tokens
+    // Public portal access is authorized strictly via strong public_token values
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
+    const isLeadId = token.startsWith('lead_');
+
+    if (isUuid || isLeadId) {
+        console.warn(`[SECURITY REJECT] Direct ID access attempted on public route: ${token}`);
+        return null;
+    }
+
     // Tier 1: Try public RPC for estimate header
     try {
         const { data: estimate, error: estimateError } = await supabase
@@ -326,17 +336,15 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
             } as Estimate;
         }
     } catch (rpcErr) {
-        console.warn('RPC get_public_estimate failed, trying direct select:', rpcErr);
+        console.warn('RPC get_public_estimate failed, trying direct select by public_token:', rpcErr);
     }
 
-    // Tier 2: Direct SELECT by public_token, id, OR lead_id
+    // Tier 2: Direct SELECT strictly by public_token
     try {
         const { data: directEst, error: directErr } = await supabase
             .from('estimates')
             .select('*')
-            .or(`public_token.eq.${token},id.eq.${token},lead_id.eq.${token}`)
-            .order('created_at', { ascending: false })
-            .limit(1)
+            .eq('public_token', token)
             .maybeSingle();
 
         if (!directErr && directEst) {
@@ -352,23 +360,7 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
             } as Estimate;
         }
     } catch (selectErr) {
-        console.warn('Direct select estimate error:', selectErr);
-    }
-
-    // Tier 3: Fallback check if token is a service_job_id or lead_id on service_jobs
-    try {
-        const { data: jobRecord } = await supabase
-            .from('service_jobs')
-            .select('estimate_id')
-            .or(`id.eq.${token},lead_id.eq.${token}`)
-            .limit(1)
-            .maybeSingle();
-
-        if (jobRecord?.estimate_id) {
-            return getEstimateByToken(jobRecord.estimate_id);
-        }
-    } catch (jobErr) {
-        console.warn('Job lookup for token failed:', jobErr);
+        console.warn('Direct select estimate by public_token error:', selectErr);
     }
 
     return null;
