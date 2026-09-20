@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 interface ProjectSummary {
   id: string;
+  estimate_id?: string | null;
   title: string;
   status: string;
   client_name: string;
@@ -23,6 +24,8 @@ interface ProjectSummary {
   original_contract: number;
   approved_extras: number;
   current_contract: number;
+  client_materials: number;
+  total_responsibility: number;
   amount_paid: number;
   balance_due: number;
 }
@@ -42,10 +45,13 @@ export default function ProjectsList() {
 
     async function loadProjectsData() {
       try {
-        const [jobsData, estimatesData, paymentsData] = await Promise.all([
+        const { getExpenses } = await import("@/lib/expenses");
+
+        const [jobsData, estimatesData, paymentsData, expensesData] = await Promise.all([
           getServiceJobs(orgId).catch(() => []),
           getEstimates(orgId).catch(() => []),
-          getClientPayments(orgId).catch(() => [])
+          getClientPayments(orgId).catch(() => []),
+          getExpenses(orgId).catch(() => [])
         ]);
 
         if (!mounted) return;
@@ -64,6 +70,11 @@ export default function ProjectsList() {
               .filter((ex: any) => ex.status === 'approved')
               .reduce((acc: number, ex: any) => acc + (ex.amount || 0), 0);
 
+            // Calculate client materials for this job
+            const clientMaterials = (expensesData || [])
+              .filter((ex: any) => ex.status === 'active' && (ex.service_job_id === job.id || ex.estimate_id === job.estimate_id) && ex.bill_to_client)
+              .reduce((acc: number, ex: any) => acc + (ex.amount || 0), 0);
+
             // Fetch lead info if needed
             let clientName = linkedEst?.client_name || "Client Project";
             let address = linkedEst?.client_address || "Sinop / Local Address";
@@ -80,16 +91,18 @@ export default function ProjectsList() {
 
             const originalContract = linkedEst?.total_amount || 0;
             const currentContract = originalContract + approvedExtras;
+            const totalResponsibility = currentContract + clientMaterials;
 
             // Calculate paid for this job
             const paidForJob = (paymentsData || [])
-              .filter(p => p.status === 'received' && (p.service_job_id === job.id || p.estimate_id === job.estimate_id))
-              .reduce((acc, p) => acc + (p.amount || 0), 0);
+              .filter((p: any) => p.status === 'received' && (p.service_job_id === job.id || p.estimate_id === job.estimate_id))
+              .reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
 
-            const balanceDue = currentContract - paidForJob;
+            const balanceDue = totalResponsibility - paidForJob;
 
             return {
               id: job.id,
+              estimate_id: job.estimate_id,
               title: job.title || `Job #${job.id.slice(0, 8)}`,
               status: job.status || 'scheduled',
               client_name: clientName,
@@ -99,6 +112,8 @@ export default function ProjectsList() {
               original_contract: originalContract,
               approved_extras: approvedExtras,
               current_contract: currentContract,
+              client_materials: clientMaterials,
+              total_responsibility: totalResponsibility,
               amount_paid: paidForJob,
               balance_due: balanceDue
             };
@@ -224,7 +239,7 @@ export default function ProjectsList() {
                     <span className="font-semibold">${proj.original_contract.toLocaleString()}</span>
                   </div>
                   {proj.approved_extras > 0 && (
-                    <div className="flex justify-between text-emerald-600 font-medium">
+                    <div className="flex justify-between text-purple-700 font-medium">
                       <span>Approved Extras:</span>
                       <span>+${proj.approved_extras.toLocaleString()}</span>
                     </div>
@@ -233,8 +248,14 @@ export default function ProjectsList() {
                     <span>Current Contract:</span>
                     <span>${proj.current_contract.toLocaleString()}</span>
                   </div>
+                  {proj.client_materials > 0 && (
+                    <div className="flex justify-between text-amber-700 font-medium">
+                      <span>Client Materials:</span>
+                      <span>+${proj.client_materials.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-gray-500">
-                    <span>Amount Paid:</span>
+                    <span>Amount Received:</span>
                     <span className="text-emerald-700 font-medium">${proj.amount_paid.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between font-extrabold text-orange-600 pt-1">
@@ -244,10 +265,22 @@ export default function ProjectsList() {
                 </div>
               </div>
 
-              <div className="mt-5 pt-3 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-[11px] text-gray-400">
-                  Created {new Date(proj.created_at).toLocaleDateString()}
-                </span>
+              <div className="mt-5 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                {proj.estimate_id ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/admin/estimates/${proj.estimate_id}`);
+                    }}
+                    className="text-[11px] font-bold text-slate-500 hover:text-blue-600 hover:underline"
+                  >
+                    View Estimate
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-gray-400">
+                    Created {new Date(proj.created_at).toLocaleDateString()}
+                  </span>
+                )}
                 <Button size="sm" className="bg-[#0b2a4a] hover:bg-[#081e35] text-white font-bold text-xs gap-1">
                   Open Project
                   <ArrowRight className="h-3.5 w-3.5" />

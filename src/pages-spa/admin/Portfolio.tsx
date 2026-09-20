@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Save, Plus, Trash2, Image as ImageIcon } from "lucide-react";
+import { Save, Plus, Trash2, Image as ImageIcon, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
 import type { PortfolioData, PortfolioItem } from "@/lib/portfolio-types";
 import { fetchPortfolioAdmin, savePortfolioAdmin } from "@/lib/portfolio-api";
+import { supabase } from "@/lib/supabase";
+import { approveMediaForPortfolio, ServiceJobMediaRecord } from "@/lib/job-media";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
 const createEmptyItem = (categories: string[]): PortfolioItem => {
   const baseCategory = categories[0] || "Remodeling";
@@ -37,6 +41,23 @@ const AdminPortfolio = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
+  // Job Media Candidates State
+  const [pendingMedia, setPendingMedia] = useState<ServiceJobMediaRecord[]>([]);
+
+  const loadPendingMedia = async () => {
+    if (!supabase) return;
+    try {
+      const { data: mediaData } = await supabase
+        .from('service_job_media')
+        .select('*')
+        .eq('visible_on_public_site', true)
+        .order('created_at', { ascending: false });
+      setPendingMedia((mediaData || []) as ServiceJobMediaRecord[]);
+    } catch (err) {
+      console.warn("Could not fetch pending job media candidates:", err);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     fetchPortfolioAdmin()
@@ -50,6 +71,9 @@ const AdminPortfolio = () => {
         if (!active) return;
         setStatus("Unable to load portfolio data.");
       });
+
+    loadPendingMedia();
+
     return () => {
       active = false;
     };
@@ -132,6 +156,66 @@ const AdminPortfolio = () => {
       {status && (
         <div className="mb-6 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
           {status}
+        </div>
+      )}
+
+      {/* JOB MEDIA PORTFOLIO CANDIDATES REVIEW SECTION (Requirement 10 & 11) */}
+      {pendingMedia.length > 0 && (
+        <div className="mb-8 p-6 bg-purple-50/60 rounded-2xl border border-purple-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-purple-200/60 pb-3">
+            <div>
+              <h3 className="font-bold text-purple-900 text-sm flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-purple-600" />
+                Pending Job Photo Candidates for Public Website ({pendingMedia.length})
+              </h3>
+              <p className="text-xs text-purple-700">Review job photos submitted by field managers before publishing to website portfolio.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {pendingMedia.map(m => {
+              const mediaUrl = m.storage_path.startsWith('http') ? m.storage_path :
+                supabase?.storage.from('images').getPublicUrl(m.storage_path).data.publicUrl;
+
+              return (
+                <div key={m.id} className="bg-white rounded-xl border border-purple-200 overflow-hidden shadow-sm flex flex-col justify-between">
+                  <div className="aspect-video relative bg-slate-900">
+                    <img src={mediaUrl} alt={m.caption || "Candidate photo"} className="w-full h-full object-cover" />
+                    <div className="absolute top-2 left-2">
+                      <Badge className={m.portfolio_approved ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"}>
+                        {m.portfolio_approved ? "Approved" : "Pending Review"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="p-3 space-y-2 text-xs">
+                    <p className="font-bold text-gray-900">{m.caption || "Job Site Documentation"}</p>
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <button
+                        onClick={async () => {
+                          await approveMediaForPortfolio(m.id, true);
+                          toast.success("Photo approved for public website!");
+                          loadPendingMedia();
+                        }}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await approveMediaForPortfolio(m.id, false);
+                          toast.info("Photo rejected from public portfolio.");
+                          loadPendingMedia();
+                        }}
+                        className="px-2 py-1 text-gray-500 hover:text-red-600 font-bold text-[11px] flex items-center gap-1"
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
