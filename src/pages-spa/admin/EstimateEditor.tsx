@@ -3,6 +3,8 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer, Copy, Wrench, Wand2, Mail, PenTool } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
+import { supabase } from "@/lib/supabase";
+
 import { useLanguage } from "@/context/LanguageContext";
 import {
     getEstimateById,
@@ -398,13 +400,41 @@ const EstimateEditor = () => {
         setIsSaving(true);
         try {
             // Check if job already exists for this estimate
-            const existingJob = await getServiceJobByEstimateId(id);
+            let existingJob = await getServiceJobByEstimateId(id);
+            let targetLeadId = existingJob?.lead_id || formData.lead_id;
+
+            // If no lead container is linked to this estimate, create one so the job detail page is fully functional
+            if (!targetLeadId && supabase) {
+                const now = new Date().toISOString();
+                const { data: newLead, error: leadErr } = await supabase
+                    .from('leads')
+                    .insert([{
+                        organization_id: orgId,
+                        fullName: formData.client_name || "Client",
+                        email: formData.client_email || "",
+                        phone: formData.client_phone || "",
+                        address: formData.client_address || "",
+                        zip: formData.client_zip || "",
+                        serviceSlug: formData.project_type || "general-repair",
+                        selectedServiceOption: formData.project_type || "General Repair",
+                        locationType: "Home",
+                        status: "converted",
+                        statusHistory: [{ status: "converted", timestamp: now }]
+                    }])
+                    .select()
+                    .single();
+
+                if (!leadErr && newLead) {
+                    targetLeadId = newLead.id;
+                    await updateEstimate(id, { lead_id: newLead.id });
+                    setFormData(prev => ({ ...prev, lead_id: newLead.id }));
+                }
+            }
+
             if (existingJob) {
                 setServiceJob(existingJob);
-                toast.info("Opening existing Service Job for this estimate.");
-                const targetPath = (existingJob.lead_id || formData.lead_id)
-                    ? `/admin/leads/${existingJob.lead_id || formData.lead_id}`
-                    : `/admin/jobs`;
+                toast.info("Opening Service Job details.");
+                const targetPath = targetLeadId ? `/admin/leads/${targetLeadId}` : `/admin`;
                 navigate(targetPath);
                 return;
             }
@@ -412,16 +442,14 @@ const EstimateEditor = () => {
             // Create new Service Job
             const job = await createServiceJob({
                 organization_id: orgId,
-                lead_id: formData.lead_id || undefined,
+                lead_id: targetLeadId || undefined,
                 estimate_id: id,
                 status: 'scheduled'
             });
 
             setServiceJob(job);
             toast.success("Service Job created successfully!");
-            const targetPath = (job.lead_id || formData.lead_id)
-                ? `/admin/leads/${job.lead_id || formData.lead_id}`
-                : `/admin/jobs`;
+            const targetPath = targetLeadId ? `/admin/leads/${targetLeadId}` : `/admin`;
             navigate(targetPath);
         } catch (error: any) {
             console.error("Create Service Job Error:", error);
@@ -430,6 +458,7 @@ const EstimateEditor = () => {
             setIsSaving(false);
         }
     };
+
 
     if (isLoading) {
         return (
@@ -521,10 +550,11 @@ const EstimateEditor = () => {
                                     variant="outline"
                                     className="h-10 gap-2 border-green-200 text-green-700 hover:bg-green-50"
                                     onClick={() => {
-                                        if (formData.lead_id && formData.lead_id !== 'null') {
-                                            navigate(`/admin/leads/${formData.lead_id}`);
+                                        const targetLeadId = serviceJob.lead_id || formData.lead_id;
+                                        if (targetLeadId && targetLeadId !== 'null') {
+                                            navigate(`/admin/leads/${targetLeadId}`);
                                         } else {
-                                            navigate(`/admin/jobs`);
+                                            handleCreateJob();
                                         }
                                     }}
                                 >
@@ -532,6 +562,7 @@ const EstimateEditor = () => {
                                     Job Scheduled
                                 </Button>
                             )}
+
 
                             {(formData.status === 'Sent' || formData.status === 'Expired' || formData.status === 'Rejected') && (
                                 <Button
