@@ -262,7 +262,11 @@ const Dashboard = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeJobs.slice(0, 6).map((job) => (
-              <div key={job.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:border-blue-300 transition-all flex flex-col justify-between">
+              <div
+                key={job.id}
+                onClick={() => navigate(`/admin/jobs/${job.id}`)}
+                className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:border-blue-500 hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group"
+              >
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
@@ -274,14 +278,19 @@ const Dashboard = () => {
                     </span>
                     <span className="text-xs text-gray-400 font-mono">#{job.id.slice(0, 8)}</span>
                   </div>
-                  <h3 className="font-bold text-gray-900 text-base">{job.title}</h3>
+                  <h3 className="font-bold text-gray-900 text-base group-hover:text-blue-600 transition-colors">
+                    {job.title || `Job #${job.id.slice(0, 8)}`}
+                  </h3>
                 </div>
                 <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
                   <button
-                    onClick={() => navigate(job.lead_id ? `/admin/leads/${job.lead_id}` : '/admin/estimates')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/admin/jobs/${job.id}`);
+                    }}
                     className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
                   >
-                    View Details & Progress →
+                    Open Project Workspace →
                   </button>
                 </div>
               </div>

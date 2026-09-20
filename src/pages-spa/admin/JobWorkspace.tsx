@@ -1,0 +1,1400 @@
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft, Clock, Save, FileText, User, Mail, Phone, MapPin, CheckCircle2,
+  MoreHorizontal, Images, Wrench, UserCheck, DollarSign, Plus, Download, Copy,
+  Printer, ShieldCheck, PenTool, Calendar, AlertCircle, Sparkles, ExternalLink,
+  ChevronRight, Eye, EyeOff, Globe, Tag, CreditCard, Receipt, FileCheck
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
+import { supabase } from "@/lib/supabase";
+import { getEstimateById, Estimate } from "@/lib/estimates";
+import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra } from "@/lib/service-extras";
+import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, ServiceJobMediaRecord } from "@/lib/job-media";
+import { getExpenses, createExpense, Expense, updateExpense } from "@/lib/expenses";
+import { getClientPayments, createClientPayment, ClientPayment } from "@/lib/client-payments";
+import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
+import RegisterPaymentModal from "@/components/admin/estimates/RegisterPaymentModal";
+import CountersignModal from "@/components/admin/estimates/CountersignModal";
+import { generateProfessionalPDF } from "@/lib/pdf-generator";
+
+type WorkspaceTab =
+  | "overview"
+  | "contract"
+  | "schedule"
+  | "payments"
+  | "extras"
+  | "media"
+  | "materials"
+  | "reimbursements"
+  | "documents"
+  | "history";
+
+export default function JobWorkspace() {
+  const params = useParams<{ jobId?: string; id?: string }>();
+  const jobId = params.jobId || params.id;
+  const navigate = useNavigate();
+  const { user, isLoading: isUserLoading } = useUser();
+
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Core Data Entities
+  const [job, setJob] = useState<any | null>(null);
+  const [estimate, setEstimate] = useState<Estimate | null>(null);
+  const [lead, setLead] = useState<any | null>(null);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+  const [extras, setExtras] = useState<ServiceExtra[]>([]);
+  const [media, setMedia] = useState<ServiceJobMediaRecord[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [payments, setPayments] = useState<ClientPayment[]>([]);
+
+  // Modals & Forms
+  const [isRegisterPaymentOpen, setIsRegisterPaymentOpen] = useState(false);
+  const [isCountersignOpen, setIsCountersignOpen] = useState(false);
+  const [isAddExtraOpen, setIsAddExtraOpen] = useState(false);
+  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+  const [isAddMediaOpen, setIsAddMediaOpen] = useState(false);
+
+  // Action Loading States
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isSavingExtra, setIsSavingExtra] = useState(false);
+  const [isSavingExpense, setIsSavingExpense] = useState(false);
+  const [isSavingMedia, setIsSavingMedia] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  // Extra Form State
+  const [extraForm, setExtraForm] = useState({
+    description: "",
+    reason: "",
+    amount: "",
+    scheduleImpact: "0 days"
+  });
+
+  // Expense Form State
+  const [expenseForm, setExpenseForm] = useState({
+    description: "",
+    vendor: "",
+    amount: "",
+    receiptDate: new Date().toISOString().slice(0, 10),
+    paidByName: user?.name || "Hugo Manager",
+    paymentSource: "owner_personal",
+    reimbursableToOwner: true,
+    billToClient: false
+  });
+
+  // Media Form State
+  const [mediaFileUrl, setMediaFileUrl] = useState<string | null>(null);
+  const [mediaCaption, setMediaCaption] = useState("");
+  const [mediaVisibility, setMediaVisibility] = useState<"admin" | "client" | "public">("client");
+
+  // Media Filter State
+  const [mediaFilter, setMediaFilter] = useState<"all" | "client" | "admin" | "portfolio">("all");
+
+  const orgId = user?.organization?.id || DEFAULT_ORG_ID;
+
+  // Load Job Workspace Data Modularly
+  const loadJobWorkspace = useCallback(async () => {
+    if (!jobId || !supabase) return;
+    setIsLoading(true);
+
+    try {
+      // 1. Fetch Main Service Job
+      const { data: jobData, error: jobError } = await supabase
+        .from("service_jobs")
+        .select("*")
+        .eq("id", jobId)
+        .single();
+
+      if (jobError || !jobData) {
+        console.error("Job load error:", jobError);
+        toast.error("Service Job not found.");
+        setIsLoading(false);
+        return;
+      }
+
+      setJob(jobData);
+
+      // 2. Derive linked Estimate and Lead concurrently
+      const [estRes, leadRes, companyRes] = await Promise.all([
+        jobData.estimate_id ? getEstimateById(jobData.estimate_id).catch(() => null) : Promise.resolve(null),
+        jobData.lead_id ? supabase.from("leads").select("*").eq("id", jobData.lead_id).maybeSingle() : Promise.resolve({ data: null }),
+        getCompanySettings(orgId).catch(() => null)
+      ]);
+
+      setEstimate(estRes);
+      setLead(leadRes.data || null);
+      setCompanySettings(companyRes);
+
+      // 3. Fetch independent modules via Promise.all
+      const [extrasData, mediaData, allExpenses, allPayments] = await Promise.all([
+        getServiceExtrasByJobId(jobId).catch(() => []),
+        getJobMediaRecords(jobId).catch(() => []),
+        getExpenses(orgId).catch(() => []),
+        getClientPayments(orgId).catch(() => [])
+      ]);
+
+      setExtras(extrasData || []);
+      setMedia(mediaData || []);
+      
+      // Filter expenses for this job
+      const jobExpenses = (allExpenses || []).filter(
+        e => e.service_job_id === jobId || e.estimate_id === jobData.estimate_id
+      );
+      setExpenses(jobExpenses);
+
+      // Filter payments for this job/estimate
+      const jobPayments = (allPayments || []).filter(
+        p => p.service_job_id === jobId || p.estimate_id === jobData.estimate_id
+      );
+      setPayments(jobPayments);
+
+    } catch (err: any) {
+      console.error("Critical error in JobWorkspace:", err);
+      toast.error("Error loading project workspace data.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [jobId, orgId]);
+
+  useEffect(() => {
+    if (isUserLoading) return;
+    loadJobWorkspace();
+  }, [isUserLoading, loadJobWorkspace]);
+
+  // Derived Financial Math (Requirement 5)
+  const financialSummary = useMemo(() => {
+    const originalContractValue = estimate?.total_amount || 0;
+
+    const approvedExtras = extras
+      .filter(e => e.status === 'approved')
+      .reduce((acc, e) => acc + (e.amount || 0), 0);
+
+    const pendingExtras = extras
+      .filter(e => e.status === 'pending' || (e.status as string) === 'sent' || (e.status as string) === 'draft')
+      .reduce((acc, e) => acc + (e.amount || 0), 0);
+
+    const currentContractValue = originalContractValue + approvedExtras;
+
+    const amountPaid = payments
+      .filter(p => p.status === 'received')
+      .reduce((acc, p) => acc + (p.amount || 0), 0);
+
+    const balanceDue = currentContractValue - amountPaid;
+
+    return {
+      originalContractValue,
+      approvedExtras,
+      pendingExtras,
+      currentContractValue,
+      amountPaid,
+      balanceDue: balanceDue < 0 ? 0 : balanceDue
+    };
+  }, [estimate, extras, payments]);
+
+  // Action Handlers
+  const handleUpdateJobStatus = async (newStatus: "scheduled" | "in_progress" | "completed") => {
+    if (!job || !supabase) return;
+    setIsUpdatingStatus(true);
+    try {
+      const now = new Date().toISOString();
+      const updates: Record<string, any> = {
+        status: newStatus,
+        started_at: newStatus === "in_progress" && !job.started_at ? now : job.started_at,
+        completed_at: newStatus === "completed" ? now : job.completed_at
+      };
+
+      const { error } = await supabase
+        .from("service_jobs")
+        .update(updates)
+        .eq("id", job.id);
+
+      if (error) throw error;
+
+      setJob((prev: any) => ({ ...prev, ...updates }));
+      toast.success(`Job status updated to ${newStatus.replace("_", " ")}!`);
+    } catch (err: any) {
+      console.error("Job status update error:", err);
+      toast.error(`Failed to update status: ${err?.message || "Database error"}`);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleAddExtraSubmit = async () => {
+    if (!job || !extraForm.description.trim() || !extraForm.amount) {
+      toast.error("Description and Extra Amount are required.");
+      return;
+    }
+
+    setIsSavingExtra(true);
+    try {
+      const extraAmount = parseFloat(extraForm.amount);
+      const previousPrice = financialSummary.currentContractValue;
+
+      const newExtra = await createServiceExtra({
+        organization_id: orgId,
+        service_job_id: job.id,
+        estimate_id: job.estimate_id || null,
+        description: extraForm.description.trim(),
+        amount: extraAmount,
+        previous_contract_price: previousPrice,
+        schedule_impact: extraForm.scheduleImpact || undefined,
+        reason: extraForm.reason.trim() || undefined
+      });
+
+      setExtras(prev => [newExtra, ...prev]);
+      setIsAddExtraOpen(false);
+      setExtraForm({ description: "", reason: "", amount: "", scheduleImpact: "0 days" });
+      setActiveTab("extras");
+      toast.success("Change Order created successfully!");
+    } catch (err: any) {
+      console.error("Create extra error:", err);
+      toast.error(`Failed to create Extra: ${err?.message || "Database error"}`);
+    } finally {
+      setIsSavingExtra(false);
+    }
+  };
+
+  const handleAddExpenseSubmit = async () => {
+    if (!job || !expenseForm.description.trim() || !expenseForm.amount) {
+      toast.error("Description and Amount are required.");
+      return;
+    }
+
+    setIsSavingExpense(true);
+    try {
+      const amount = parseFloat(expenseForm.amount);
+      const { receipt: created } = await createExpense({
+        organization_id: orgId,
+        service_job_id: job.id,
+        estimate_id: job.estimate_id || null,
+        amount,
+        vendor: expenseForm.vendor.trim() || "Supplier",
+        receipt_date: expenseForm.receiptDate,
+        expense_category: "job_material",
+        payment_method: "card",
+        payment_source: expenseForm.paymentSource as any,
+        paid_by_name: expenseForm.paidByName,
+        reimbursable_to_owner: expenseForm.reimbursableToOwner,
+        bill_to_client: expenseForm.billToClient,
+        reimbursement_status: expenseForm.reimbursableToOwner ? "pending" : "not_reimbursable",
+        client_reimbursement_status: expenseForm.billToClient ? "pending" : "not_billable",
+        notes: `Job Expense for ${expenseForm.description}`,
+        status: "active"
+      });
+
+      if (created) {
+        setExpenses(prev => [created, ...prev]);
+      }
+      setIsAddExpenseOpen(false);
+      setExpenseForm({
+        description: "",
+        vendor: "",
+        amount: "",
+        receiptDate: new Date().toISOString().slice(0, 10),
+        paidByName: user?.name || "Hugo Manager",
+        paymentSource: "owner_personal",
+        reimbursableToOwner: true,
+        billToClient: false
+      });
+      setActiveTab("materials");
+      toast.success("Job Expense logged successfully!");
+    } catch (err: any) {
+      console.error("Create expense error:", err);
+      toast.error(`Failed to log expense: ${err?.message || "Database error"}`);
+    } finally {
+      setIsSavingExpense(false);
+    }
+  };
+
+  const handleMediaFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (mediaFileUrl && mediaFileUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(mediaFileUrl);
+      }
+      const url = URL.createObjectURL(file);
+      setMediaFileUrl(url);
+    }
+  };
+
+  const handleAddMediaSubmit = async () => {
+    if (!job || !mediaFileUrl) {
+      toast.error("Please select a photo or video file.");
+      return;
+    }
+
+    setIsSavingMedia(true);
+    const storagePath = `${orgId}/jobs/${job.id}/photos/${Date.now()}.jpg`;
+
+    try {
+      const record = await uploadJobMediaRecord({
+        organization_id: orgId,
+        service_job_id: job.id,
+        media_type: "image",
+        storage_path: storagePath,
+        file_name: `job_photo_${Date.now()}.jpg`,
+        mime_type: "image/jpeg",
+        file_size_bytes: 1048576,
+        caption: mediaCaption.trim() || "Job progress documentation"
+      });
+
+      setMedia(prev => [record, ...prev]);
+      setIsAddMediaOpen(false);
+      setMediaFileUrl(null);
+      setMediaCaption("");
+      setActiveTab("media");
+      toast.success("Job photo uploaded!");
+    } catch (err: any) {
+      console.error("Upload job media error:", err);
+      toast.error("Failed to upload job photo.");
+    } finally {
+      setIsSavingMedia(false);
+    }
+  };
+
+  const handleToggleMediaVisibility = async (mediaId: string, mode: "client" | "public" | "portfolio") => {
+    const target = media.find(m => m.id === mediaId);
+    if (!target) return;
+
+    let updates: Partial<ServiceJobMediaRecord> = {};
+    if (mode === "client") updates.visible_to_client = !target.visible_to_client;
+    if (mode === "public") updates.visible_on_public_site = !target.visible_on_public_site;
+    if (mode === "portfolio") updates.portfolio_approved = !target.portfolio_approved;
+
+    try {
+      await updateJobMediaVisibility(mediaId, updates);
+      setMedia(prev => prev.map(m => m.id === mediaId ? { ...m, ...updates } : m));
+      toast.success("Photo visibility updated!");
+    } catch (err) {
+      toast.error("Failed to update media visibility.");
+    }
+  };
+
+  const handleGeneratePDF = async () => {
+    if (!estimate) return;
+    setIsGeneratingPDF(true);
+    try {
+      await generateProfessionalPDF(estimate, companySettings, {});
+      toast.success("Estimate PDF generated!");
+    } catch (err) {
+      toast.error("Failed to generate PDF.");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const clientName = estimate?.client_name || lead?.fullName || "Client";
+  const clientEmail = estimate?.client_email || lead?.email || "";
+  const clientPhone = estimate?.client_phone || lead?.phone || "";
+  const propertyAddress = estimate?.client_address || lead?.address || "Fairfield County, CT";
+  const projectType = estimate?.project_type || lead?.serviceSlug || "Residential Project";
+
+  const filteredMedia = useMemo(() => {
+    return media.filter(m => {
+      if (mediaFilter === "client") return m.visible_to_client;
+      if (mediaFilter === "admin") return !m.visible_to_client;
+      if (mediaFilter === "portfolio") return m.portfolio_approved;
+      return true;
+    });
+  }, [media, mediaFilter]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-[#0b2a4a] border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Loading Project Workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!job) {
+    return (
+      <div className="p-12 text-center max-w-xl mx-auto">
+        <AlertCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Service Job Not Found</h2>
+        <p className="text-sm text-gray-500 mb-6">The requested job does not exist or has been removed.</p>
+        <Button onClick={() => navigate("/admin/estimates")} className="bg-[#0b2a4a] text-white">
+          Return to Estimates
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen pb-32">
+      {/* Breadcrumb Navigation */}
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-2.5 text-xs text-gray-500 flex items-center gap-2">
+        <button onClick={() => navigate("/admin/estimates")} className="hover:text-gray-900">Estimates</button>
+        <ChevronRight className="h-3 w-3" />
+        <span className="font-bold text-gray-900">{clientName}</span>
+        <ChevronRight className="h-3 w-3" />
+        <span className="text-blue-600 font-semibold">{projectType}</span>
+      </div>
+
+      {/* FIXED STICKY PROJECT HEADER (Requirement 2) */}
+      <header className="sticky top-0 z-30 bg-[#0b2a4a] text-white shadow-xl border-b border-blue-900/40 px-4 sm:px-8 py-5">
+        <div className="max-w-7xl mx-auto space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/admin/estimates")}
+                className="text-white/80 hover:text-white hover:bg-white/10 rounded-xl h-9 w-9 shrink-0 mt-0.5"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-black tracking-tight">{clientName}</h1>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                    job.status === "completed" ? "bg-emerald-500 text-white" :
+                    job.status === "in_progress" ? "bg-blue-500 text-white" :
+                    "bg-amber-500 text-white"
+                  }`}>
+                    {job.status?.replace("_", " ")}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-blue-200/90 mt-1 font-medium">
+                  <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-blue-400" /> {propertyAddress}</span>
+                  <span>·</span>
+                  <span className="flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-blue-400" /> {projectType}</span>
+                  {estimate && (
+                    <>
+                      <span>·</span>
+                      <span className="font-mono text-blue-300">EST #{estimate.id.split("-")[0].toUpperCase()}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions Header Bar */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => setIsAddExtraOpen(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold h-9 px-3 rounded-xl shadow-sm gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" /> + Extra
+              </Button>
+              <Button
+                onClick={() => setIsRegisterPaymentOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-9 px-3 rounded-xl shadow-sm gap-1.5"
+              >
+                <DollarSign className="h-3.5 w-3.5" /> Register Payment
+              </Button>
+              <Button
+                onClick={() => setIsAddExpenseOpen(true)}
+                variant="outline"
+                className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-xs font-bold h-9 px-3 rounded-xl gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" /> + Material
+              </Button>
+              <Button
+                onClick={() => setIsAddMediaOpen(true)}
+                variant="outline"
+                className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-xs font-bold h-9 px-3 rounded-xl gap-1.5"
+              >
+                <Images className="h-3.5 w-3.5" /> + Photo
+              </Button>
+            </div>
+          </div>
+
+          {/* Header Financial KPI Strip (Requirement 5) */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-white/10 text-xs">
+            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
+              <span className="text-[10px] text-blue-300 uppercase tracking-widest font-bold block">Original Contract</span>
+              <span className="text-base font-bold text-white">${financialSummary.originalContractValue.toLocaleString()}</span>
+            </div>
+            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
+              <span className="text-[10px] text-purple-300 uppercase tracking-widest font-bold block">Approved Extras</span>
+              <span className="text-base font-bold text-purple-300">+${financialSummary.approvedExtras.toLocaleString()}</span>
+            </div>
+            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
+              <span className="text-[10px] text-blue-300 uppercase tracking-widest font-bold block">Current Contract</span>
+              <span className="text-base font-black text-white">${financialSummary.currentContractValue.toLocaleString()}</span>
+            </div>
+            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
+              <span className="text-[10px] text-emerald-300 uppercase tracking-widest font-bold block">Amount Paid</span>
+              <span className="text-base font-bold text-emerald-400">${financialSummary.amountPaid.toLocaleString()}</span>
+            </div>
+            <div className="bg-white/5 rounded-xl p-2.5 border border-white/10 col-span-2 sm:col-span-1">
+              <span className="text-[10px] text-amber-300 uppercase tracking-widest font-bold block">Balance Due</span>
+              <span className="text-base font-black text-amber-400">${financialSummary.balanceDue.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* WORKSPACE TAB BAR (Requirement 3) */}
+      <div className="sticky top-[148px] z-20 bg-white border-b border-gray-200 shadow-sm overflow-x-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 flex space-x-1 min-w-max py-2">
+          {[
+            { id: "overview", label: "Overview", icon: Sparkles },
+            { id: "contract", label: "Contract / Estimate", icon: FileText },
+            { id: "schedule", label: "Schedule", icon: Calendar },
+            { id: "payments", label: `Payments (${payments.length})`, icon: CreditCard },
+            { id: "extras", label: `Extras / Change Orders (${extras.length})`, icon: Tag },
+            { id: "media", label: `Photos & Videos (${media.length})`, icon: Images },
+            { id: "materials", label: `Materials & Expenses (${expenses.length})`, icon: Receipt },
+            { id: "reimbursements", label: "Reimbursements", icon: DollarSign },
+            { id: "documents", label: "Documents", icon: FileCheck },
+            { id: "history", label: "History", icon: Clock },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as WorkspaceTab)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  isActive
+                    ? "bg-[#0b2a4a] text-white shadow-md"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* MAIN TAB CONTENT WORKSPACE */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-8">
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === "overview" && (
+          <div className="space-y-8 animate-in fade-in">
+            {/* Quick Actions & Status Control */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-gray-900 text-base">Job Status Control</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Update site operational status directly from the workspace.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {job.status === "scheduled" && (
+                  <Button
+                    onClick={() => handleUpdateJobStatus("in_progress")}
+                    disabled={isUpdatingStatus}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-9 rounded-xl"
+                  >
+                    Start Job Execution
+                  </Button>
+                )}
+                {job.status === "in_progress" && (
+                  <Button
+                    onClick={() => handleUpdateJobStatus("completed")}
+                    disabled={isUpdatingStatus}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 rounded-xl"
+                  >
+                    Mark Job Completed
+                  </Button>
+                )}
+                {job.status === "completed" && (
+                  <Badge className="bg-emerald-100 text-emerald-800 text-xs px-3 py-1 font-bold">
+                    Job Completed
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Overview Summary Grid */}
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* Client Info Card */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+                <h3 className="font-bold text-[#0b2a4a] text-sm flex items-center gap-2">
+                  <User className="h-4 w-4 text-blue-600" /> Client Details
+                </h3>
+                <div className="space-y-2 text-xs">
+                  <p className="font-bold text-gray-900 text-sm">{clientName}</p>
+                  {clientPhone && <p className="text-gray-600 flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-gray-400" /> {clientPhone}</p>}
+                  {clientEmail && <p className="text-gray-600 flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-gray-400" /> {clientEmail}</p>}
+                  <p className="text-gray-600 flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-gray-400" /> {propertyAddress}</p>
+                </div>
+              </div>
+
+              {/* Financial Breakdown Card */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+                <h3 className="font-bold text-[#0b2a4a] text-sm flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-emerald-600" /> Financial Summary
+                </h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Original Contract:</span>
+                    <span className="font-bold text-gray-900">${financialSummary.originalContractValue.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Approved Extras ({extras.filter(e => e.status === 'approved').length}):</span>
+                    <span className="font-bold text-purple-600">+${financialSummary.approvedExtras.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-gray-100 font-bold">
+                    <span className="text-gray-900">Current Total:</span>
+                    <span className="text-blue-600">${financialSummary.currentContractValue.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-700 font-bold">
+                    <span>Paid to Date:</span>
+                    <span>${financialSummary.amountPaid.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-amber-700 font-bold">
+                    <span>Balance Remaining:</span>
+                    <span>${financialSummary.balanceDue.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Actions Overview Card */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+                <h3 className="font-bold text-[#0b2a4a] text-sm flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-500" /> Project Workspace Actions
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setIsAddExtraOpen(true)} className="h-9 text-xs font-bold">
+                    + Add Extra
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setIsRegisterPaymentOpen(true)} className="h-9 text-xs font-bold">
+                    Register Payment
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setIsAddExpenseOpen(true)} className="h-9 text-xs font-bold">
+                    + Expense
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setIsAddMediaOpen(true)} className="h-9 text-xs font-bold">
+                    + Photo
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Change Orders Preview */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-[#0b2a4a] text-sm flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-purple-600" /> Change Orders / Service Extras ({extras.length})
+                </h3>
+                <Button variant="ghost" size="sm" onClick={() => setActiveTab("extras")} className="text-xs text-blue-600">
+                  View All Extras →
+                </Button>
+              </div>
+
+              {extras.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No Change Orders registered for this job yet.</p>
+              ) : (
+                <div className="grid gap-3">
+                  {extras.slice(0, 3).map(extra => (
+                    <div key={extra.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-xs text-gray-900">{extra.description}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{new Date(extra.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-bold text-sm text-gray-900">${extra.amount.toLocaleString()}</span>
+                        <span className={`block text-[9px] font-bold uppercase ${extra.status === 'approved' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {extra.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: CONTRACT / ESTIMATE */}
+        {activeTab === "contract" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-[#0b2a4a] text-base">Commercial Proposal & Contract</h3>
+                  <p className="text-xs text-gray-500">Commercial terms frozen upon client signature approval.</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handleGeneratePDF} disabled={isGeneratingPDF} className="h-9 text-xs font-bold">
+                    <Printer className="h-3.5 w-3.5 mr-1" /> Download PDF
+                  </Button>
+                  {estimate?.status === 'Approved' && (
+                    <Button variant="outline" size="sm" onClick={() => setIsCountersignOpen(true)} className="h-9 text-xs font-bold border-purple-200 text-purple-700">
+                      <PenTool className="h-3.5 w-3.5 mr-1" /> Countersign Contract
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {estimate ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                    <div>
+                      <span className="text-gray-400 font-bold uppercase">Status</span>
+                      <p className="font-bold text-emerald-600">{estimate.status}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-bold uppercase">Date Created</span>
+                      <p className="font-semibold text-gray-900">{new Date(estimate.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-bold uppercase">Valid Until</span>
+                      <p className="font-semibold text-gray-900">{estimate.valid_until ? new Date(estimate.valid_until).toLocaleDateString() : "N/A"}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-bold uppercase">Public Share Link</span>
+                      {estimate.public_token ? (
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${window.location.origin}/estimate/${estimate.public_token}`);
+                            toast.success("Link copied!");
+                          }}
+                          className="font-bold text-blue-600 hover:underline block"
+                        >
+                          Copy Link
+                        </button>
+                      ) : <span>N/A</span>}
+                    </div>
+                  </div>
+
+                  {/* Line Items Table */}
+                  <div>
+                    <h4 className="font-bold text-xs uppercase text-gray-500 mb-3">Line Items Breakdown</h4>
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold uppercase">
+                          <tr>
+                            <th className="p-3">Item</th>
+                            <th className="p-3">Qty</th>
+                            <th className="p-3">Unit Price</th>
+                            <th className="p-3 text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {(estimate.items || []).map((item, idx) => (
+                            <tr key={idx}>
+                              <td className="p-3 font-semibold text-gray-900">{item.description}</td>
+                              <td className="p-3 text-gray-600">{item.quantity}</td>
+                              <td className="p-3 text-gray-600">${(item.unit_price || 0).toFixed(2)}</td>
+                              <td className="p-3 text-right font-bold text-gray-900">${(item.total_price || 0).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 italic">No Estimate record attached.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: SCHEDULE */}
+        {activeTab === "schedule" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-[#0b2a4a] text-base">Job Execution Schedule</h3>
+                  <p className="text-xs text-gray-500">Track site appointment dates, worker assignments, and milestones.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {job.status === "scheduled" && (
+                    <Button onClick={() => handleUpdateJobStatus("in_progress")} size="sm" className="bg-blue-600 text-white font-bold text-xs">
+                      Start Execution
+                    </Button>
+                  )}
+                  {job.status === "in_progress" && (
+                    <Button onClick={() => handleUpdateJobStatus("completed")} size="sm" className="bg-emerald-600 text-white font-bold text-xs">
+                      Complete Job
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6 text-xs">
+                <div className="space-y-4">
+                  <div>
+                    <label className="font-bold text-gray-500 uppercase block mb-1">Scheduled Start Date</label>
+                    <p className="text-sm font-semibold text-gray-900">{job.scheduled_at ? new Date(job.scheduled_at).toLocaleString() : "Pending Schedule"}</p>
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-500 uppercase block mb-1">Actual Execution Started</label>
+                    <p className="text-sm font-semibold text-gray-900">{job.started_at ? new Date(job.started_at).toLocaleString() : "Not started yet"}</p>
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-500 uppercase block mb-1">Target Completion</label>
+                    <p className="text-sm font-semibold text-gray-900">{job.completed_at ? new Date(job.completed_at).toLocaleString() : "In Progress"}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="font-bold text-gray-500 uppercase block mb-1">Assigned Operational Worker</label>
+                    <p className="text-sm font-semibold text-gray-900">{job.assigned_worker_id ? `Worker #${job.assigned_worker_id.slice(0, 8)}` : "Unassigned (Manager Supervised)"}</p>
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-500 uppercase block mb-1">Property Address Released to Worker</label>
+                    <Badge className={job.address_released_to_worker ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-700"}>
+                      {job.address_released_to_worker ? "Released" : "Restricted"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: PAYMENTS */}
+        {activeTab === "payments" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-[#0b2a4a] text-base">Client Payments & Receipts</h3>
+                  <p className="text-xs text-gray-500">Record customer payments and issue digital receipts for this job.</p>
+                </div>
+                <Button onClick={() => setIsRegisterPaymentOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9">
+                  <DollarSign className="h-3.5 w-3.5 mr-1" /> Register Payment
+                </Button>
+              </div>
+
+              {payments.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No payments recorded for this job yet.</p>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-gray-50 border-b border-gray-200 font-bold text-gray-600 uppercase">
+                      <tr>
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Method</th>
+                        <th className="p-3">Notes</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {payments.map(payment => (
+                        <tr key={payment.id}>
+                          <td className="p-3 font-semibold text-gray-900">{new Date(payment.payment_date).toLocaleDateString()}</td>
+                          <td className="p-3 capitalize text-gray-700">{payment.method}</td>
+                          <td className="p-3 text-gray-500">{payment.note || "Payment received"}</td>
+                          <td className="p-3">
+                            <Badge className="bg-emerald-100 text-emerald-800 capitalize font-bold text-[10px]">
+                              {payment.status}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-right font-bold text-emerald-700 text-sm">${payment.amount.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: EXTRAS / CHANGE ORDERS */}
+        {activeTab === "extras" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-[#0b2a4a] text-base">Change Orders / Service Extras</h3>
+                  <p className="text-xs text-gray-500">Add scope adjustments, unforeseen repairs, or customer upgrades.</p>
+                </div>
+                <Button onClick={() => setIsAddExtraOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs h-9">
+                  <Plus className="h-3.5 w-3.5 mr-1" /> + Add Change Order
+                </Button>
+              </div>
+
+              {extras.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No Change Orders added for this job.</p>
+              ) : (
+                <div className="grid gap-4">
+                  {extras.map(extra => (
+                    <div key={extra.id} className="p-5 bg-gray-50/80 rounded-2xl border border-gray-200 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-bold text-sm text-gray-900">{extra.description}</p>
+                          {extra.reason && <p className="text-xs text-gray-500 mt-0.5">Reason: {extra.reason}</p>}
+                        </div>
+                        <span className="font-bold text-base text-purple-700">+${extra.amount.toLocaleString()}</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200 text-xs">
+                        <div className="flex items-center gap-3">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            extra.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {extra.status}
+                          </span>
+                          {extra.schedule_impact && <span className="text-gray-500 font-medium">Impact: {extra.schedule_impact}</span>}
+                        </div>
+
+                        {extra.public_token && (
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${window.location.origin}/extra/${extra.public_token}`);
+                              toast.success("Extra proposal link copied!");
+                            }}
+                            className="font-bold text-blue-600 hover:underline"
+                          >
+                            Copy Client Approval Link
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: PHOTOS & VIDEOS */}
+        {activeTab === "media" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-[#0b2a4a] text-base">Job Site Photos &amp; Video Documentation</h3>
+                  <p className="text-xs text-gray-500">Manage progress photos, client visibility, and public portfolio candidates.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {/* Media Filter buttons */}
+                  <div className="flex bg-gray-100 p-0.5 rounded-xl border border-gray-200 text-xs">
+                    {(["all", "client", "admin", "portfolio"] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setMediaFilter(f)}
+                        className={`px-3 py-1 rounded-lg font-bold capitalize transition-all ${
+                          mediaFilter === f ? "bg-white text-blue-900 shadow-sm" : "text-gray-500"
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                  <Button onClick={() => setIsAddMediaOpen(true)} className="bg-[#0b2a4a] text-white font-bold text-xs h-9">
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Photo
+                  </Button>
+                </div>
+              </div>
+
+              {filteredMedia.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No photos uploaded matching current filter.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {filteredMedia.map(m => (
+                    <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col group">
+                      <div className="aspect-video relative overflow-hidden bg-slate-900">
+                        <img src={m.storage_path} alt={m.caption || "Job photo"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+                          {m.visible_to_client ? (
+                            <Badge className="bg-emerald-500/90 text-white text-[9px] px-1.5 py-0.5">
+                              <Eye className="h-3 w-3 mr-1" /> Client Visible
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-slate-700/90 text-white text-[9px] px-1.5 py-0.5">
+                              <EyeOff className="h-3 w-3 mr-1" /> Admin Only
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-3 flex-1 flex flex-col justify-between space-y-2 text-xs">
+                        <p className="font-bold text-gray-900">{m.caption || "Job progress documentation"}</p>
+
+                        <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-1 text-[10px]">
+                          <button
+                            onClick={() => handleToggleMediaVisibility(m.id, "client")}
+                            className={`px-2 py-0.5 rounded border font-semibold ${m.visible_to_client ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-600'}`}
+                          >
+                            Client: {m.visible_to_client ? 'ON' : 'OFF'}
+                          </button>
+                          <button
+                            onClick={() => handleToggleMediaVisibility(m.id, "public")}
+                            className={`px-2 py-0.5 rounded border font-semibold ${m.visible_on_public_site ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
+                          >
+                            Public: {m.visible_on_public_site ? 'ON' : 'OFF'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 7: MATERIALS / EXPENSES */}
+        {activeTab === "materials" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-[#0b2a4a] text-base">Job Materials &amp; Site Expenses</h3>
+                  <p className="text-xs text-gray-500">Expenses automatically locked to this job context.</p>
+                </div>
+                <Button onClick={() => setIsAddExpenseOpen(true)} className="bg-purple-600 text-white font-bold text-xs h-9">
+                  <Plus className="h-3.5 w-3.5 mr-1" /> + Add Job Expense
+                </Button>
+              </div>
+
+              {expenses.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No job materials or expenses logged for this job yet.</p>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-gray-50 border-b border-gray-200 font-bold text-gray-600 uppercase">
+                      <tr>
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Vendor / Merchant</th>
+                        <th className="p-3">Who Paid</th>
+                        <th className="p-3">Reimbursement</th>
+                        <th className="p-3 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {expenses.map(expense => (
+                        <tr key={expense.id}>
+                          <td className="p-3 font-semibold text-gray-900">{new Date(expense.receipt_date).toLocaleDateString()}</td>
+                          <td className="p-3 text-gray-900 font-medium">{expense.vendor}</td>
+                          <td className="p-3 text-gray-600">{expense.paid_by_name || "Company Account"}</td>
+                          <td className="p-3">
+                            <Badge className={expense.reimbursable_to_owner ? "bg-amber-100 text-amber-800 font-bold text-[10px]" : "bg-gray-100 text-gray-600 text-[10px]"}>
+                              {expense.reimbursement_status}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-right font-bold text-gray-900 text-sm">${expense.amount.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 8: REIMBURSEMENTS */}
+        {activeTab === "reimbursements" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="font-bold text-[#0b2a4a] text-base">Owner &amp; Partner Reimbursements</h3>
+                  <p className="text-xs text-gray-500">Track out-of-pocket expenses owed for this specific job.</p>
+                </div>
+              </div>
+
+              {expenses.filter(e => e.reimbursable_to_owner).length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No pending or paid owner reimbursements for this job.</p>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-gray-50 border-b border-gray-200 font-bold text-gray-600 uppercase">
+                      <tr>
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Vendor</th>
+                        <th className="p-3">Owed To</th>
+                        <th className="p-3">Reimbursement Status</th>
+                        <th className="p-3 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {expenses.filter(e => e.reimbursable_to_owner).map(expense => (
+                        <tr key={expense.id}>
+                          <td className="p-3 font-semibold text-gray-900">{new Date(expense.receipt_date).toLocaleDateString()}</td>
+                          <td className="p-3 text-gray-900 font-medium">{expense.vendor}</td>
+                          <td className="p-3 text-gray-700">{expense.paid_by_name || "Owner"}</td>
+                          <td className="p-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                const newStatus = expense.reimbursement_status === "paid" ? "pending" : "paid";
+                                await updateExpense(expense.id, { reimbursement_status: newStatus });
+                                setExpenses(prev => prev.map(e => e.id === expense.id ? { ...e, reimbursement_status: newStatus } : e));
+                                toast.success(`Reimbursement marked as ${newStatus}!`);
+                              }}
+                              className="h-7 text-[10px] font-bold"
+                            >
+                              {expense.reimbursement_status}
+                            </Button>
+                          </td>
+                          <td className="p-3 text-right font-bold text-amber-700 text-sm">${expense.amount.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 9: DOCUMENTS */}
+        {activeTab === "documents" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+              <div className="border-b border-gray-100 pb-4">
+                <h3 className="font-bold text-[#0b2a4a] text-base">Project Documents &amp; Executed Artifacts</h3>
+                <p className="text-xs text-gray-500">Centralized storage for signed PDFs, receipts, and change order files.</p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4 text-xs">
+                {estimate && (
+                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <FileCheck className="h-6 w-6 text-blue-600" />
+                      <div>
+                        <p className="font-bold text-gray-900">Commercial Proposal PDF</p>
+                        <p className="text-[10px] text-gray-500">Estimate #{estimate.id.split("-")[0].toUpperCase()}</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleGeneratePDF} className="h-8 text-xs font-bold">
+                      Download
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 10: HISTORY */}
+        {activeTab === "history" && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
+              <div className="border-b border-gray-100 pb-4">
+                <h3 className="font-bold text-[#0b2a4a] text-base">Real Activity Audit Log</h3>
+                <p className="text-xs text-gray-500">Authentic timeline of commercial approvals, payments, and site updates.</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-start gap-3 text-xs">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">1</div>
+                  <div>
+                    <p className="font-bold text-gray-900">Job Created</p>
+                    <p className="text-[10px] text-gray-500">{new Date(job.created_at).toLocaleString()}</p>
+                  </div>
+                </div>
+                {payments.map(p => (
+                  <div key={p.id} className="flex items-start gap-3 text-xs">
+                    <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">$</div>
+                    <div>
+                      <p className="font-bold text-gray-900">Payment Received (${p.amount.toLocaleString()})</p>
+                      <p className="text-[10px] text-gray-500">{new Date(p.payment_date).toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* MODALS WITH PRE-FILLED LOCKED CONTEXT (Requirement 6, 7, 10) */}
+      {/* 1. Register Payment Modal */}
+      {estimate && (
+        <RegisterPaymentModal
+          isOpen={isRegisterPaymentOpen}
+          onClose={() => setIsRegisterPaymentOpen(false)}
+          estimateId={estimate.id}
+          organizationId={orgId}
+          remainingBalance={financialSummary.balanceDue}
+          onSuccess={() => loadJobWorkspace()}
+        />
+      )}
+
+      {/* 2. Countersign Modal */}
+      {estimate && (
+        <CountersignModal
+          isOpen={isCountersignOpen}
+          onClose={() => setIsCountersignOpen(false)}
+          estimate={estimate}
+          companySettings={companySettings}
+          onCountersigned={() => loadJobWorkspace()}
+        />
+      )}
+
+      {/* 3. Add Extra / Change Order Modal */}
+      {isAddExtraOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-base text-[#0b2a4a]">New Change Order / Service Extra</h3>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <Label>Previous Contract Price (Auto)</Label>
+                <Input value={`$${financialSummary.currentContractValue.toLocaleString()}`} disabled className="bg-gray-100 font-bold" />
+              </div>
+              <div>
+                <Label>Description / Scope</Label>
+                <Input
+                  placeholder="e.g. Replace damaged framing joists"
+                  value={extraForm.description}
+                  onChange={e => setExtraForm({ ...extraForm, description: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Reason</Label>
+                <Input
+                  placeholder="e.g. Unforeseen structural decay under subfloor"
+                  value={extraForm.reason}
+                  onChange={e => setExtraForm({ ...extraForm, reason: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Extra Amount ($)</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 750"
+                  value={extraForm.amount}
+                  onChange={e => setExtraForm({ ...extraForm, amount: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Schedule Impact</Label>
+                <Input
+                  placeholder="e.g. 2 additional days"
+                  value={extraForm.scheduleImpact}
+                  onChange={e => setExtraForm({ ...extraForm, scheduleImpact: e.target.value })}
+                />
+              </div>
+
+              {extraForm.amount && (
+                <div className="p-3 bg-purple-50 rounded-xl text-purple-900 font-bold">
+                  Revised Contract Price: ${(financialSummary.currentContractValue + (parseFloat(extraForm.amount) || 0)).toLocaleString()}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setIsAddExtraOpen(false)}>Cancel</Button>
+              <Button onClick={handleAddExtraSubmit} disabled={isSavingExtra} className="bg-purple-600 text-white font-bold size-sm">
+                {isSavingExtra ? "Saving..." : "Save Change Order"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Add Material Expense Modal */}
+      {isAddExpenseOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-base text-[#0b2a4a]">Log Job Material / Expense</h3>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <Label>Job (Locked)</Label>
+                <Input value={`${clientName} — ${projectType}`} disabled className="bg-gray-100 font-bold" />
+              </div>
+              <div>
+                <Label>Description / Item</Label>
+                <Input
+                  placeholder="e.g. 2x4 Pressure Treated Lumber & Screws"
+                  value={expenseForm.description}
+                  onChange={e => setExpenseForm({ ...expenseForm, description: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Vendor / Merchant</Label>
+                <Input
+                  placeholder="e.g. Home Depot / Ring's End"
+                  value={expenseForm.vendor}
+                  onChange={e => setExpenseForm({ ...expenseForm, vendor: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Amount ($)</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 340.50"
+                  value={expenseForm.amount}
+                  onChange={e => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Receipt Date</Label>
+                <Input
+                  type="date"
+                  value={expenseForm.receiptDate}
+                  onChange={e => setExpenseForm({ ...expenseForm, receiptDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Who Paid</Label>
+                <Input
+                  value={expenseForm.paidByName}
+                  onChange={e => setExpenseForm({ ...expenseForm, paidByName: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setIsAddExpenseOpen(false)}>Cancel</Button>
+              <Button onClick={handleAddExpenseSubmit} disabled={isSavingExpense} className="bg-purple-600 text-white font-bold size-sm">
+                {isSavingExpense ? "Saving..." : "Save Job Expense"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Add Job Photo Modal */}
+      {isAddMediaOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="font-bold text-base text-[#0b2a4a]">Upload Job Progress Photo</h3>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <Label>Select Image File</Label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleMediaFileSelect}
+                  className="w-full text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white"
+                />
+              </div>
+
+              {mediaFileUrl && (
+                <div className="w-24 h-24 rounded-xl overflow-hidden border border-gray-200">
+                  <img src={mediaFileUrl} alt="Preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+
+              <div>
+                <Label>Caption / Notes</Label>
+                <Input
+                  placeholder="e.g. Framing completed & inspected"
+                  value={mediaCaption}
+                  onChange={e => setMediaCaption(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setIsAddMediaOpen(false)}>Cancel</Button>
+              <Button onClick={handleAddMediaSubmit} disabled={isSavingMedia || !mediaFileUrl} className="bg-[#0b2a4a] text-white font-bold size-sm">
+                {isSavingMedia ? "Uploading..." : "Upload Photo"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

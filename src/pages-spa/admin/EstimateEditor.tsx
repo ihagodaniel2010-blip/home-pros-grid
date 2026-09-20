@@ -433,9 +433,8 @@ const EstimateEditor = () => {
 
             if (existingJob) {
                 setServiceJob(existingJob);
-                toast.info("Opening Service Job details.");
-                const targetPath = targetLeadId ? `/admin/leads/${targetLeadId}` : `/admin`;
-                navigate(targetPath);
+                toast.info("Opening Job Workspace.");
+                navigate(`/admin/jobs/${existingJob.id}`);
                 return;
             }
 
@@ -449,8 +448,7 @@ const EstimateEditor = () => {
 
             setServiceJob(job);
             toast.success("Service Job created successfully!");
-            const targetPath = targetLeadId ? `/admin/leads/${targetLeadId}` : `/admin`;
-            navigate(targetPath);
+            navigate(`/admin/jobs/${job.id}`);
         } catch (error: any) {
             console.error("Create Service Job Error:", error);
             toast.error(`Failed to create Service Job: ${error?.message || "Database insert error"}`);
@@ -548,18 +546,11 @@ const EstimateEditor = () => {
                             {serviceJob && (
                                 <Button
                                     variant="outline"
-                                    className="h-10 gap-2 border-green-200 text-green-700 hover:bg-green-50"
-                                    onClick={() => {
-                                        const targetLeadId = serviceJob.lead_id || formData.lead_id;
-                                        if (targetLeadId && targetLeadId !== 'null') {
-                                            navigate(`/admin/leads/${targetLeadId}`);
-                                        } else {
-                                            handleCreateJob();
-                                        }
-                                    }}
+                                    className="h-10 gap-2 border-green-200 text-green-700 hover:bg-green-50 font-bold"
+                                    onClick={() => navigate(`/admin/jobs/${serviceJob.id}`)}
                                 >
-                                    <CheckCircle2 className="h-4 w-4" />
-                                    Job Scheduled
+                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                    Open Job Workspace
                                 </Button>
                             )}
 
