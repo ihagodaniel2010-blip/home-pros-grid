@@ -98,6 +98,19 @@ export default function JobWorkspace() {
   // Media Filter State
   const [mediaFilter, setMediaFilter] = useState<"all" | "client" | "admin" | "portfolio">("all");
 
+  // Offline Signed Contract Confirmation State (Requirement 5 & 6)
+  const [isOfflineUploadOpen, setIsOfflineUploadOpen] = useState(false);
+  const [isSubmittingOfflineDoc, setIsSubmittingOfflineDoc] = useState(false);
+  const [offlineForm, setOfflineForm] = useState({
+    file: null as File | null,
+    fileUrl: "",
+    signedByClient: false,
+    clientLegalName: "",
+    signedDate: new Date().toISOString().slice(0, 10),
+    uploadedBy: user?.name || user?.email || "Manager",
+    notes: ""
+  });
+
   const orgId = user?.organization?.id || DEFAULT_ORG_ID;
 
   // Load Job Workspace Data Modularly
@@ -257,12 +270,39 @@ export default function JobWorkspace() {
     }
   };
 
-  const handleSignedDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSignedDocUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !estimate) return;
 
+    setOfflineForm({
+      file,
+      fileUrl: URL.createObjectURL(file),
+      signedByClient: true,
+      clientLegalName: estimate.client_name || "",
+      signedDate: new Date().toISOString().slice(0, 10),
+      uploadedBy: user?.name || user?.email || "Manager",
+      notes: ""
+    });
+    setIsOfflineUploadOpen(true);
+  };
+
+  const handleConfirmOfflineSignedContract = async () => {
+    if (!estimate || !offlineForm.file) {
+      toast.error("Please select a signed document file.");
+      return;
+    }
+    if (!offlineForm.signedByClient) {
+      toast.error("You must confirm that the client physically signed the document.");
+      return;
+    }
+    if (!offlineForm.clientLegalName.trim()) {
+      toast.error("Client Legal Name is required.");
+      return;
+    }
+
+    setIsSubmittingOfflineDoc(true);
     try {
-      toast.loading("Uploading signed document...");
+      const file = offlineForm.file;
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = ev => resolve(ev.target?.result as string);
@@ -284,22 +324,57 @@ export default function JobWorkspace() {
         console.warn("Storage upload for signed doc handled, using Data URL fallback:", sErr);
       }
 
+      // 1. Update Estimate status to Approved with metadata
       await supabase
         .from('estimates')
         .update({
           status: 'Approved',
-          approved_at: new Date().toISOString(),
-          signed_document_url: docUrl
+          approved_at: new Date(offlineForm.signedDate).toISOString(),
+          signed_document_url: docUrl,
+          signature_type: 'offline_paper',
+          signed_by_name: offlineForm.clientLegalName.trim()
         })
         .eq('id', estimate.id);
 
-      toast.dismiss();
-      toast.success("Offline Signed Document attached! Contract marked as Approved.");
+      // 2. Audit Event Recording (Requirement 5)
+      try {
+        await supabase.from('document_audit_logs').insert([{
+          organization_id: orgId,
+          document_type: 'estimate',
+          document_id: estimate.id,
+          event_type: 'offline_signed_contract_uploaded',
+          performed_by: user?.id || 'admin',
+          metadata_json: {
+            client_legal_name: offlineForm.clientLegalName.trim(),
+            signed_date: offlineForm.signedDate,
+            uploaded_by: offlineForm.uploadedBy,
+            notes: offlineForm.notes,
+            file_url: docUrl
+          }
+        }]);
+
+        await supabase.from('document_audit_logs').insert([{
+          organization_id: orgId,
+          document_type: 'estimate',
+          document_id: estimate.id,
+          event_type: 'offline_contract_approved',
+          performed_by: user?.id || 'admin',
+          metadata_json: {
+            approved_at: new Date().toISOString()
+          }
+        }]);
+      } catch (auditErr) {
+        console.warn("Audit event logging handled:", auditErr);
+      }
+
+      toast.success("Offline Signed Contract confirmed and Approved!");
+      setIsOfflineUploadOpen(false);
       loadJobWorkspace();
     } catch (err: any) {
-      toast.dismiss();
-      console.error("Error uploading signed doc:", err);
-      toast.error("Failed to upload signed document.");
+      console.error("Error confirming offline signed contract:", err);
+      toast.error(err?.message || "Failed to confirm offline contract.");
+    } finally {
+      setIsSubmittingOfflineDoc(false);
     }
   };
 
@@ -1650,6 +1725,94 @@ export default function JobWorkspace() {
               <Button variant="outline" size="sm" onClick={() => setIsAddMediaOpen(false)}>Cancel</Button>
               <Button onClick={handleAddMediaSubmit} disabled={isSavingMedia || !mediaFileUrl} className="bg-[#0b2a4a] text-white font-bold size-sm">
                 {isSavingMedia ? "Uploading..." : "Upload Media"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Confirm Offline Signed Contract Modal (Security Rule 5 & 6) */}
+      {isOfflineUploadOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-base text-[#0b2a4a] flex items-center gap-2">
+                <FileText className="h-5 w-5 text-emerald-600" />
+                Confirm Offline Signed Contract
+              </h3>
+              <button onClick={() => setIsOfflineUploadOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 font-medium">
+                📄 Attachment: <span className="font-bold">{offlineForm.file?.name || "Signed_Contract.pdf"}</span> ({( (offlineForm.file?.size || 0) / 1024 ).toFixed(1)} KB)
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2.5 p-3 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer font-bold text-gray-900">
+                  <input
+                    type="checkbox"
+                    checked={offlineForm.signedByClient}
+                    onChange={e => setOfflineForm({ ...offlineForm, signedByClient: e.target.checked })}
+                    className="h-4 w-4 text-emerald-600 rounded"
+                  />
+                  <span>Signed by Client (Physical Paper Signature Verified)</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Client Legal Name</Label>
+                  <Input
+                    value={offlineForm.clientLegalName}
+                    onChange={e => setOfflineForm({ ...offlineForm, clientLegalName: e.target.value })}
+                    placeholder="Full Legal Name"
+                  />
+                </div>
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Signed Date</Label>
+                  <Input
+                    type="date"
+                    value={offlineForm.signedDate}
+                    onChange={e => setOfflineForm({ ...offlineForm, signedDate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Uploaded By</Label>
+                  <Input
+                    value={offlineForm.uploadedBy}
+                    onChange={e => setOfflineForm({ ...offlineForm, uploadedBy: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Document Version</Label>
+                  <Input value={`Estimate ${estimate?.id ? estimate.id.split('-')[0].toUpperCase() : 'v1'}`} disabled className="bg-gray-100" />
+                </div>
+              </div>
+
+              <div>
+                <Label className="font-bold text-gray-700 block mb-1">Audit Notes / Notes</Label>
+                <textarea
+                  rows={2}
+                  value={offlineForm.notes}
+                  onChange={e => setOfflineForm({ ...offlineForm, notes: e.target.value })}
+                  placeholder="e.g. Physical paper contract signed during site visit & scanned."
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+              <Button variant="outline" size="sm" onClick={() => setIsOfflineUploadOpen(false)}>Cancel</Button>
+              <Button
+                onClick={handleConfirmOfflineSignedContract}
+                disabled={isSubmittingOfflineDoc || !offlineForm.signedByClient}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+              >
+                {isSubmittingOfflineDoc ? "Confirming & Approving..." : "Confirm Signed Contract"}
               </Button>
             </div>
           </div>
