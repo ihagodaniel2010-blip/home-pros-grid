@@ -413,7 +413,15 @@ const PublicView = () => {
                                                             {m.media_type === 'video' ? (
                                                                 <video src={url} className="w-24 h-24 object-cover rounded-xl border border-purple-200" />
                                                             ) : (
-                                                                <img src={url} alt={m.caption || "Extra photo"} className="w-24 h-24 object-cover rounded-xl border border-purple-200 font-bold" />
+                                                                <img
+                                                                    src={url}
+                                                                    alt={m.caption || "Extra photo"}
+                                                                    className="w-24 h-24 object-cover rounded-xl border border-purple-200 font-bold"
+                                                                    onError={(e) => {
+                                                                        const target = e.currentTarget.parentElement;
+                                                                        if (target) target.style.display = 'none';
+                                                                    }}
+                                                                />
                                                             )}
                                                         </div>
                                                     ))}
@@ -441,18 +449,29 @@ const PublicView = () => {
                                                     <div className="flex justify-end gap-2">
                                                         <Button
                                                             size="sm"
+                                                            disabled={isApproving}
                                                             onClick={async () => {
-                                                                if (extra.public_token) {
-                                                                    const ok = await respondPublicServiceExtra(extra.public_token, 'approved');
-                                                                    if (ok) {
-                                                                        toast.success("Extra Approved!");
-                                                                        setExtras(prev => prev.map(ex => ex.id === extra.id ? { ...ex, status: 'approved' } : ex));
+                                                                const targetToken = extra.public_token || extra.id;
+                                                                if (targetToken) {
+                                                                    setIsApproving(true);
+                                                                    try {
+                                                                        const ok = await respondPublicServiceExtra(targetToken, 'approved');
+                                                                        if (ok) {
+                                                                            toast.success("Change Order Approved!");
+                                                                            setExtras(prev => prev.map(ex => ex.id === extra.id ? { ...ex, status: 'approved' } : ex));
+                                                                        } else {
+                                                                            toast.error("Failed to approve Change Order.");
+                                                                        }
+                                                                    } catch (err: any) {
+                                                                        toast.error(err?.message || "Error approving Change Order.");
+                                                                    } finally {
+                                                                        setIsApproving(false);
                                                                     }
                                                                 }
                                                             }}
                                                             className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs"
                                                         >
-                                                            Approve Change Order (+${extra.amount.toLocaleString()})
+                                                            {isApproving ? "Approving..." : `Approve Change Order (+${extra.amount.toLocaleString()})`}
                                                         </Button>
                                                     </div>
                                                 </div>
