@@ -19,6 +19,7 @@ import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, Ser
 import { getExpenses, createExpense, Expense, updateExpense } from "@/lib/expenses";
 import { getClientPayments, createClientPayment, ClientPayment } from "@/lib/client-payments";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
+import { getOrganizationPartners, OrganizationPartner } from "@/lib/partners";
 import RegisterPaymentModal from "@/components/admin/estimates/RegisterPaymentModal";
 import CountersignModal from "@/components/admin/estimates/CountersignModal";
 import { generateProfessionalPDF } from "@/lib/pdf-generator";
@@ -53,6 +54,7 @@ export default function JobWorkspace() {
   const [media, setMedia] = useState<ServiceJobMediaRecord[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [payments, setPayments] = useState<ClientPayment[]>([]);
+  const [partners, setPartners] = useState<OrganizationPartner[]>([]);
 
   // Modals & Forms
   const [isRegisterPaymentOpen, setIsRegisterPaymentOpen] = useState(false);
@@ -132,15 +134,17 @@ export default function JobWorkspace() {
       setCompanySettings(companyRes);
 
       // 3. Fetch independent modules via Promise.all
-      const [extrasData, mediaData, allExpenses, allPayments] = await Promise.all([
+      const [extrasData, mediaData, allExpenses, allPayments, fetchedPartners] = await Promise.all([
         getServiceExtrasByJobId(jobId).catch(() => []),
         getJobMediaRecords(jobId).catch(() => []),
         getExpenses(orgId).catch(() => []),
-        getClientPayments(orgId).catch(() => [])
+        getClientPayments(orgId).catch(() => []),
+        getOrganizationPartners(orgId).catch(() => [])
       ]);
 
       setExtras(extrasData || []);
       setMedia(mediaData || []);
+      setPartners(fetchedPartners || []);
       
       // Filter expenses for this job
       const jobExpenses = (allExpenses || []).filter(
@@ -1401,12 +1405,28 @@ export default function JobWorkspace() {
                 />
               </div>
               <div>
-                <Label>Who Paid</Label>
-                <Input
+                <Label className="font-bold text-gray-700 block mb-1">Who Paid (Payment Source)</Label>
+                <select
                   value={expenseForm.paidByName}
                   onChange={e => setExpenseForm({ ...expenseForm, paidByName: e.target.value })}
-                  placeholder="e.g. Hugo / Partner / Company Card"
-                />
+                  className="w-full h-10 px-3 rounded-xl border border-gray-200 text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Company Card">Company Card / Account</option>
+                  {partners.filter(p => p.active !== false).length > 0 ? (
+                    partners.filter(p => p.active !== false).map(p => (
+                      <option key={p.id} value={p.name}>
+                        {p.name} (Partner Personal Card / Cash)
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Hugo Manager">Hugo (Personal Card / Cash)</option>
+                      <option value="Brother Partner">Brother (Personal Card / Cash)</option>
+                    </>
+                  )}
+                  <option value="Customer Paid Direct">Customer Paid Direct</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
               {/* Mobile-First Receipt Photo Capture (Requirement 13 & 28) */}
