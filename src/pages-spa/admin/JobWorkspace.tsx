@@ -15,7 +15,7 @@ import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { supabase } from "@/lib/supabase";
 import { getEstimateById, Estimate } from "@/lib/estimates";
 import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra } from "@/lib/service-extras";
-import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, ServiceJobMediaRecord } from "@/lib/job-media";
+import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, deleteJobMediaRecord, resolveSignedMediaUrl, uploadExtraMediaRecord, ServiceJobMediaRecord } from "@/lib/job-media";
 import { getExpenses, createExpense, Expense, updateExpense } from "@/lib/expenses";
 import { getClientPayments, createClientPayment, ClientPayment } from "@/lib/client-payments";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
@@ -95,6 +95,10 @@ export default function JobWorkspace() {
   const [mediaFileUrl, setMediaFileUrl] = useState<string | null>(null);
   const [mediaCaption, setMediaCaption] = useState("");
   const [mediaVisibility, setMediaVisibility] = useState<"admin" | "client" | "public">("client");
+  const [mediaSignedUrls, setMediaSignedUrls] = useState<Record<string, { url: string; isMissing: boolean }>>({});
+
+  // Extra Form Media Attachments
+  const [extraSelectedFiles, setExtraSelectedFiles] = useState<File[]>([]);
 
   // Media Lightbox Modal State (Requirement 8)
   const [lightboxMedia, setLightboxMedia] = useState<ServiceJobMediaRecord | null>(null);
@@ -116,6 +120,25 @@ export default function JobWorkspace() {
   });
 
   const orgId = user?.organization?.id || DEFAULT_ORG_ID;
+
+  const loadMediaSignedUrls = useCallback(async (records: ServiceJobMediaRecord[]) => {
+    const urlMap: Record<string, { url: string; isMissing: boolean }> = {};
+    await Promise.all(
+      records.map(async (m) => {
+        try {
+          const url = await resolveSignedMediaUrl(m.storage_path);
+          if (url) {
+            urlMap[m.id] = { url, isMissing: false };
+          } else {
+            urlMap[m.id] = { url: "", isMissing: true };
+          }
+        } catch (err) {
+          urlMap[m.id] = { url: "", isMissing: true };
+        }
+      })
+    );
+    setMediaSignedUrls(prev => ({ ...prev, ...urlMap }));
+  }, []);
 
   // Load Job Workspace Data Modularly
   const loadJobWorkspace = useCallback(async () => {
@@ -162,6 +185,9 @@ export default function JobWorkspace() {
       setExtras(extrasData || []);
       setMedia(mediaData || []);
       setPartners(fetchedPartners || []);
+      if (mediaData && mediaData.length > 0) {
+        loadMediaSignedUrls(mediaData);
+      }
       
       // Filter expenses for this job
       const jobExpenses = (allExpenses || []).filter(
@@ -404,9 +430,41 @@ export default function JobWorkspace() {
         reason: extraForm.reason.trim() || undefined
       });
 
+      // Upload attached media files for extra
+      if (extraSelectedFiles.length > 0 && newExtra?.id) {
+        for (const file of extraSelectedFiles) {
+          try {
+            const isVideo = file.type.startsWith("video/");
+            const fileExt = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
+            const relativePath = `${orgId}/extras/${newExtra.id}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${fileExt}`;
+
+            let storedBucket = "images";
+            const { error: uErr } = await supabase.storage.from("images").upload(relativePath, file, { upsert: true });
+            if (uErr) {
+              storedBucket = "documents";
+              await supabase.storage.from("documents").upload(relativePath, file, { upsert: true });
+            }
+
+            await uploadExtraMediaRecord({
+              organization_id: orgId,
+              service_extra_id: newExtra.id,
+              media_type: isVideo ? "video" : "image",
+              storage_path: `${storedBucket}/${relativePath}`,
+              file_name: file.name,
+              mime_type: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
+              file_size_bytes: file.size,
+              caption: extraForm.description.trim()
+            });
+          } catch (mediaErr: any) {
+            console.warn("Extra media upload handled:", mediaErr);
+          }
+        }
+      }
+
       setExtras(prev => [newExtra, ...prev]);
       setIsAddExtraOpen(false);
       setExtraForm({ description: "", reason: "", amount: "", scheduleImpact: "0 days" });
+      setExtraSelectedFiles([]);
       setActiveTab("extras");
       toast.success("Change Order created successfully!");
     } catch (err: any) {
@@ -414,6 +472,31 @@ export default function JobWorkspace() {
       toast.error(`Failed to create Extra: ${err?.message || "Database error"}`);
     } finally {
       setIsSavingExtra(false);
+    }
+  };
+
+  const handleCopyExtraLink = async (extra: ServiceExtra) => {
+    let estToken = estimate?.public_token;
+    if (!estToken && (extra.estimate_id || job?.estimate_id)) {
+      try {
+        const estId = extra.estimate_id || job?.estimate_id;
+        if (estId) {
+          const est = await getEstimateById(estId);
+          if (est?.public_token) estToken = est.public_token;
+        }
+      } catch (e) {}
+    }
+
+    if (estToken) {
+      const url = `${window.location.origin}/estimate/${estToken}#extras`;
+      await navigator.clipboard.writeText(url);
+      toast.success("Extra link copied (unified client portal)!");
+    } else if (extra.public_token && !extra.public_token.startsWith("lead_") && !/^[0-9a-f]{8}-/i.test(extra.public_token)) {
+      const url = `${window.location.origin}/extra/${extra.public_token}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("Extra proposal link copied!");
+    } else {
+      toast.error("Could not resolve estimate public token for this extra.");
     }
   };
 
@@ -525,72 +608,74 @@ export default function JobWorkspace() {
   };
 
   const handleAddMediaSubmit = async () => {
-    if (!job || (!selectedMediaFile && !mediaFileUrl)) {
+    if (!job || !selectedMediaFile) {
       toast.error("Please select a photo or video file.");
       return;
     }
 
     setIsSavingMedia(true);
     try {
-      let finalStoragePath = "";
-      const isVideo = selectedMediaFile?.type.startsWith("video/") || false;
+      const isVideo = selectedMediaFile.type.startsWith("video/");
       const mediaType = isVideo ? "video" : "image";
-      const fileExt = selectedMediaFile?.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
+      const fileExt = selectedMediaFile.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
       const relativePath = `${orgId}/jobs/${job.id}/${isVideo ? "videos" : "photos"}/${Date.now()}.${fileExt}`;
 
-      if (selectedMediaFile) {
-        // Read file as Base64 Data URL fallback
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = ev => resolve(ev.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(selectedMediaFile);
-        });
+      let storedBucket = "images";
+      const { error: uploadErr } = await supabase.storage
+        .from("images")
+        .upload(relativePath, selectedMediaFile, { upsert: true, cacheControl: "3600" });
 
-        // Try storage upload first
-        try {
-          const { error: uploadErr } = await supabase.storage
-            .from("images")
-            .upload(relativePath, selectedMediaFile);
+      if (uploadErr) {
+        console.warn("Storage upload to 'images' failed, trying 'documents' bucket:", uploadErr.message);
+        const { error: docUploadErr } = await supabase.storage
+          .from("documents")
+          .upload(relativePath, selectedMediaFile, { upsert: true, cacheControl: "3600" });
 
-          if (!uploadErr) {
-            const { data } = supabase.storage.from("images").getPublicUrl(relativePath);
-            if (data?.publicUrl) finalStoragePath = data.publicUrl;
-          }
-        } catch (sErr) {
-          console.warn("Storage upload for job media handled, using Data URL fallback:", sErr);
+        if (docUploadErr) {
+          console.error("Storage upload failed on both buckets:", docUploadErr.message);
+          toast.error(`Storage upload failed: ${docUploadErr.message}`);
+          return;
         }
-
-        if (!finalStoragePath) {
-          finalStoragePath = dataUrl;
-        }
-      } else {
-        finalStoragePath = mediaFileUrl!;
+        storedBucket = "documents";
       }
+
+      const finalPath = `${storedBucket}/${relativePath}`;
 
       const record = await uploadJobMediaRecord({
         organization_id: orgId,
         service_job_id: job.id,
         media_type: mediaType,
-        storage_path: finalStoragePath,
-        file_name: selectedMediaFile?.name || `job_media_${Date.now()}.${fileExt}`,
-        mime_type: selectedMediaFile?.type || (isVideo ? "video/mp4" : "image/jpeg"),
-        file_size_bytes: selectedMediaFile?.size || 1048576,
+        storage_path: finalPath,
+        file_name: selectedMediaFile.name,
+        mime_type: selectedMediaFile.type || (isVideo ? "video/mp4" : "image/jpeg"),
+        file_size_bytes: selectedMediaFile.size,
         caption: mediaCaption.trim() || "Job progress documentation"
       });
 
-      setMedia(prev => [record, ...prev]);
+      const updated = [record, ...media];
+      setMedia(updated);
       setIsAddMediaOpen(false);
       setSelectedMediaFile(null);
       setMediaFileUrl(null);
       setMediaCaption("");
       setActiveTab("media");
       toast.success(`${isVideo ? "Job video" : "Job photo"} uploaded successfully!`);
+      await loadMediaSignedUrls(updated);
     } catch (err: any) {
       console.error("Upload job media error:", err);
-      toast.error("Failed to upload job photo/video.");
+      toast.error(`Failed to upload job photo/video: ${err?.message || "Storage error"}`);
     } finally {
       setIsSavingMedia(false);
+    }
+  };
+
+  const handleDeleteMediaRecord = async (mediaId: string) => {
+    try {
+      await deleteJobMediaRecord(mediaId);
+      setMedia(prev => prev.filter(m => m.id !== mediaId));
+      toast.success("Broken media record removed.");
+    } catch (err) {
+      toast.error("Failed to delete media record.");
     }
   };
 
@@ -639,6 +724,23 @@ export default function JobWorkspace() {
       return true;
     });
   }, [media, mediaFilter]);
+
+  const lightboxIndex = useMemo(() => {
+    if (!lightboxMedia) return -1;
+    return filteredMedia.findIndex(m => m.id === lightboxMedia.id);
+  }, [filteredMedia, lightboxMedia]);
+
+  const handleNextLightbox = () => {
+    if (lightboxIndex >= 0 && lightboxIndex < filteredMedia.length - 1) {
+      setLightboxMedia(filteredMedia[lightboxIndex + 1]);
+    }
+  };
+
+  const handlePrevLightbox = () => {
+    if (lightboxIndex > 0) {
+      setLightboxMedia(filteredMedia[lightboxIndex - 1]);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -1200,12 +1302,9 @@ export default function JobWorkspace() {
                           {extra.schedule_impact && <span className="text-gray-500 font-medium">Impact: {extra.schedule_impact}</span>}
                         </div>
 
-                        {extra.public_token && (
+                        {(extra.public_token || estimate?.public_token) && (
                           <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(`${window.location.origin}/extra/${extra.public_token}`);
-                              toast.success("Extra proposal link copied!");
-                            }}
+                            onClick={() => handleCopyExtraLink(extra)}
                             className="font-bold text-blue-600 hover:underline"
                           >
                             Copy Client Approval Link
@@ -1255,9 +1354,9 @@ export default function JobWorkspace() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {filteredMedia.map(m => {
-                    const mediaUrl = m.storage_path.startsWith('http') || m.storage_path.startsWith('data:')
-                      ? m.storage_path
-                      : supabase.storage.from('images').getPublicUrl(m.storage_path).data.publicUrl;
+                    const mediaState = mediaSignedUrls[m.id];
+                    const mediaUrl = mediaState?.url || "";
+                    const isMissing = mediaState?.isMissing || false;
 
                     const portfolioStatus = m.portfolio_approved
                       ? 'Approved'
@@ -1266,9 +1365,20 @@ export default function JobWorkspace() {
                       : 'Not Submitted';
 
                     return (
-                      <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col group cursor-pointer" onClick={() => setLightboxMedia(m)}>
-                        <div className="aspect-video relative overflow-hidden bg-slate-900 flex items-center justify-center">
-                          {m.media_type === 'video' ? (
+                      <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col group">
+                        <div
+                          className="aspect-video relative overflow-hidden bg-slate-900 flex items-center justify-center cursor-pointer"
+                          onClick={() => {
+                            if (!isMissing && mediaUrl) setLightboxMedia(m);
+                          }}
+                        >
+                          {isMissing ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-950 p-4 text-center text-slate-400">
+                              <AlertCircle className="h-8 w-8 text-amber-500 mb-2" />
+                              <span className="font-bold text-xs text-amber-400">File Missing in Storage</span>
+                              <span className="text-[10px] text-slate-500 mt-1 truncate max-w-full">{m.file_name || m.storage_path}</span>
+                            </div>
+                          ) : m.media_type === 'video' ? (
                             <div className="w-full h-full flex flex-col items-center justify-center text-white bg-slate-950/80">
                               <video src={mediaUrl} className="w-full h-full object-cover pointer-events-none" />
                               <span className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition-colors">
@@ -1280,10 +1390,11 @@ export default function JobWorkspace() {
                               src={mediaUrl}
                               alt={m.caption || "Job photo"}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.onerror = null;
-                                target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+                              onError={() => {
+                                setMediaSignedUrls(prev => ({
+                                  ...prev,
+                                  [m.id]: { url: "", isMissing: true }
+                                }));
                               }}
                             />
                           )}
@@ -1306,20 +1417,60 @@ export default function JobWorkspace() {
                             <p className="text-[10px] text-gray-500 mt-0.5">Portfolio Status: <span className="font-bold text-purple-700">{portfolioStatus}</span></p>
                           </div>
 
-                          <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-1 text-[10px]">
-                            <button
-                              onClick={() => handleToggleMediaVisibility(m.id, "client")}
-                              className={`px-2 py-0.5 rounded border font-semibold ${m.visible_to_client ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-600'}`}
-                            >
-                              Client: {m.visible_to_client ? 'ON' : 'OFF'}
-                            </button>
-                            <button
-                              onClick={() => handleToggleMediaVisibility(m.id, "public")}
-                              className={`px-2 py-0.5 rounded border font-semibold ${m.visible_on_public_site ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
-                            >
-                              Public Candidate: {m.visible_on_public_site ? 'ON' : 'OFF'}
-                            </button>
-                          </div>
+                          {isMissing ? (
+                            <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+                              <label className="cursor-pointer text-[10px] font-bold px-2 py-1 bg-amber-50 text-amber-700 rounded border border-amber-200 hover:bg-amber-100">
+                                Replace File
+                                <input
+                                  type="file"
+                                  accept={m.media_type === 'video' ? 'video/*' : 'image/*'}
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    try {
+                                      const relativePath = `${orgId}/jobs/${job.id}/${m.media_type === 'video' ? 'videos' : 'photos'}/${Date.now()}_${file.name}`;
+                                      let bucket = 'images';
+                                      const { error: err1 } = await supabase.storage.from('images').upload(relativePath, file, { upsert: true });
+                                      if (err1) {
+                                        bucket = 'documents';
+                                        await supabase.storage.from('documents').upload(relativePath, file, { upsert: true });
+                                      }
+                                      const newPath = `${bucket}/${relativePath}`;
+                                      await supabase.from('service_job_media').update({ storage_path: newPath }).eq('id', m.id);
+                                      toast.success("Media file replaced!");
+                                      const updatedList = media.map(item => item.id === m.id ? { ...item, storage_path: newPath } : item);
+                                      setMedia(updatedList);
+                                      await loadMediaSignedUrls(updatedList);
+                                    } catch (err: any) {
+                                      toast.error("Failed to replace media file.");
+                                    }
+                                  }}
+                                />
+                              </label>
+                              <button
+                                onClick={() => handleDeleteMediaRecord(m.id)}
+                                className="text-[10px] font-bold px-2 py-1 bg-red-50 text-red-600 rounded border border-red-200 hover:bg-red-100"
+                              >
+                                Delete Record
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-1 text-[10px]">
+                              <button
+                                onClick={() => handleToggleMediaVisibility(m.id, "client")}
+                                className={`px-2 py-0.5 rounded border font-semibold ${m.visible_to_client ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-600'}`}
+                              >
+                                Client: {m.visible_to_client ? 'ON' : 'OFF'}
+                              </button>
+                              <button
+                                onClick={() => handleToggleMediaVisibility(m.id, "public")}
+                                className={`px-2 py-0.5 rounded border font-semibold ${m.visible_on_public_site ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
+                              >
+                                Public Candidate: {m.visible_on_public_site ? 'ON' : 'OFF'}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1634,6 +1785,80 @@ export default function JobWorkspace() {
                 />
               </div>
 
+              {/* Restored Photo & Video Attachments for Change Order */}
+              <div className="space-y-2 pt-2 border-t border-purple-100">
+                <Label className="font-bold text-gray-700 block text-xs">Attach Extra Photo or Video</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2 bg-purple-50 text-purple-700 font-bold rounded-xl border border-purple-200 text-[11px] hover:bg-purple-100">
+                    📷 Take Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setExtraSelectedFiles(prev => [...prev, file]);
+                      }}
+                    />
+                  </label>
+                  <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2 bg-purple-50 text-purple-700 font-bold rounded-xl border border-purple-200 text-[11px] hover:bg-purple-100">
+                    🖼️ Choose Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setExtraSelectedFiles(prev => [...prev, file]);
+                      }}
+                    />
+                  </label>
+                  <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2 bg-purple-50 text-purple-700 font-bold rounded-xl border border-purple-200 text-[11px] hover:bg-purple-100">
+                    📹 Record Video
+                    <input
+                      type="file"
+                      accept="video/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setExtraSelectedFiles(prev => [...prev, file]);
+                      }}
+                    />
+                  </label>
+                  <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2 bg-purple-50 text-purple-700 font-bold rounded-xl border border-purple-200 text-[11px] hover:bg-purple-100">
+                    🎥 Choose Video
+                    <input
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setExtraSelectedFiles(prev => [...prev, file]);
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {extraSelectedFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {extraSelectedFiles.map((file, idx) => (
+                      <div key={idx} className="relative bg-purple-100 px-2 py-1 rounded-lg text-[10px] font-bold text-purple-900 flex items-center gap-1">
+                        <span className="truncate max-w-[120px]">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setExtraSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-red-500 font-bold hover:text-red-700 ml-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {extraForm.amount && (
                 <div className="p-3 bg-purple-50 rounded-xl text-purple-900 font-bold">
                   Revised Contract Price: ${(financialSummary.currentContractValue + (parseFloat(extraForm.amount) || 0)).toLocaleString()}
@@ -1907,7 +2132,7 @@ export default function JobWorkspace() {
         </div>
       )}
 
-      {/* 7. Media Lightbox Modal (Requirement 8) */}
+      {/* 7. Media Lightbox Modal */}
       {lightboxMedia && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in">
           <div className="max-w-4xl w-full bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col max-h-[90vh]">
@@ -1927,25 +2152,39 @@ export default function JobWorkspace() {
             </div>
 
             <div className="flex-1 bg-black flex items-center justify-center relative min-h-[300px] overflow-hidden p-2">
+              {filteredMedia.length > 1 && (
+                <button
+                  onClick={handlePrevLightbox}
+                  disabled={lightboxIndex <= 0}
+                  className="absolute left-4 z-20 h-10 w-10 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center disabled:opacity-30 font-bold transition-all"
+                >
+                  ❮
+                </button>
+              )}
+
               {lightboxMedia.media_type === 'video' ? (
                 <video
-                  src={lightboxMedia.storage_path.startsWith('http') || lightboxMedia.storage_path.startsWith('data:')
-                    ? lightboxMedia.storage_path
-                    : supabase.storage.from('images').getPublicUrl(lightboxMedia.storage_path).data.publicUrl
-                  }
+                  src={mediaSignedUrls[lightboxMedia.id]?.url || lightboxMedia.storage_path}
                   controls
                   autoPlay
                   className="max-h-[70vh] w-auto max-w-full rounded-xl"
                 />
               ) : (
                 <img
-                  src={lightboxMedia.storage_path.startsWith('http') || lightboxMedia.storage_path.startsWith('data:')
-                    ? lightboxMedia.storage_path
-                    : supabase.storage.from('images').getPublicUrl(lightboxMedia.storage_path).data.publicUrl
-                  }
+                  src={mediaSignedUrls[lightboxMedia.id]?.url || lightboxMedia.storage_path}
                   alt={lightboxMedia.caption || "Job photo"}
                   className="max-h-[70vh] w-auto max-w-full object-contain rounded-xl"
                 />
+              )}
+
+              {filteredMedia.length > 1 && (
+                <button
+                  onClick={handleNextLightbox}
+                  disabled={lightboxIndex >= filteredMedia.length - 1}
+                  className="absolute right-4 z-20 h-10 w-10 rounded-full bg-black/60 hover:bg-black text-white flex items-center justify-center disabled:opacity-30 font-bold transition-all"
+                >
+                  ❯
+                </button>
               )}
             </div>
 

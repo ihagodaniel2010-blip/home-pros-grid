@@ -90,10 +90,23 @@ const LeadDetail = () => {
     }
   };
 
-  const copyExtraLink = (token: string) => {
-    const url = `${window.location.origin}/extra/${token}`;
-    navigator.clipboard.writeText(url);
-    toast.success("Extra link copied to clipboard!");
+  const copyExtraLink = async (extra: ServiceExtra) => {
+    let estToken: string | null = null;
+    if (serviceJob?.estimate_id) {
+      try {
+        const { data: est } = await supabase.from('estimates').select('public_token').eq('id', serviceJob.estimate_id).maybeSingle();
+        if (est?.public_token) estToken = est.public_token;
+      } catch (err) {}
+    }
+    if (estToken) {
+      navigator.clipboard.writeText(`${window.location.origin}/estimate/${estToken}#extras`);
+      toast.success("Extra link copied (unified client portal)!");
+    } else if (extra.public_token && !extra.public_token.startsWith('lead_') && !/^[0-9a-f]{8}-/i.test(extra.public_token)) {
+      navigator.clipboard.writeText(`${window.location.origin}/extra/${extra.public_token}`);
+      toast.success("Extra proposal link copied!");
+    } else {
+      toast.error("Could not resolve estimate public token for this extra.");
+    }
   };
 
   if (!lead) return (
@@ -425,9 +438,9 @@ const LeadDetail = () => {
                       }`}>
                         {extra.status}
                       </span>
-                      {extra.public_token && (
+                      {(extra.public_token || serviceJob?.estimate_id) && (
                         <button
-                          onClick={() => copyExtraLink(extra.public_token!)}
+                          onClick={() => copyExtraLink(extra)}
                           className="text-xs text-blue-600 hover:underline"
                         >
                           Copy Link

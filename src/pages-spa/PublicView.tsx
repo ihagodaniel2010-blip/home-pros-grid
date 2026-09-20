@@ -4,7 +4,7 @@ import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Es
 import { getServiceJobByEstimateId } from "@/lib/service-jobs";
 import { getServiceExtrasByJobId, getServiceExtrasByJobOrEstimateId, respondPublicServiceExtra, ServiceExtra } from "@/lib/service-extras";
 import { getExpenses, Expense } from "@/lib/expenses";
-import { getJobMediaRecords, ServiceJobMediaRecord } from "@/lib/job-media";
+import { getJobMediaRecords, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, FileText, Download, ShieldCheck, PenTool, CheckSquare, Square, AlertCircle, Plus, Eye, Tag, Receipt, Images } from "lucide-react";
@@ -17,8 +17,10 @@ const PublicView = () => {
     const { token } = useParams<{ token: string }>();
     const [estimate, setEstimate] = useState<Estimate | null>(null);
     const [extras, setExtras] = useState<ServiceExtra[]>([]);
+    const [extraMediaMap, setExtraMediaMap] = useState<Record<string, { record: ServiceExtraMediaRecord; url: string }[]>>({});
     const [clientMaterials, setClientMaterials] = useState<Expense[]>([]);
     const [clientMedia, setClientMedia] = useState<ServiceJobMediaRecord[]>([]);
+    const [clientMediaUrls, setClientMediaUrls] = useState<Record<string, string>>({});
     const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isApproving, setIsApproving] = useState(false);
@@ -38,11 +40,11 @@ const PublicView = () => {
 
     useEffect(() => {
         if (token) {
-            loadEstimate(token);
+            loadPublicData(token);
         }
     }, [token]);
 
-    const loadEstimate = async (tk: string) => {
+    const loadPublicData = async (tk: string) => {
         setIsLoading(true);
         const data = await getEstimateByToken(tk);
         if (data) {
@@ -71,7 +73,34 @@ const PublicView = () => {
                     ((job && e.service_job_id === job.id) || e.estimate_id === data.id) && 
                     (e.material_responsibility === 'client' || (e.material_responsibility === null && e.bill_to_client))
                 ));
-                setClientMedia((mediaList || []).filter(m => m.visible_to_client));
+                const visibleMedia = (mediaList || []).filter(m => m.visible_to_client);
+                setClientMedia(visibleMedia);
+
+                // Resolve signed URLs for visible client job media
+                const jobMediaUrlMap: Record<string, string> = {};
+                await Promise.all(visibleMedia.map(async (m) => {
+                    const resolved = await resolveSignedMediaUrl(m.storage_path);
+                    if (resolved) jobMediaUrlMap[m.id] = resolved;
+                }));
+                setClientMediaUrls(jobMediaUrlMap);
+
+                // Resolve extra media records
+                if (extrasList && extrasList.length > 0) {
+                    const exMap: Record<string, { record: ServiceExtraMediaRecord; url: string }[]> = {};
+                    await Promise.all(extrasList.map(async (ex) => {
+                        try {
+                            const records = await getExtraMediaRecords(ex.id);
+                            const resolvedList = await Promise.all(records.map(async (r) => {
+                                const url = await resolveSignedMediaUrl(r.storage_path);
+                                return { record: r, url: url || '' };
+                            }));
+                            exMap[ex.id] = resolvedList.filter(item => Boolean(item.url));
+                        } catch (mErr) {
+                            console.warn("Error fetching extra media for public view:", mErr);
+                        }
+                    }));
+                    setExtraMediaMap(exMap);
+                }
             } catch (err) {
                 console.warn("Could not load linked job details in Client Portal:", err);
             }
@@ -375,6 +404,21 @@ const PublicView = () => {
                                                     <span className="text-xl font-black text-purple-900">+${extra.amount.toLocaleString()}</span>
                                                 </div>
                                             </div>
+
+                                            {/* Attached Extra Photos/Videos */}
+                                            {extraMediaMap[extra.id] && extraMediaMap[extra.id].length > 0 && (
+                                                <div className="flex flex-wrap gap-2 pt-2 border-t border-purple-100">
+                                                    {extraMediaMap[extra.id].map(({ record: m, url }) => (
+                                                        <div key={m.id} className="relative group cursor-pointer" onClick={() => setSelectedMediaUrl(url)}>
+                                                            {m.media_type === 'video' ? (
+                                                                <video src={url} className="w-24 h-24 object-cover rounded-xl border border-purple-200" />
+                                                            ) : (
+                                                                <img src={url} alt={m.caption || "Extra photo"} className="w-24 h-24 object-cover rounded-xl border border-purple-200 font-bold" />
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
 
                                             {/* Interactive Approval for Pending Extra (Requirement 16 & 17) */}
                                             {extra.status === 'pending' && (
