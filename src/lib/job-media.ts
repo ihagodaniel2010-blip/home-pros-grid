@@ -39,11 +39,22 @@ export interface ServiceExtraMediaRecord {
     created_at: string;
 }
 
+export function autoCategorizePhoto(caption?: string, fileName?: string, projectType?: string): string {
+    const text = `${caption || ''} ${fileName || ''} ${projectType || ''}`.toLowerCase();
+    
+    if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(text)) return "Framing & Structure";
+    if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(text)) return "Roofing & Gutters";
+    if (/drywall|gesso|sheetrock|wall|parede|teto/i.test(text)) return "Drywall & Painting";
+    if (/siding|revestimento|facade|exterior|cladding/i.test(text)) return "Siding & Exterior";
+    if (/deck|porch|patio|varanda|decking|rail/i.test(text)) return "Decks & Patios";
+    if (/remodel|reforma|kitchen|bath|cozinha|banheiro|tile|flooring/i.test(text)) return "Remodeling";
+    return "Construction Progress";
+}
+
 /**
  * Uploads a job photo or video adhering to canonical path structure:
  * {organization_id}/jobs/{service_job_id}/photos/{uuid}.jpg
  * {organization_id}/jobs/{service_job_id}/videos/{uuid}.mp4
- * Default visibility: PRIVATE (`visible_to_client = false`, `visible_on_public_site = false`, `portfolio_approved = false`)
  */
 export async function uploadJobMediaRecord(params: {
     organization_id: string;
@@ -55,6 +66,9 @@ export async function uploadJobMediaRecord(params: {
     file_size_bytes: number;
     duration_seconds?: number;
     caption?: string;
+    visible_to_client?: boolean;
+    visible_on_public_site?: boolean;
+    portfolio_approved?: boolean;
 }): Promise<ServiceJobMediaRecord> {
     const payload = {
         organization_id: params.organization_id,
@@ -66,10 +80,10 @@ export async function uploadJobMediaRecord(params: {
         file_size_bytes: params.file_size_bytes,
         duration_seconds: params.duration_seconds || null,
         caption: params.caption || null,
-        visible_to_client: false,
-        visible_on_public_site: false,
-        portfolio_approved: false,
-        media_status: 'pending'
+        visible_to_client: params.visible_to_client ?? true,
+        visible_on_public_site: params.visible_on_public_site ?? true,
+        portfolio_approved: params.portfolio_approved ?? false,
+        media_status: params.portfolio_approved ? 'approved' : 'pending'
     };
 
     const { data, error } = await supabase

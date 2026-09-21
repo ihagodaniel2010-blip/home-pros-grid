@@ -86,6 +86,20 @@ const PublicView = () => {
         try {
             const amount = parseFloat(reportPaymentAmount);
             const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+
+            if (reportPaymentType === 'contract') {
+                if (amount > balanceDue + 0.01) {
+                    toast.error(`O valor informado ($${amount.toFixed(2)}) não pode ser maior que o saldo restante do contrato ($${balanceDue.toFixed(2)}).`);
+                    setIsSubmittingReportPayment(false);
+                    return;
+                }
+            } else if (reportPaymentType === 'material') {
+                if (amount > unpaidClientMaterials + 0.01) {
+                    toast.error(`O valor informado ($${amount.toFixed(2)}) não pode ser maior que o saldo devedor das notinhas ($${unpaidClientMaterials.toFixed(2)}).`);
+                    setIsSubmittingReportPayment(false);
+                    return;
+                }
+            }
             
             let fileAttachmentNote = "";
             if (reportPaymentFile) {
@@ -1061,10 +1075,13 @@ const PublicView = () => {
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
                                 <div>
                                     <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                                        <Receipt className="h-5 w-5 text-amber-600" /> Client Materials &amp; Purchases
+                                        <Receipt className="h-5 w-5 text-amber-600" /> Client Materials &amp; Purchases (Notinhas)
                                     </h2>
-                                    <p className="text-xs text-gray-500 mt-0.5">Purchases billed directly to client or requested for reimbursement.</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">Purchases billed directly to client or requested for reimbursement with receipt proof attached.</p>
                                 </div>
+                                <Button onClick={() => { setReportPaymentType('material'); setReportPaymentAmount(unpaidClientMaterials > 0 ? unpaidClientMaterials.toFixed(2) : ''); setIsReportPaymentOpen(true); }} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm gap-1.5 shrink-0">
+                                    <Plus className="h-4 w-4" /> Informar Pagamento das Notinhas
+                                </Button>
                             </div>
 
                             {/* Summary Cards */}
@@ -1086,40 +1103,51 @@ const PublicView = () => {
                             {clientMaterials.length === 0 ? (
                                 <p className="text-xs text-gray-400 italic">No client-billed materials logged for this project.</p>
                             ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-bold">
-                                                <th className="py-3">Vendor</th>
-                                                <th className="py-3">Description</th>
-                                                <th className="py-3">Date</th>
-                                                <th className="py-3 text-right">Amount</th>
-                                                <th className="py-3 text-center">Receipt</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50 font-medium">
-                                            {clientMaterials.map((mat) => (
-                                                <tr key={mat.id} className="hover:bg-gray-50/50">
-                                                    <td className="py-3.5 font-bold text-gray-900">{mat.vendor_name || "Supplier"}</td>
-                                                    <td className="py-3.5 text-gray-600">{mat.description}</td>
-                                                    <td className="py-3.5 text-gray-400">{new Date(mat.expense_date || mat.created_at).toLocaleDateString()}</td>
-                                                    <td className="py-3.5 text-right font-bold text-gray-900">${mat.amount.toFixed(2)}</td>
-                                                    <td className="py-3.5 text-center">
-                                                        {mat.receipt_url || mat.receipt_storage_path ? (
-                                                            <button onClick={async () => {
-                                                                const url = mat.receipt_storage_path ? await resolveSignedMediaUrl(mat.receipt_storage_path) : mat.receipt_url;
-                                                                if (url) setSelectedReceiptUrl(url);
-                                                            }} className="text-blue-600 font-bold hover:underline flex items-center justify-center gap-1 mx-auto">
-                                                                <Receipt className="h-3.5 w-3.5" /> View Receipt
-                                                            </button>
-                                                        ) : (
-                                                            <span className="text-gray-400">N/A</span>
-                                                        )}
-                                                    </td>
+                                <div className="space-y-6">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-bold">
+                                                    <th className="py-3">Vendor</th>
+                                                    <th className="py-3">Description</th>
+                                                    <th className="py-3">Date</th>
+                                                    <th className="py-3 text-right">Amount</th>
+                                                    <th className="py-3 text-center">Receipt Photo</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50 font-medium">
+                                                {clientMaterials.map((mat) => {
+                                                    const hasReceipt = Boolean(mat.receipt_url || mat.receipt_storage_path || (mat.receipt_files && mat.receipt_files.length > 0));
+                                                    
+                                                    return (
+                                                        <tr key={mat.id} className="hover:bg-gray-50/50">
+                                                            <td className="py-3.5 font-bold text-gray-900">{mat.vendor_name || mat.vendor || "Supplier"}</td>
+                                                            <td className="py-3.5 text-gray-600">{mat.description || mat.notes}</td>
+                                                            <td className="py-3.5 text-gray-400">{new Date(mat.expense_date || mat.receipt_date || mat.created_at).toLocaleDateString()}</td>
+                                                            <td className="py-3.5 text-right font-bold text-gray-900">${mat.amount.toFixed(2)}</td>
+                                                            <td className="py-3.5 text-center">
+                                                                {hasReceipt ? (
+                                                                    <button onClick={async () => {
+                                                                        let url = mat.receipt_url;
+                                                                        if (mat.receipt_storage_path) {
+                                                                            url = await resolveSignedMediaUrl(mat.receipt_storage_path);
+                                                                        } else if (mat.receipt_files && mat.receipt_files.length > 0) {
+                                                                            url = await resolveSignedMediaUrl(mat.receipt_files[0].storage_path);
+                                                                        }
+                                                                        if (url) setSelectedReceiptUrl(url);
+                                                                    }} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-200 transition-colors mx-auto text-[11px]">
+                                                                        <Receipt className="h-3.5 w-3.5 text-amber-600" /> Ver Comprovante
+                                                                    </button>
+                                                                ) : (
+                                                                    <span className="text-gray-400 italic text-[11px]">Sem foto</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             )}
                         </div>
