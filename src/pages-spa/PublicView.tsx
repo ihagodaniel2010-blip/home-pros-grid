@@ -33,6 +33,7 @@ const PublicView = () => {
     const [clientMaterials, setClientMaterials] = useState<Expense[]>([]);
     const [clientMedia, setClientMedia] = useState<ServiceJobMediaRecord[]>([]);
     const [clientMediaUrls, setClientMediaUrls] = useState<Record<string, string>>({});
+    const [materialReceiptUrls, setMaterialReceiptUrls] = useState<Record<string, string>>({});
     const [payments, setPayments] = useState<ClientPayment[]>([]);
     const [company, setCompany] = useState<CompanySettings | null>(null);
 
@@ -215,11 +216,26 @@ const PublicView = () => {
                 setExtras(extrasList || []);
 
                 // Filter ONLY Client Materials (never company materials)
-                setClientMaterials((allExpenses || []).filter(e => 
+                const filteredClientMats = (allExpenses || []).filter(e => 
                     ((job && e.service_job_id === job.id) || (data.id && e.estimate_id === data.id) || (data.lead_id && (e as any).related_lead_id === data.lead_id)) && 
                     (e.bill_to_client === true || e.material_responsibility === 'client') &&
                     e.material_responsibility !== 'company'
-                ));
+                );
+                setClientMaterials(filteredClientMats);
+
+                // Pre-resolve signed URLs for material receipts
+                const receiptUrlMap: Record<string, string> = {};
+                await Promise.all(filteredClientMats.map(async (mat) => {
+                    let path = mat.receipt_url || (mat as any).receipt_storage_path || (mat as any).storage_path;
+                    if (!path && mat.receipt_files && mat.receipt_files.length > 0) {
+                        path = mat.receipt_files[0].storage_path;
+                    }
+                    if (path) {
+                        const resolved = await resolveSignedMediaUrl(path);
+                        if (resolved) receiptUrlMap[mat.id] = resolved;
+                    }
+                }));
+                setMaterialReceiptUrls(receiptUrlMap);
 
                 // Filter ONLY Client-Visible Job Media (never admin-only media)
                 const visibleMedia = (mediaList || []).filter(m => m.visible_to_client);
@@ -1117,7 +1133,13 @@ const PublicView = () => {
                                             </thead>
                                             <tbody className="divide-y divide-gray-50 font-medium">
                                                 {clientMaterials.map((mat) => {
-                                                    const hasReceipt = Boolean(mat.receipt_url || mat.receipt_storage_path || (mat.receipt_files && mat.receipt_files.length > 0));
+                                                    const receiptUrl = materialReceiptUrls[mat.id] || mat.receipt_url;
+                                                    const hasReceipt = Boolean(
+                                                        receiptUrl || 
+                                                        (mat as any).receipt_storage_path || 
+                                                        (mat as any).storage_path || 
+                                                        (mat.receipt_files && mat.receipt_files.length > 0)
+                                                    );
                                                     
                                                     return (
                                                         <tr key={mat.id} className="hover:bg-gray-50/50">
@@ -1128,10 +1150,12 @@ const PublicView = () => {
                                                             <td className="py-3.5 text-center">
                                                                 {hasReceipt ? (
                                                                     <button onClick={async () => {
-                                                                        let url = mat.receipt_url;
-                                                                        if (mat.receipt_storage_path) {
-                                                                            url = await resolveSignedMediaUrl(mat.receipt_storage_path);
-                                                                        } else if (mat.receipt_files && mat.receipt_files.length > 0) {
+                                                                        let url = materialReceiptUrls[mat.id] || mat.receipt_url;
+                                                                        if (!url && (mat as any).receipt_storage_path) {
+                                                                            url = await resolveSignedMediaUrl((mat as any).receipt_storage_path);
+                                                                        } else if (!url && (mat as any).storage_path) {
+                                                                            url = await resolveSignedMediaUrl((mat as any).storage_path);
+                                                                        } else if (!url && mat.receipt_files && mat.receipt_files.length > 0) {
                                                                             url = await resolveSignedMediaUrl(mat.receipt_files[0].storage_path);
                                                                         }
                                                                         if (url) setSelectedReceiptUrl(url);

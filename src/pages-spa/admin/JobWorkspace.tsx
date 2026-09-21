@@ -377,6 +377,21 @@ export default function JobWorkspace() {
     };
   }, [expenses, partners]);
 
+  const clientMaterialsByPartner = useMemo(() => {
+    const map: Record<string, { partnerName: string; amount: number }> = {};
+    const clientMats = expenses.filter(e => e.bill_to_client === true || (e as any).material_responsibility === 'client');
+    for (const exp of clientMats) {
+      const payer = exp.paid_by_name || "Company Card / Other";
+      if (!map[payer]) {
+        map[payer] = { partnerName: payer, amount: 0 };
+      }
+      map[payer].amount += exp.amount || 0;
+    }
+    return Object.values(map);
+  }, [expenses]);
+
+  const [expenseSelectedFile, setExpenseSelectedFile] = useState<File | null>(null);
+
   const handleStartEditSettlement = (exp: Expense) => {
     setEditingExpense(exp);
     const payer = exp.paid_by_name || "Hugo Luiz Ferreira dos Santos";
@@ -898,7 +913,9 @@ export default function JobWorkspace() {
         client_reimbursement_status: expenseForm.billToClient ? "pending" : "not_billable",
         notes: `Job Expense for ${expenseForm.description}`,
         status: "active"
-      } as any);
+      } as any, expenseSelectedFile || undefined);
+
+      setExpenseSelectedFile(null);
 
       // Create bulk partner allocations if Company Material paid by Partner
       if (isCompanyMaterial && matchedPartner && created?.id) {
@@ -2068,6 +2085,23 @@ export default function JobWorkspace() {
                 </div>
               </div>
 
+              {/* Partner Breakdown for Client Materials (Requirement: Show total spent per partner for client materials) */}
+              {clientMaterialsByPartner.length > 0 && (
+                <div className="p-3.5 bg-amber-50/80 rounded-xl border border-amber-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-3 font-semibold text-amber-950">
+                    <span className="font-bold text-amber-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <User className="h-4 w-4 text-amber-600" /> Total Pago por Sócio em Materiais do Cliente:
+                    </span>
+                    {clientMaterialsByPartner.map(p => (
+                      <div key={p.partnerName} className="bg-white px-3 py-1 rounded-lg border border-amber-200 shadow-2xs flex items-center gap-2">
+                        <span className="text-gray-700">{p.partnerName}:</span>
+                        <span className="font-black text-amber-900 text-sm">${p.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {expenses.filter(e => e.bill_to_client).length === 0 ? (
                 <p className="text-xs text-gray-400 italic">No client-billed materials logged for this job yet.</p>
               ) : (
@@ -2135,10 +2169,26 @@ export default function JobWorkspace() {
                   </h3>
                   <p className="text-xs text-gray-500">Internal company job expenses used for job cost profitability & partner accounting.</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge className="bg-purple-100 text-purple-900 font-bold text-xs px-3 py-1">
                     Company Job Cost: ${financialSummary.companyMaterialsCost.toLocaleString()}
                   </Badge>
+                  <Button
+                    onClick={() => {
+                      setSettlementForm({
+                        payerName: partnerAccountingSummary.netOwedFrom || "Hugo Luiz Ferreira dos Santos",
+                        receiverName: partnerAccountingSummary.netOwedTo || "Adelmo Ferreira dos Santos",
+                        amount: partnerAccountingSummary.netOwedAmount > 0 ? partnerAccountingSummary.netOwedAmount.toFixed(2) : "",
+                        date: new Date().toISOString().slice(0, 10),
+                        paymentMethod: "zelle",
+                        notes: ""
+                      });
+                      setIsPartnerSettlementOpen(true);
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 shadow-sm gap-1.5"
+                  >
+                    <DollarSign className="h-4 w-4" /> Registrar Baixa entre Sócios
+                  </Button>
                   <Button onClick={() => { setExpenseForm(prev => ({ ...prev, billToClient: false, reimbursableToOwner: true })); setIsAddExpenseOpen(true); }} className="bg-[#0b2a4a] text-white font-bold text-xs h-9">
                     <Plus className="h-3.5 w-3.5 mr-1" /> + Add Company Material
                   </Button>
@@ -2577,17 +2627,28 @@ export default function JobWorkspace() {
 
               {/* Mobile-First Receipt Photo Capture (Requirement 13 & 28) */}
               <div className="pt-2 border-t border-gray-100 space-y-2">
-                <Label className="font-bold text-gray-700 block">Receipt Attachment (Mobile Options)</Label>
+                <Label className="font-bold text-gray-700 block">Comprovante / Recibo do Material (Foto / PDF)</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl border border-blue-200 text-[11px] hover:bg-blue-100">
-                    📷 Take Receipt Photo
-                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleMediaFileSelect} />
+                    📷 Tirar Foto (Câmera)
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => {
+                      if (e.target.files?.[0]) setExpenseSelectedFile(e.target.files[0]);
+                    }} />
                   </label>
                   <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2.5 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 text-[11px] hover:bg-gray-100">
-                    🖼️ Choose File / PDF
-                    <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleMediaFileSelect} />
+                    🖼️ Carregar Imagem / PDF
+                    <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => {
+                      if (e.target.files?.[0]) setExpenseSelectedFile(e.target.files[0]);
+                    }} />
                   </label>
                 </div>
+
+                {expenseSelectedFile && (
+                  <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 font-bold text-xs flex items-center justify-between shadow-xs">
+                    <span className="truncate max-w-[240px]">📎 Recibo Anexado: {expenseSelectedFile.name}</span>
+                    <button type="button" onClick={() => setExpenseSelectedFile(null)} className="text-red-500 font-bold hover:text-red-700 ml-2">✕</button>
+                  </div>
+                )}
               </div>
             </div>
 
