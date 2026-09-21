@@ -4,7 +4,8 @@ import {
   ArrowLeft, Clock, Save, FileText, User, Mail, Phone, MapPin, CheckCircle2,
   MoreHorizontal, Images, Wrench, UserCheck, DollarSign, Plus, Download, Copy,
   Printer, ShieldCheck, PenTool, Calendar, AlertCircle, Sparkles, ExternalLink,
-  ChevronRight, Eye, EyeOff, Globe, Tag, CreditCard, Receipt, FileCheck, Building2
+  ChevronRight, Eye, EyeOff, Globe, Tag, CreditCard, Receipt, FileCheck, Building2,
+  Pencil, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { getEstimateById, Estimate } from "@/lib/estimates";
 import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra, extractMediaFromText } from "@/lib/service-extras";
 import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, deleteJobMediaRecord, resolveSignedMediaUrl, uploadExtraMediaRecord, ServiceJobMediaRecord } from "@/lib/job-media";
-import { getExpenses, createExpense, Expense, updateExpense } from "@/lib/expenses";
+import { getExpenses, createExpense, Expense, updateExpense, deleteExpense } from "@/lib/expenses";
 import { getClientPayments, createClientPayment, ClientPayment } from "@/lib/client-payments";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
 import { getOrganizationPartners, OrganizationPartner } from "@/lib/partners";
@@ -61,6 +62,7 @@ export default function JobWorkspace() {
   const [isCountersignOpen, setIsCountersignOpen] = useState(false);
   const [isAddExtraOpen, setIsAddExtraOpen] = useState(false);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [isAddMediaOpen, setIsAddMediaOpen] = useState(false);
 
   // Action Loading States
@@ -533,6 +535,34 @@ export default function JobWorkspace() {
     }
   };
 
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!confirm("Are you sure you want to delete this material record?")) return;
+    try {
+      await deleteExpense(expenseId);
+      setExpenses(prev => prev.filter(e => e.id !== expenseId));
+      toast.success("Material deleted successfully!");
+      loadJobWorkspace();
+    } catch (err: any) {
+      console.error("Delete expense error:", err);
+      toast.error("Failed to delete material.");
+    }
+  };
+
+  const handleStartEditExpense = (exp: Expense) => {
+    setEditingExpense(exp);
+    setExpenseForm({
+      description: exp.notes?.replace("Job Expense for ", "") || exp.vendor || "",
+      vendor: exp.vendor || "",
+      amount: exp.amount ? String(exp.amount) : "",
+      receiptDate: exp.receipt_date || new Date().toISOString().slice(0, 10),
+      paidByName: exp.paid_by_name || user?.name || "Hugo Manager",
+      paymentSource: exp.payment_source || "owner_personal",
+      reimbursableToOwner: exp.reimbursable_to_owner,
+      billToClient: exp.bill_to_client
+    });
+    setIsAddExpenseOpen(true);
+  };
+
   const handleAddExpenseSubmit = async () => {
     if (!job || !expenseForm.description.trim() || !expenseForm.amount) {
       toast.error("Description and Amount are required.");
@@ -543,6 +573,25 @@ export default function JobWorkspace() {
     try {
       const amount = parseFloat(expenseForm.amount);
       const isCompanyMaterial = !expenseForm.billToClient;
+
+      if (editingExpense) {
+        const updated = await updateExpense(editingExpense.id, {
+          amount,
+          vendor: expenseForm.vendor.trim() || "Supplier",
+          receipt_date: expenseForm.receiptDate,
+          paid_by_name: expenseForm.paidByName,
+          material_responsibility: isCompanyMaterial ? "company" : "client",
+          reimbursable_to_owner: expenseForm.reimbursableToOwner,
+          bill_to_client: expenseForm.billToClient,
+          notes: `Job Expense for ${expenseForm.description}`
+        });
+        setExpenses(prev => prev.map(e => e.id === editingExpense.id ? { ...e, ...updated } : e));
+        setEditingExpense(null);
+        setIsAddExpenseOpen(false);
+        toast.success("Material updated successfully!");
+        loadJobWorkspace();
+        return;
+      }
 
       // Find partner matching paidByName if paid personally by partner
       const matchedPartner = partners.find(p => 
@@ -614,8 +663,8 @@ export default function JobWorkspace() {
         receiptDate: new Date().toISOString().slice(0, 10),
         paidByName: user?.name || "Hugo Manager",
         paymentSource: "owner_personal",
-        reimbursableToOwner: true,
-        billToClient: false
+        reimbursableToOwner: false,
+        billToClient: true
       });
       setActiveTab("materials");
       toast.success(isCompanyMaterial ? "Company Material & Partner Allocations logged!" : "Client Material logged successfully!");
@@ -1584,8 +1633,9 @@ export default function JobWorkspace() {
                         <th className="p-3">Date</th>
                         <th className="p-3">Vendor</th>
                         <th className="p-3">Who Paid</th>
-                        <th className="p-3">Client Status</th>
+                        <th className="p-3">Payment Status</th>
                         <th className="p-3 text-right">Amount</th>
+                        <th className="p-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-amber-100/80">
@@ -1595,11 +1645,33 @@ export default function JobWorkspace() {
                           <td className="p-3 font-bold text-gray-900">{mat.vendor}</td>
                           <td className="p-3 text-gray-600">{mat.paid_by_name || "Company Account"}</td>
                           <td className="p-3">
-                            <Badge className="bg-amber-100 text-amber-900 capitalize font-bold text-[10px]">
-                              {mat.client_reimbursement_status || "pending"}
+                            <Badge className={mat.client_reimbursement_status === 'paid' ? "bg-emerald-100 text-emerald-800 font-bold text-[10px]" : "bg-amber-100 text-amber-800 font-bold text-[10px]"}>
+                              {mat.client_reimbursement_status === 'paid' ? "Paid by Client" : "Billed to Client"}
                             </Badge>
                           </td>
                           <td className="p-3 text-right font-bold text-amber-900 text-sm">${mat.amount.toLocaleString()}</td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleStartEditExpense(mat)}
+                                className="h-7 w-7 p-0 text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                                title="Edit Material"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteExpense(mat.id)}
+                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Delete Material"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1622,7 +1694,7 @@ export default function JobWorkspace() {
                   <Badge className="bg-purple-100 text-purple-900 font-bold text-xs px-3 py-1">
                     Company Job Cost: ${financialSummary.companyMaterialsCost.toLocaleString()}
                   </Badge>
-                  <Button onClick={() => setIsAddExpenseOpen(true)} className="bg-[#0b2a4a] text-white font-bold text-xs h-9">
+                  <Button onClick={() => { setExpenseForm(prev => ({ ...prev, billToClient: false, reimbursableToOwner: true })); setIsAddExpenseOpen(true); }} className="bg-[#0b2a4a] text-white font-bold text-xs h-9">
                     <Plus className="h-3.5 w-3.5 mr-1" /> + Add Company Material
                   </Button>
                 </div>
@@ -1640,6 +1712,7 @@ export default function JobWorkspace() {
                         <th className="p-3">Who Paid</th>
                         <th className="p-3">Economic Allocation (50/50)</th>
                         <th className="p-3 text-right">Net Amount</th>
+                        <th className="p-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -1657,6 +1730,28 @@ export default function JobWorkspace() {
                                 : `Company Card ($${exp.amount.toFixed(2)})`}
                             </td>
                             <td className="p-3 text-right font-bold text-gray-900 text-sm">${exp.amount.toLocaleString()}</td>
+                            <td className="p-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleStartEditExpense(exp)}
+                                  className="h-7 w-7 p-0 text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                                  title="Edit Material"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteExpense(exp.id)}
+                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Delete Material"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </td>
                           </tr>
                         );
                       })}

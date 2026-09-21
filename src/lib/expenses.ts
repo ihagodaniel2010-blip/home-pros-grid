@@ -186,6 +186,18 @@ export async function updateExpense(id: string, updates: Partial<Expense>): Prom
   return data as Expense;
 }
 
+export async function deleteExpense(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("receipts")
+    .update({ status: "deleted" })
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error deleting expense:", error);
+    throw error;
+  }
+}
+
 export async function getReceiptFileUrl(storagePath: string): Promise<string> {
   const { data, error } = await supabase.storage
     .from("receipts")
