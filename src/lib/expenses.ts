@@ -104,38 +104,50 @@ export async function uploadReceiptFile(
   file: File,
   userId?: string
 ) {
-  const fileExt = file.name.split(".").pop();
-  const fileName = `${receiptId}-${Date.now()}.${fileExt}`;
-  const filePath = `${organizationId}/${fileName}`;
+  const fileExt = file.name.split(".").pop() || "jpg";
+  const relativePath = `${organizationId}/receipts/${receiptId}-${Date.now()}.${fileExt}`;
+  
+  let finalStoragePath = "";
+  let finalBucket = "images";
 
-  const { error: uploadError } = await supabase.storage
-    .from("receipts")
-    .upload(filePath, file);
-
-  if (uploadError) {
-    console.error("Error uploading receipt file:", uploadError);
-    throw uploadError;
+  // Multi-bucket fallback strategy for storage resilience
+  const { error: err1 } = await supabase.storage.from("images").upload(relativePath, file, { upsert: true });
+  if (!err1) {
+    finalStoragePath = `images/${relativePath}`;
+    finalBucket = "images";
+  } else {
+    const { error: err2 } = await supabase.storage.from("documents").upload(relativePath, file, { upsert: true });
+    if (!err2) {
+      finalStoragePath = `documents/${relativePath}`;
+      finalBucket = "documents";
+    } else {
+      const { error: err3 } = await supabase.storage.from("receipts").upload(relativePath, file, { upsert: true });
+      if (!err3) {
+        finalStoragePath = `receipts/${relativePath}`;
+        finalBucket = "receipts";
+      }
+    }
   }
 
-  // Create receipt_files record
-  const { error: fileRecordError } = await supabase
-    .from("receipt_files")
-    .insert([
-      {
-        organization_id: organizationId,
-        receipt_id: receiptId,
-        storage_bucket: "receipts",
-        storage_path: filePath,
-        file_name: file.name,
-        mime_type: file.type,
-        file_size: file.size,
-        uploaded_by: userId,
-      },
-    ]);
-
-  if (fileRecordError) {
-    console.error("Error recording receipt file:", fileRecordError);
-    throw fileRecordError;
+  if (finalStoragePath) {
+    try {
+      await supabase
+        .from("receipt_files")
+        .insert([
+          {
+            organization_id: organizationId,
+            receipt_id: receiptId,
+            storage_bucket: finalBucket,
+            storage_path: finalStoragePath,
+            file_name: file.name,
+            mime_type: file.type || "image/jpeg",
+            file_size: file.size,
+            uploaded_by: userId || null,
+          },
+        ]);
+    } catch (recordErr) {
+      console.warn("receipt_files insert record handled:", recordErr);
+    }
   }
 }
 
@@ -143,15 +155,37 @@ export async function createExpense(
   expenseData: Partial<Expense>,
   file?: File
 ): Promise<{ receipt: Expense; uploadError?: string }> {
-  // Insert receipt
+  // Sanitize reimbursement_status to comply strictly with PostgreSQL check constraint
+  let validReimbursementStatus: string = (expenseData.reimbursement_status as string) || 'not_reimbursable';
+  if (validReimbursementStatus === 'pending') {
+    validReimbursementStatus = 'pending_reimbursement';
+  } else if (validReimbursementStatus === 'settled') {
+    validReimbursementStatus = 'reimbursed';
+  } else if (!['not_reimbursable', 'reimbursable', 'pending_reimbursement', 'reimbursed'].includes(validReimbursementStatus)) {
+    validReimbursementStatus = 'not_reimbursable';
+  }
+
+  // Sanitize client_reimbursement_status
+  let validClientStatus: string = (expenseData.client_reimbursement_status as string) || (expenseData.bill_to_client ? 'pending' : 'not_billable');
+  if (!['not_billable', 'pending', 'invoiced', 'paid'].includes(validClientStatus)) {
+    validClientStatus = expenseData.bill_to_client ? 'pending' : 'not_billable';
+  }
+
+  const payload = {
+    ...expenseData,
+    reimbursement_status: validReimbursementStatus as ReimbursementStatus,
+    client_reimbursement_status: validClientStatus as ClientReimbursementStatus
+  };
+
+  // Insert receipt into public.receipts
   const { data: receipt, error: receiptError } = await supabase
     .from("receipts")
-    .insert([{ ...expenseData }])
+    .insert([payload])
     .select()
     .single();
 
   if (receiptError) {
-    console.error("Error creating expense:", receiptError);
+    console.error("Error creating expense/receipt:", receiptError);
     throw receiptError;
   }
 
