@@ -64,6 +64,20 @@ export default function JobWorkspace() {
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [isAddMediaOpen, setIsAddMediaOpen] = useState(false);
+  const [isPartnerSettlementOpen, setIsPartnerSettlementOpen] = useState(false);
+  const [isCompanyMaterialsModalOpen, setIsCompanyMaterialsModalOpen] = useState(false);
+  const [isSavingSettlement, setIsSavingSettlement] = useState(false);
+
+  const [settlementForm, setSettlementForm] = useState({
+    payerName: "",
+    receiverName: "",
+    amount: "",
+    date: new Date().toISOString().slice(0, 10),
+    paymentMethod: "zelle",
+    notes: ""
+  });
+  const [settlementFile, setSettlementFile] = useState<File | null>(null);
+  const [settlementFileUrl, setSettlementFileUrl] = useState<string | null>(null);
 
   // Action Loading States
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -272,6 +286,130 @@ export default function JobWorkspace() {
       profitMargin
     };
   }, [estimate, extras, expenses, payments]);
+
+  // Derived Partner Accounting Breakdown (Requirements for Hugo vs Partner 50/50)
+  const partnerAccountingSummary = useMemo(() => {
+    const companyExpenses = expenses.filter(
+      e => !e.bill_to_client && (e as any).material_responsibility !== 'client' && e.status !== 'deleted' && e.expense_category !== 'partner_reimbursement'
+    );
+
+    const totalsByPartner: Record<string, number> = {};
+    companyExpenses.forEach(exp => {
+      const name = exp.paid_by_name?.trim() || "Company Account";
+      totalsByPartner[name] = (totalsByPartner[name] || 0) + (exp.amount || 0);
+    });
+
+    const totalCompanyCost = companyExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
+
+    const activePartners = partners.filter(p => p.active !== false);
+    const hugoName = activePartners.find(p => p.name.toLowerCase().includes("hugo"))?.name || "Hugo Luiz Ferreira dos Santos";
+    const partner2Name = activePartners.find(p => !p.name.toLowerCase().includes("hugo"))?.name || "Adelmo Partner";
+
+    const hugoPaid = Object.entries(totalsByPartner)
+      .filter(([name]) => name.toLowerCase().includes("hugo"))
+      .reduce((sum, [, amt]) => sum + amt, 0);
+
+    const partner2Paid = Object.entries(totalsByPartner)
+      .filter(([name]) => !name.toLowerCase().includes("hugo") && name !== "Company Account")
+      .reduce((sum, [, amt]) => sum + amt, 0);
+
+    const companyCardPaid = totalsByPartner["Company Account"] || 0;
+
+    // Calculate settlements ("baixas")
+    const settlementRecords = expenses.filter(
+      e => e.expense_category === 'partner_reimbursement' || (e as any).reimbursement_status === 'settled'
+    );
+    const totalSettledAmount = settlementRecords.reduce((acc, e) => acc + (e.amount || 0), 0);
+
+    // Target equalization out-of-pocket (50/50 split of out-of-pocket partner advances)
+    const outOfPocketDiff = hugoPaid - partner2Paid;
+    const targetTransfer = outOfPocketDiff / 2; // amount to equalize 50/50
+
+    let netOwedFrom = "";
+    let netOwedTo = "";
+    let netOwedAmount = 0;
+
+    if (targetTransfer > 0) {
+      netOwedFrom = partner2Name;
+      netOwedTo = hugoName;
+      netOwedAmount = Math.max(0, targetTransfer - totalSettledAmount);
+    } else if (targetTransfer < 0) {
+      netOwedFrom = hugoName;
+      netOwedTo = partner2Name;
+      netOwedAmount = Math.max(0, Math.abs(targetTransfer) - totalSettledAmount);
+    }
+
+    const isSettled = netOwedAmount <= 0.01;
+
+    return {
+      companyExpenses,
+      totalsByPartner,
+      totalCompanyCost,
+      hugoPaid,
+      partner2Paid,
+      companyCardPaid,
+      settlementRecords,
+      totalSettledAmount,
+      hugoName,
+      partner2Name,
+      netOwedFrom,
+      netOwedTo,
+      netOwedAmount,
+      isSettled
+    };
+  }, [expenses, partners]);
+
+  const handleSettlementSubmit = async () => {
+    if (!job || !settlementForm.amount || parseFloat(settlementForm.amount) <= 0) {
+      toast.error("Please enter a valid settlement amount.");
+      return;
+    }
+
+    setIsSavingSettlement(true);
+    try {
+      const amount = parseFloat(settlementForm.amount);
+      const { receipt: created } = await createExpense({
+        organization_id: orgId,
+        service_job_id: job.id,
+        estimate_id: job.estimate_id || estimate?.id || null,
+        amount,
+        vendor: `Partner Settlement (${settlementForm.payerName} -> ${settlementForm.receiverName})`,
+        receipt_date: settlementForm.date,
+        expense_category: "partner_reimbursement",
+        payment_method: settlementForm.paymentMethod as any,
+        payment_source: "partner_personal",
+        paid_by_name: settlementForm.payerName,
+        bill_to_client: false,
+        material_responsibility: "company",
+        reimbursement_status: "settled",
+        notes: `Partner Reimbursement Settlement (Baixa Realizada): ${settlementForm.notes || 'Settled'}`,
+        status: "active"
+      } as any, settlementFile || undefined);
+
+      if (created) {
+        setExpenses(prev => [created, ...prev]);
+      }
+
+      setIsPartnerSettlementOpen(false);
+      setSettlementForm({
+        payerName: "",
+        receiverName: "",
+        amount: "",
+        date: new Date().toISOString().slice(0, 10),
+        paymentMethod: "zelle",
+        notes: ""
+      });
+      setSettlementFile(null);
+      setSettlementFileUrl(null);
+      toast.success("Partner settlement logged & balance updated (Baixa realizada)!");
+      loadJobWorkspace();
+    } catch (err: any) {
+      console.error("Settlement error:", err);
+      toast.error("Failed to register partner settlement.");
+    } finally {
+      setIsSavingSettlement(false);
+    }
+  };
 
   // Action Handlers
   const handleUpdateJobStatus = async (newStatus: "scheduled" | "in_progress" | "completed") => {
@@ -1136,6 +1274,107 @@ export default function JobWorkspace() {
                     + Photo
                   </Button>
                 </div>
+              </div>
+            </div>
+
+            {/* PARTNER COMPANY MATERIALS ACCOUNTING CARD (Requirements: Hugo & Adelmo 50/50 Split & Baixas) */}
+            <div className="bg-white rounded-2xl border border-purple-200 p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100 pb-3">
+                <div>
+                  <h3 className="font-bold text-[#0b2a4a] text-base flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-purple-600" />
+                    Company Material &amp; Job Costs — Partner Accounting (50/50 Split)
+                  </h3>
+                  <p className="text-xs text-gray-500">Internal company job costs paid out-of-pocket by partners, split 50/50.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-purple-100 text-purple-900 font-bold text-xs px-3 py-1">
+                    Total Company Job Cost: ${partnerAccountingSummary.totalCompanyCost.toLocaleString()}
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsCompanyMaterialsModalOpen(true)}
+                    className="text-xs font-bold border-purple-200 text-purple-800 hover:bg-purple-50"
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" /> View Material Items
+                  </Button>
+                </div>
+              </div>
+
+              {/* Partner Totals Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200 space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-blue-800 tracking-wider">
+                    {partnerAccountingSummary.hugoName} Paid
+                  </span>
+                  <p className="text-xl font-black text-blue-950">${partnerAccountingSummary.hugoPaid.toFixed(2)}</p>
+                  <p className="text-[10px] text-blue-700">Out-of-pocket advanced</p>
+                </div>
+                <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200 space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-purple-800 tracking-wider">
+                    {partnerAccountingSummary.partner2Name} Paid
+                  </span>
+                  <p className="text-xl font-black text-purple-950">${partnerAccountingSummary.partner2Paid.toFixed(2)}</p>
+                  <p className="text-[10px] text-purple-700">Out-of-pocket advanced</p>
+                </div>
+                <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-slate-700 tracking-wider">Company Card/Account</span>
+                  <p className="text-xl font-black text-slate-900">${partnerAccountingSummary.companyCardPaid.toFixed(2)}</p>
+                  <p className="text-[10px] text-slate-500">Corporate company card</p>
+                </div>
+              </div>
+
+              {/* Partner Settlement Status & Baixa Action */}
+              <div className="pt-2">
+                {partnerAccountingSummary.netOwedAmount > 0 ? (
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-amber-500 text-white font-bold text-[10px] uppercase">
+                          Pending Partner Settlement
+                        </Badge>
+                        <span className="text-xs font-bold text-amber-950">
+                          {partnerAccountingSummary.netOwedFrom} owes {partnerAccountingSummary.netOwedTo}:
+                        </span>
+                        <span className="text-base font-black text-amber-900">${partnerAccountingSummary.netOwedAmount.toFixed(2)}</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800">
+                        Equalization required to balance out-of-pocket job material expenses 50/50.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setSettlementForm({
+                          payerName: partnerAccountingSummary.netOwedFrom,
+                          receiverName: partnerAccountingSummary.netOwedTo,
+                          amount: partnerAccountingSummary.netOwedAmount.toFixed(2),
+                          date: new Date().toISOString().slice(0, 10),
+                          paymentMethod: "zelle",
+                          notes: ""
+                        });
+                        setIsPartnerSettlementOpen(true);
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 h-9 shadow-sm shrink-0 gap-1.5"
+                    >
+                      <DollarSign className="h-4 w-4" /> Registrar Baixa / Pay Partner
+                    </Button>
+                  </div>
+                ) : partnerAccountingSummary.totalCompanyCost > 0 ? (
+                  <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs font-bold text-emerald-900">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      <span>Partner Materials 100% Equalized &amp; Settled (Baixa Efetuada)</span>
+                    </div>
+                    {partnerAccountingSummary.settlementRecords.length > 0 && (
+                      <Badge className="bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                        {partnerAccountingSummary.settlementRecords.length} Settlement(s) Logged
+                      </Badge>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No internal company material expenses recorded for this job yet.</p>
+                )}
               </div>
             </div>
 
@@ -2360,6 +2599,214 @@ export default function JobWorkspace() {
                   Close Lightbox
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PARTNER SETTLEMENT MODAL (FAZER BAIXA DE MATERIAL / EXTRA) */}
+      {isPartnerSettlementOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-base text-[#0b2a4a] flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-600" />
+                Registrar Baixa de Material (Partner Settlement)
+              </h3>
+              <button onClick={() => setIsPartnerSettlementOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 font-medium space-y-1">
+                <p className="font-bold">Baixa de Ajuste entre Sócios (50/50)</p>
+                <p className="text-[11px] text-amber-800">
+                  Lançar o pagamento efetuado para zerar o saldo de materiais do projeto.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Quem Pagou (Payer)</Label>
+                  <Input
+                    value={settlementForm.payerName}
+                    onChange={e => setSettlementForm({ ...settlementForm, payerName: e.target.value })}
+                    placeholder="Quem enviou o dinheiro"
+                  />
+                </div>
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Quem Recebeu (Receiver)</Label>
+                  <Input
+                    value={settlementForm.receiverName}
+                    onChange={e => setSettlementForm({ ...settlementForm, receiverName: e.target.value })}
+                    placeholder="Quem recebeu o pagamento"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Valor do Pagamento ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={settlementForm.amount}
+                    onChange={e => setSettlementForm({ ...settlementForm, amount: e.target.value })}
+                    placeholder="0.00"
+                    className="font-bold text-emerald-700"
+                  />
+                </div>
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Data do Pagamento</Label>
+                  <Input
+                    type="date"
+                    value={settlementForm.date}
+                    onChange={e => setSettlementForm({ ...settlementForm, date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="font-bold text-gray-700 block mb-1">Método de Pagamento</Label>
+                <select
+                  value={settlementForm.paymentMethod}
+                  onChange={e => setSettlementForm({ ...settlementForm, paymentMethod: e.target.value })}
+                  className="w-full h-10 px-3 rounded-xl border border-gray-200 text-xs bg-white font-medium"
+                >
+                  <option value="zelle">Zelle Transfer</option>
+                  <option value="venmo">Venmo</option>
+                  <option value="cash">Dinheiro em Espécie (Cash)</option>
+                  <option value="check">Cheque (Check)</option>
+                  <option value="bank_transfer">Transferência Bancária</option>
+                  <option value="card">Cartão</option>
+                </select>
+              </div>
+
+              {/* Camera Photo Capture / Upload for Proof */}
+              <div className="pt-2 border-t border-gray-100 space-y-2">
+                <Label className="font-bold text-gray-700 block">Comprovante / Recibo do Pagamento</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl border border-blue-200 text-[11px] hover:bg-blue-100 text-center">
+                    📷 Tirar Foto (Câmera)
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setSettlementFile(file);
+                          setSettlementFileUrl(URL.createObjectURL(file));
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2.5 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 text-[11px] hover:bg-gray-100 text-center">
+                    🖼️ Carregar Imagem
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setSettlementFile(file);
+                          setSettlementFileUrl(URL.createObjectURL(file));
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                {settlementFileUrl && (
+                  <div className="w-24 h-24 rounded-xl overflow-hidden border border-gray-200 mt-2">
+                    <img src={settlementFileUrl} alt="Comprovante" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <Label className="font-bold text-gray-700 block mb-1">Observações / Referência</Label>
+                <textarea
+                  rows={2}
+                  value={settlementForm.notes}
+                  onChange={e => setSettlementForm({ ...settlementForm, notes: e.target.value })}
+                  placeholder="Ex: Baixa do saldo de materiais referente às compras no Home Depot."
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+              <Button variant="outline" size="sm" onClick={() => setIsPartnerSettlementOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={handleSettlementSubmit}
+                disabled={isSavingSettlement || !settlementForm.amount}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+              >
+                {isSavingSettlement ? "Registrando Baixa..." : "Confirmar Baixa"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ITEMIZED COMPANY MATERIALS MODAL */}
+      {isCompanyMaterialsModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl animate-in fade-in max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-base text-[#0b2a4a] flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-purple-600" />
+                Company Materials &amp; Job Costs Breakdown
+              </h3>
+              <button onClick={() => setIsCompanyMaterialsModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 bg-purple-50 p-3 rounded-xl border border-purple-100">
+                <div>
+                  <span className="text-[10px] font-bold text-purple-700 uppercase">Total Company Cost</span>
+                  <p className="text-lg font-black text-purple-900">${partnerAccountingSummary.totalCompanyCost.toFixed(2)}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-purple-700 uppercase">Equalized Partner Share (50/50)</span>
+                  <p className="text-lg font-black text-purple-900">${(partnerAccountingSummary.totalCompanyCost / 2).toFixed(2)} each</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-bold text-gray-900 text-xs">All Company Material Expenses Logged:</h4>
+                {partnerAccountingSummary.companyExpenses.length === 0 ? (
+                  <p className="text-gray-400 italic">No company materials logged for this job.</p>
+                ) : (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50 border-b border-gray-200 font-bold text-gray-600 uppercase">
+                        <tr>
+                          <th className="p-2.5">Date</th>
+                          <th className="p-2.5">Vendor</th>
+                          <th className="p-2.5">Paid By</th>
+                          <th className="p-2.5 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {partnerAccountingSummary.companyExpenses.map(exp => (
+                          <tr key={exp.id}>
+                            <td className="p-2.5 font-semibold text-gray-900">{new Date(exp.receipt_date).toLocaleDateString()}</td>
+                            <td className="p-2.5 font-medium text-gray-900">{exp.vendor}</td>
+                            <td className="p-2.5 font-bold text-purple-700">{exp.paid_by_name || "Company Account"}</td>
+                            <td className="p-2.5 text-right font-bold text-gray-900">${exp.amount.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-gray-100">
+              <Button variant="outline" size="sm" onClick={() => setIsCompanyMaterialsModalOpen(false)}>Fechar</Button>
             </div>
           </div>
         </div>
