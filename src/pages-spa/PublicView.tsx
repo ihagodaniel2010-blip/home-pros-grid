@@ -117,7 +117,8 @@ const PublicView = () => {
                 // Filter ONLY Client Materials (never company materials)
                 setClientMaterials((allExpenses || []).filter(e => 
                     ((job && e.service_job_id === job.id) || e.estimate_id === data.id) && 
-                    (e.material_responsibility === 'client' || (e.material_responsibility === null && e.bill_to_client))
+                    (e.bill_to_client === true || e.material_responsibility === 'client') &&
+                    e.material_responsibility !== 'company'
                 ));
 
                 // Filter ONLY Client-Visible Job Media (never admin-only media)
