@@ -4,7 +4,7 @@ import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Es
 import { getServiceJobByEstimateId } from "@/lib/service-jobs";
 import { getServiceExtrasByJobId, getServiceExtrasByJobOrEstimateId, respondPublicServiceExtra, ServiceExtra, cleanReasonForDisplay } from "@/lib/service-extras";
 import { getExpenses, Expense } from "@/lib/expenses";
-import { getClientPayments, ClientPayment } from "@/lib/client-payments";
+import { getClientPayments, ClientPayment, createClientPayment } from "@/lib/client-payments";
 import { getJobMediaRecords, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import SignaturePad from "@/components/common/SignaturePad";
-import { generateProfessionalPDF, generateChangeOrderPDF } from "@/lib/pdf-generator";
+import { generateProfessionalPDF, generateChangeOrderPDF, generatePaymentCancellationPDF } from "@/lib/pdf-generator";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
 
 const PublicView = () => {
@@ -64,6 +64,86 @@ const PublicView = () => {
     const [signerEmail, setSignerEmail] = useState("");
     const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
+
+    // Client Report Payment Modal State
+    const [isReportPaymentOpen, setIsReportPaymentOpen] = useState(false);
+    const [reportPaymentType, setReportPaymentType] = useState<'contract' | 'material'>('contract');
+    const [reportPaymentAmount, setReportPaymentAmount] = useState('');
+    const [reportPaymentDate, setReportPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+    const [reportPaymentMethod, setReportPaymentMethod] = useState<'zelle' | 'check' | 'cash' | 'venmo' | 'card' | 'bank_transfer'>('zelle');
+    const [reportPaymentFile, setReportPaymentFile] = useState<File | null>(null);
+    const [reportPaymentFileUrl, setReportPaymentFileUrl] = useState<string | null>(null);
+    const [reportPaymentNotes, setReportPaymentNotes] = useState('');
+    const [isSubmittingReportPayment, setIsSubmittingReportPayment] = useState(false);
+
+    const handleReportPaymentSubmit = async () => {
+        if (!estimate || !reportPaymentAmount || parseFloat(reportPaymentAmount) <= 0) {
+            toast.error("Por favor, informe um valor válido para o pagamento.");
+            return;
+        }
+
+        setIsSubmittingReportPayment(true);
+        try {
+            const amount = parseFloat(reportPaymentAmount);
+            const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+            
+            let fileAttachmentNote = "";
+            if (reportPaymentFile) {
+                try {
+                    const fileExt = reportPaymentFile.name.split('.').pop() || 'jpg';
+                    const path = `${orgId}/client_payments/${Date.now()}_${reportPaymentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                    const { error: upErr } = await supabase.storage.from("images").upload(path, reportPaymentFile, { upsert: true });
+                    if (!upErr) {
+                        const { data: pubData } = supabase.storage.from("images").getPublicUrl(path);
+                        if (pubData?.publicUrl) {
+                            fileAttachmentNote = ` [Comprovante: ${pubData.publicUrl}]`;
+                        }
+                    } else {
+                        // fallback to documents bucket
+                        const { error: docErr } = await supabase.storage.from("documents").upload(path, reportPaymentFile, { upsert: true });
+                        if (!docErr) {
+                            const { data: pubData } = supabase.storage.from("documents").getPublicUrl(path);
+                            if (pubData?.publicUrl) {
+                                fileAttachmentNote = ` [Comprovante: ${pubData.publicUrl}]`;
+                            }
+                        }
+                    }
+                } catch (fErr) {
+                    console.warn("Client payment proof upload note:", fErr);
+                }
+            }
+
+            const noteHeader = reportPaymentType === 'material' ? '[PAGAMENTO DE MATERIAIS / NOTINHAS]' : '[PAGAMENTO DO CONTRATO]';
+            const finalNote = `${noteHeader} ${reportPaymentNotes.trim()}${fileAttachmentNote}`.trim();
+
+            await createClientPayment({
+                organization_id: orgId,
+                estimate_id: estimate.id,
+                service_job_id: serviceJob?.id || null,
+                lead_id: estimate.lead_id || null,
+                customer_name: estimate.client_name || "Cliente",
+                amount,
+                method: reportPaymentMethod as any,
+                payment_date: reportPaymentDate,
+                note: finalNote,
+                status: "draft", // Requires owner/partner validation
+                receipt_status: "draft"
+            });
+
+            toast.success("Pagamento informado com sucesso! Aguardando validação dos proprietários da empresa.");
+            setIsReportPaymentOpen(false);
+            setReportPaymentAmount("");
+            setReportPaymentNotes("");
+            setReportPaymentFile(null);
+            setReportPaymentFileUrl(null);
+            loadPublicData(token!);
+        } catch (err: any) {
+            console.error("Error submitting client payment:", err);
+            toast.error("Erro ao informar pagamento. Tente novamente.");
+        } finally {
+            setIsSubmittingReportPayment(false);
+        }
+    };
 
     // Hash sync
     useEffect(() => {
@@ -1055,8 +1135,11 @@ const PublicView = () => {
                                     <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                                         <DollarSign className="h-5 w-5 text-emerald-600" /> Customer Payment History
                                     </h2>
-                                    <p className="text-xs text-gray-500 mt-0.5">Verified payments received for contract and materials.</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">Verified payments received &amp; client-reported payments for contract and materials.</p>
                                 </div>
+                                <Button onClick={() => setIsReportPaymentOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm gap-1.5 shrink-0">
+                                    <Plus className="h-4 w-4" /> Informar Pagamento
+                                </Button>
                             </div>
 
                             {/* Summary Cards */}
@@ -1074,31 +1157,77 @@ const PublicView = () => {
                             {payments.length === 0 ? (
                                 <p className="text-xs text-gray-400 italic">No individual payment receipts logged yet.</p>
                             ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
-                                        <thead>
-                                            <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-bold">
-                                                <th className="py-3">Date</th>
-                                                <th className="py-3">Method</th>
-                                                <th className="py-3">Reference / Note</th>
-                                                <th className="py-3 text-right">Amount</th>
-                                                <th className="py-3 text-center">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50 font-medium">
-                                            {payments.map((p) => (
-                                                <tr key={p.id} className="hover:bg-gray-50/50">
-                                                    <td className="py-3.5 font-bold text-gray-900">{new Date(p.payment_date || p.created_at).toLocaleDateString()}</td>
-                                                    <td className="py-3.5 uppercase text-gray-700">{p.method}</td>
-                                                    <td className="py-3.5 text-gray-500">{p.note || "Verified Payment"}</td>
-                                                    <td className="py-3.5 text-right font-black text-emerald-700">${p.amount.toFixed(2)}</td>
-                                                    <td className="py-3.5 text-center">
-                                                        <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase">Received</Badge>
-                                                    </td>
+                                <div className="space-y-4">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-bold">
+                                                    <th className="py-3">Date</th>
+                                                    <th className="py-3">Method</th>
+                                                    <th className="py-3">Reference / Note</th>
+                                                    <th className="py-3 text-right">Amount</th>
+                                                    <th className="py-3 text-center">Status</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50 font-medium">
+                                                {payments.map((p) => {
+                                                    const isCancelled = p.status === 'cancelled';
+                                                    const isPending = p.status === 'draft' || p.status === 'pending_validation' as any;
+                                                    const isReceived = p.status === 'received';
+                                                    
+                                                    return (
+                                                        <tr key={p.id} className="hover:bg-gray-50/50">
+                                                            <td className="py-3.5 font-bold text-gray-900">{new Date(p.payment_date || p.created_at).toLocaleDateString()}</td>
+                                                            <td className="py-3.5 uppercase text-gray-700">{p.method}</td>
+                                                            <td className="py-3.5 text-gray-500 max-w-xs truncate">{p.note || "Verified Payment"}</td>
+                                                            <td className="py-3.5 text-right font-black text-emerald-700">${p.amount.toFixed(2)}</td>
+                                                            <td className="py-3.5 text-center">
+                                                                {isReceived && (
+                                                                    <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase">Validado (Recebido)</Badge>
+                                                                )}
+                                                                {isPending && (
+                                                                    <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold uppercase">Aguardando Validação</Badge>
+                                                                )}
+                                                                {isCancelled && (
+                                                                    <Badge className="bg-red-100 text-red-800 text-[10px] font-bold uppercase">Cancelado / Rejeitado</Badge>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Cancellation Details Box if any cancelled payment exists */}
+                                    {payments.filter(p => p.status === 'cancelled').map(p => (
+                                        <div key={`cancelled-${p.id}`} className="p-4 bg-red-50 rounded-2xl border border-red-200 text-xs text-red-900 space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <AlertCircle className="h-4 w-4 text-red-600" />
+                                                <span className="font-bold text-sm text-red-900">Pagamento de ${p.amount.toFixed(2)} Cancelado / Rejeitado</span>
+                                            </div>
+                                            <p className="text-red-800">
+                                                <span className="font-bold">Motivo do Cancelamento:</span> {(p as any).cancellation_reason || p.note?.replace('[CANCELLED]', '') || 'Depósito não verificado na conta bancária da empresa.'}
+                                            </p>
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-red-200/80">
+                                                <span className="font-bold text-red-950">Saldo Devedor Atual: ${balanceDue.toLocaleString()}</span>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => generatePaymentCancellationPDF(
+                                                        p, 
+                                                        estimate, 
+                                                        company, 
+                                                        (p as any).cancellation_reason || 'Depósito não verificado na conta bancária', 
+                                                        (p as any).validated_by || 'Proprietário da Empresa'
+                                                    )}
+                                                    className="bg-white border-red-300 text-red-700 hover:bg-red-100 font-bold text-xs h-8 gap-1.5 shadow-sm shrink-0"
+                                                >
+                                                    <Download className="h-3.5 w-3.5" /> Baixar Recibo de Cancelamento (PDF)
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -1284,6 +1413,151 @@ const PublicView = () => {
                             </button>
                         </div>
                         <img src={selectedReceiptUrl} alt="Material Receipt" className="max-w-full max-h-[70vh] object-contain rounded-xl mx-auto" />
+                    </div>
+                </div>
+            )}
+
+            {/* CLIENT REPORT PAYMENT MODAL */}
+            {isReportPaymentOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                            <h3 className="font-bold text-base text-[#0b2a4a] flex items-center gap-2">
+                                <DollarSign className="h-5 w-5 text-emerald-600" />
+                                Informar Pagamento Efetuado
+                            </h3>
+                            <button onClick={() => setIsReportPaymentOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+                        </div>
+
+                        <div className="space-y-3 text-xs">
+                            <div>
+                                <label className="font-bold text-gray-700 block mb-1">Tipo de Pagamento</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setReportPaymentType('contract')}
+                                        className={cn("p-2.5 rounded-xl border text-center font-bold transition-all", 
+                                            reportPaymentType === 'contract' ? "bg-emerald-50 border-emerald-500 text-emerald-900" : "bg-gray-50 border-gray-200 text-gray-600"
+                                        )}
+                                    >
+                                        Saldo do Contrato
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReportPaymentType('material')}
+                                        className={cn("p-2.5 rounded-xl border text-center font-bold transition-all", 
+                                            reportPaymentType === 'material' ? "bg-amber-50 border-amber-500 text-amber-900" : "bg-gray-50 border-gray-200 text-gray-600"
+                                        )}
+                                    >
+                                        Notinhas / Materiais
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="font-bold text-gray-700 block mb-1">Valor Pago ($)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={reportPaymentAmount}
+                                        onChange={e => setReportPaymentAmount(e.target.value)}
+                                        placeholder="0.00"
+                                        className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-emerald-700"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="font-bold text-gray-700 block mb-1">Data do Pagamento</label>
+                                    <input
+                                        type="date"
+                                        value={reportPaymentDate}
+                                        onChange={e => setReportPaymentDate(e.target.value)}
+                                        className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="font-bold text-gray-700 block mb-1">Forma de Pagamento</label>
+                                <select
+                                    value={reportPaymentMethod}
+                                    onChange={e => setReportPaymentMethod(e.target.value as any)}
+                                    className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-xs font-medium"
+                                >
+                                    <option value="zelle">Zelle</option>
+                                    <option value="check">Cheque (Check)</option>
+                                    <option value="cash">Dinheiro (Cash)</option>
+                                    <option value="venmo">Venmo</option>
+                                    <option value="card">Cartão</option>
+                                    <option value="bank_transfer">Transferência Bancária</option>
+                                </select>
+                            </div>
+
+                            {/* Proof Photo Upload */}
+                            <div className="pt-2 border-t border-gray-100 space-y-2">
+                                <label className="font-bold text-gray-700 block">Anexar Comprovante / Foto</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl border border-blue-200 text-[11px] hover:bg-blue-100 text-center">
+                                        📷 Tirar Foto (Câmera)
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            capture="environment"
+                                            className="hidden"
+                                            onChange={e => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    setReportPaymentFile(file);
+                                                    setReportPaymentFileUrl(URL.createObjectURL(file));
+                                                }
+                                            }}
+                                        />
+                                    </label>
+                                    <label className="cursor-pointer flex items-center justify-center gap-1.5 p-2.5 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 text-[11px] hover:bg-gray-100 text-center">
+                                        🖼️ Carregar Foto
+                                        <input
+                                            type="file"
+                                            accept="image/*,application/pdf"
+                                            className="hidden"
+                                            onChange={e => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    setReportPaymentFile(file);
+                                                    setReportPaymentFileUrl(URL.createObjectURL(file));
+                                                }
+                                            }}
+                                        />
+                                    </label>
+                                </div>
+                                {reportPaymentFileUrl && (
+                                    <div className="w-24 h-24 rounded-xl overflow-hidden border border-gray-200 mt-2">
+                                        <img src={reportPaymentFileUrl} alt="Comprovante" className="w-full h-full object-cover" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="font-bold text-gray-700 block mb-1">Observações / Referência</label>
+                                <textarea
+                                    rows={2}
+                                    value={reportPaymentNotes}
+                                    onChange={e => setReportPaymentNotes(e.target.value)}
+                                    placeholder="Ex: Transferência Zelle realizada via aplicativo bancário."
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+                            <Button variant="outline" size="sm" onClick={() => setIsReportPaymentOpen(false)}>Cancelar</Button>
+                            <Button
+                                onClick={handleReportPaymentSubmit}
+                                disabled={isSubmittingReportPayment || !reportPaymentAmount}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                            >
+                                {isSubmittingReportPayment ? "Enviando..." : "Confirmar Envio"}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             )}
