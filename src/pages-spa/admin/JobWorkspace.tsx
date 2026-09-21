@@ -108,6 +108,7 @@ export default function JobWorkspace() {
 
   // Media Form State
   const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
+  const [selectedMediaFiles, setSelectedMediaFiles] = useState<File[]>([]);
   const [mediaFileUrl, setMediaFileUrl] = useState<string | null>(null);
   const [mediaCaption, setMediaCaption] = useState("");
   const [mediaVisibility, setMediaVisibility] = useState<"admin" | "client" | "public">("client");
@@ -393,19 +394,27 @@ export default function JobWorkspace() {
 
   const handleSettlementSubmit = async () => {
     if (!job || !settlementForm.amount || parseFloat(settlementForm.amount) <= 0) {
-      toast.error("Please enter a valid settlement amount.");
+      toast.error("Por favor, informe um valor válido para a baixa.");
       return;
     }
 
     setIsSavingSettlement(true);
     try {
       const amount = parseFloat(settlementForm.amount);
+      const maxAllowed = partnerAccountingSummary.netOwedAmount;
+
+      if (!editingExpense && amount > maxAllowed + 0.01) {
+        toast.error(`O valor da baixa ($${amount.toFixed(2)}) não pode ser maior do que o saldo devedor entre os sócios ($${maxAllowed.toFixed(2)}).`);
+        setIsSavingSettlement(false);
+        return;
+      }
 
       if (editingExpense) {
         await updateExpense(editingExpense.id, {
           amount,
           vendor: `Partner Settlement (${settlementForm.payerName} -> ${settlementForm.receiverName})`,
           receipt_date: settlementForm.date,
+          expense_category: "partner_reimbursable",
           payment_method: settlementForm.paymentMethod as any,
           paid_by_name: settlementForm.payerName,
           notes: `Partner Reimbursement Settlement (Baixa Realizada): ${settlementForm.notes || 'Settled'}`,
@@ -425,7 +434,7 @@ export default function JobWorkspace() {
         amount,
         vendor: `Partner Settlement (${settlementForm.payerName} -> ${settlementForm.receiverName})`,
         receipt_date: settlementForm.date,
-        expense_category: "partner_reimbursement",
+        expense_category: "partner_reimbursable",
         payment_method: settlementForm.paymentMethod as any,
         payment_source: "partner_personal",
         paid_by_name: settlementForm.payerName,
@@ -948,84 +957,95 @@ export default function JobWorkspace() {
   };
 
   const handleMediaFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedMediaFile(file);
-      if (mediaFileUrl && mediaFileUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(mediaFileUrl);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedMediaFiles(prev => [...prev, ...files]);
+      setSelectedMediaFile(files[0]);
+      if (!mediaFileUrl && files[0]) {
+        setMediaFileUrl(URL.createObjectURL(files[0]));
       }
-      const url = URL.createObjectURL(file);
-      setMediaFileUrl(url);
     }
   };
 
   const handleAddMediaSubmit = async () => {
-    if (!job || !selectedMediaFile) {
-      toast.error("Please select a photo or video file.");
+    const targetFiles = selectedMediaFiles.length > 0 ? selectedMediaFiles : selectedMediaFile ? [selectedMediaFile] : [];
+    if (!job || targetFiles.length === 0) {
+      toast.error("Por favor, selecione pelo menos uma foto ou vídeo.");
       return;
     }
 
     setIsSavingMedia(true);
     try {
-      const isVideo = selectedMediaFile.type.startsWith("video/");
-      const mediaType = isVideo ? "video" : "image";
-      const fileExt = selectedMediaFile.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
-      const relativePath = `${orgId}/jobs/${job.id}/${isVideo ? "videos" : "photos"}/${Date.now()}.${fileExt}`;
+      const uploadedRecords: ServiceJobMediaRecord[] = [];
 
-      let finalPath = "";
-      const { error: uploadErr } = await supabase.storage
-        .from("images")
-        .upload(relativePath, selectedMediaFile, { upsert: true, cacheControl: "3600" });
+      for (const file of targetFiles) {
+        const isVideo = file.type.startsWith("video/");
+        const mediaType = isVideo ? "video" : "image";
+        const fileExt = file.name.split(".").pop() || (isVideo ? "mp4" : "jpg");
+        const relativePath = `${orgId}/jobs/${job.id}/${isVideo ? "videos" : "photos"}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${fileExt}`;
 
-      if (uploadErr) {
-        console.warn("Storage upload to 'images' failed, trying 'documents' bucket:", uploadErr.message);
-        const { error: docUploadErr } = await supabase.storage
-          .from("documents")
-          .upload(relativePath, selectedMediaFile, { upsert: true, cacheControl: "3600" });
+        let finalPath = "";
+        const { error: uploadErr } = await supabase.storage
+          .from("images")
+          .upload(relativePath, file, { upsert: true, cacheControl: "3600" });
 
-        if (docUploadErr) {
-          if (!isVideo) {
-            finalPath = await new Promise<string>((res, rej) => {
-              const r = new FileReader();
-              r.onload = () => res(r.result as string);
-              r.onerror = rej;
-              r.readAsDataURL(selectedMediaFile);
-            });
+        if (uploadErr) {
+          const { error: docUploadErr } = await supabase.storage
+            .from("documents")
+            .upload(relativePath, file, { upsert: true, cacheControl: "3600" });
+
+          if (docUploadErr) {
+            if (!isVideo) {
+              finalPath = await new Promise<string>((res, rej) => {
+                const r = new FileReader();
+                r.onload = () => res(r.result as string);
+                r.onerror = rej;
+                r.readAsDataURL(file);
+              });
+            } else {
+              console.error("Storage upload failed for file:", file.name);
+              continue;
+            }
           } else {
-            console.error("Storage upload failed on both buckets:", docUploadErr.message);
-            toast.error(`Storage upload failed: ${docUploadErr.message}`);
-            return;
+            finalPath = `documents/${relativePath}`;
           }
         } else {
-          finalPath = `documents/${relativePath}`;
+          finalPath = `images/${relativePath}`;
         }
-      } else {
-        finalPath = `images/${relativePath}`;
+
+        const record = await uploadJobMediaRecord({
+          organization_id: orgId,
+          service_job_id: job.id,
+          media_type: mediaType,
+          storage_path: finalPath,
+          file_name: file.name,
+          mime_type: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
+          file_size_bytes: file.size,
+          caption: mediaCaption.trim() || "Job progress documentation",
+          visible_to_client: true,
+          visible_on_public_site: true
+        });
+
+        uploadedRecords.push(record);
       }
 
-      const record = await uploadJobMediaRecord({
-        organization_id: orgId,
-        service_job_id: job.id,
-        media_type: mediaType,
-        storage_path: finalPath,
-        file_name: selectedMediaFile.name,
-        mime_type: selectedMediaFile.type || (isVideo ? "video/mp4" : "image/jpeg"),
-        file_size_bytes: selectedMediaFile.size,
-        caption: mediaCaption.trim() || "Job progress documentation"
-      });
-
-      const updated = [record, ...media];
-      setMedia(updated);
-      setIsAddMediaOpen(false);
-      setSelectedMediaFile(null);
-      setMediaFileUrl(null);
-      setMediaCaption("");
-      setActiveTab("media");
-      toast.success(`${isVideo ? "Job video" : "Job photo"} uploaded successfully!`);
-      await loadMediaSignedUrls(updated);
+      if (uploadedRecords.length > 0) {
+        const updated = [...uploadedRecords, ...media];
+        setMedia(updated);
+        setIsAddMediaOpen(false);
+        setSelectedMediaFile(null);
+        setSelectedMediaFiles([]);
+        setMediaFileUrl(null);
+        setMediaCaption("");
+        setActiveTab("media");
+        toast.success(`${uploadedRecords.length} foto(s)/vídeo(s) enviado(s) com sucesso!`);
+        await loadMediaSignedUrls(updated);
+      } else {
+        toast.error("Nenhum arquivo pôde ser enviado.");
+      }
     } catch (err: any) {
       console.error("Upload job media error:", err);
-      toast.error(`Failed to upload job photo/video: ${err?.message || "Storage error"}`);
+      toast.error(`Falha ao enviar fotos/vídeos: ${err?.message || "Erro de armazenamento"}`);
     } finally {
       setIsSavingMedia(false);
     }

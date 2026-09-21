@@ -171,8 +171,17 @@ export async function createExpense(
     validClientStatus = expenseData.bill_to_client ? 'pending' : 'not_billable';
   }
 
+  // Sanitize expense_category
+  let validCategory: string = (expenseData.expense_category as string) || 'company_expense';
+  if (validCategory === 'partner_reimbursement') {
+    validCategory = 'partner_reimbursable';
+  } else if (!['company_expense', 'job_material', 'client_reimbursable', 'owner_reimbursable', 'partner_reimbursable', 'personal_not_business', 'needs_review'].includes(validCategory)) {
+    validCategory = 'job_material';
+  }
+
   const payload = {
     ...expenseData,
+    expense_category: validCategory as ExpenseCategory,
     reimbursement_status: validReimbursementStatus as ReimbursementStatus,
     client_reimbursement_status: validClientStatus as ClientReimbursementStatus
   };
