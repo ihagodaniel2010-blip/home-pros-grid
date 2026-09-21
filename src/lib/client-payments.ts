@@ -89,6 +89,18 @@ export async function updateClientPayment(id: string, updates: Partial<ClientPay
   return data as ClientPayment;
 }
 
+export async function deleteClientPayment(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("estimate_payments_manual")
+    .update({ status: "cancelled" })
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error deleting client payment:", error);
+    throw error;
+  }
+}
+
 export async function getPublicReceipt(token: string): Promise<any> {
   const { data, error } = await supabase
     .rpc("get_receipt_by_token", { token });

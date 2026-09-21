@@ -18,7 +18,7 @@ import { getEstimateById, Estimate } from "@/lib/estimates";
 import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra, extractMediaFromText } from "@/lib/service-extras";
 import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, deleteJobMediaRecord, resolveSignedMediaUrl, uploadExtraMediaRecord, ServiceJobMediaRecord } from "@/lib/job-media";
 import { getExpenses, createExpense, Expense, updateExpense, deleteExpense } from "@/lib/expenses";
-import { getClientPayments, createClientPayment, ClientPayment } from "@/lib/client-payments";
+import { getClientPayments, createClientPayment, updateClientPayment, deleteClientPayment, ClientPayment } from "@/lib/client-payments";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
 import { getOrganizationPartners, OrganizationPartner } from "@/lib/partners";
 import RegisterPaymentModal from "@/components/admin/estimates/RegisterPaymentModal";
@@ -134,6 +134,23 @@ export default function JobWorkspace() {
     uploadedBy: user?.name || user?.email || "Manager",
     notes: ""
   });
+
+  // Client Payment Validation & Editing State
+  const [paymentToValidate, setPaymentToValidate] = useState<ClientPayment | null>(null);
+  const [validationAction, setValidationAction] = useState<'approve' | 'reject'>('approve');
+  const [validatingUserName, setValidatingUserName] = useState(user?.name || "Hugo Luiz Ferreira dos Santos");
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [isValidatingPayment, setIsValidatingPayment] = useState(false);
+
+  const [editingPayment, setEditingPayment] = useState<ClientPayment | null>(null);
+  const [isEditPaymentOpen, setIsEditPaymentOpen] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: "",
+    method: "zelle",
+    date: new Date().toISOString().slice(0, 10),
+    note: ""
+  });
+  const [isSavingPaymentEdit, setIsSavingPaymentEdit] = useState(false);
 
   const orgId = user?.organization?.id || DEFAULT_ORG_ID;
 
@@ -317,7 +334,7 @@ export default function JobWorkspace() {
 
     // Calculate settlements ("baixas")
     const settlementRecords = expenses.filter(
-      e => e.expense_category === 'partner_reimbursement' || (e as any).reimbursement_status === 'settled'
+      e => e.expense_category === 'partner_reimbursement' || (e as any).reimbursement_status === 'settled' || (e as any).reimbursement_status === 'reimbursed'
     );
     const totalSettledAmount = settlementRecords.reduce((acc, e) => acc + (e.amount || 0), 0);
 
@@ -359,6 +376,21 @@ export default function JobWorkspace() {
     };
   }, [expenses, partners]);
 
+  const handleStartEditSettlement = (exp: Expense) => {
+    setEditingExpense(exp);
+    const payer = exp.paid_by_name || "Hugo Luiz Ferreira dos Santos";
+    const receiver = exp.vendor?.includes("->") ? exp.vendor.split("->")[1].replace(")", "").trim() : "Adelmo Ferreira dos Santos";
+    setSettlementForm({
+      payerName: payer,
+      receiverName: receiver,
+      amount: exp.amount ? String(exp.amount) : "",
+      date: exp.receipt_date || new Date().toISOString().slice(0, 10),
+      paymentMethod: exp.payment_method || "zelle",
+      notes: exp.notes?.replace("Partner Reimbursement Settlement (Baixa Realizada): ", "") || ""
+    });
+    setIsPartnerSettlementOpen(true);
+  };
+
   const handleSettlementSubmit = async () => {
     if (!job || !settlementForm.amount || parseFloat(settlementForm.amount) <= 0) {
       toast.error("Please enter a valid settlement amount.");
@@ -368,6 +400,24 @@ export default function JobWorkspace() {
     setIsSavingSettlement(true);
     try {
       const amount = parseFloat(settlementForm.amount);
+
+      if (editingExpense) {
+        await updateExpense(editingExpense.id, {
+          amount,
+          vendor: `Partner Settlement (${settlementForm.payerName} -> ${settlementForm.receiverName})`,
+          receipt_date: settlementForm.date,
+          payment_method: settlementForm.paymentMethod as any,
+          paid_by_name: settlementForm.payerName,
+          notes: `Partner Reimbursement Settlement (Baixa Realizada): ${settlementForm.notes || 'Settled'}`,
+          reimbursement_status: "reimbursed"
+        });
+        toast.success("Baixa entre sócios alterada com sucesso!");
+        setIsPartnerSettlementOpen(false);
+        setEditingExpense(null);
+        loadJobWorkspace();
+        return;
+      }
+
       const { receipt: created } = await createExpense({
         organization_id: orgId,
         service_job_id: job.id,
@@ -381,7 +431,7 @@ export default function JobWorkspace() {
         paid_by_name: settlementForm.payerName,
         bill_to_client: false,
         material_responsibility: "company",
-        reimbursement_status: "settled",
+        reimbursement_status: "reimbursed",
         notes: `Partner Reimbursement Settlement (Baixa Realizada): ${settlementForm.notes || 'Settled'}`,
         status: "active"
       } as any, settlementFile || undefined);
@@ -408,6 +458,86 @@ export default function JobWorkspace() {
       toast.error("Failed to register partner settlement.");
     } finally {
       setIsSavingSettlement(false);
+    }
+  };
+
+  // Client Payment Validation & Management Handlers
+  const handleValidatePaymentSubmit = async () => {
+    if (!paymentToValidate) return;
+    setIsValidatingPayment(true);
+    try {
+      const validatorName = validatingUserName.trim() || user?.name || "Proprietário H&A";
+      if (validationAction === 'approve') {
+        await updateClientPayment(paymentToValidate.id, {
+          status: "received",
+          receipt_status: "sent",
+          note: `${paymentToValidate.note || ""} [Validado por: ${validatorName}]`.trim()
+        });
+        toast.success(`Pagamento de $${paymentToValidate.amount} APROVADO e validado por ${validatorName}!`);
+      } else {
+        const reason = cancellationReason.trim() || "Depósito não verificado na conta bancária.";
+        await updateClientPayment(paymentToValidate.id, {
+          status: "cancelled",
+          receipt_status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          note: `${paymentToValidate.note || ""} [CANCELADO por ${validatorName}: ${reason}]`.trim()
+        });
+        toast.success(`Pagamento CANCELADO / REJEITADO por ${validatorName}.`);
+      }
+      setPaymentToValidate(null);
+      setCancellationReason("");
+      loadJobWorkspace();
+    } catch (err: any) {
+      console.error("Error validating payment:", err);
+      toast.error("Falha ao processar validação do pagamento.");
+    } finally {
+      setIsValidatingPayment(false);
+    }
+  };
+
+  const handleDeleteClientPayment = async (paymentId: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta baixa/pagamento do cliente?")) return;
+    try {
+      await deleteClientPayment(paymentId);
+      setPayments(prev => prev.filter(p => p.id !== paymentId));
+      toast.success("Pagamento do cliente excluído com sucesso!");
+      loadJobWorkspace();
+    } catch (err: any) {
+      console.error("Delete client payment error:", err);
+      toast.error("Falha ao excluir pagamento.");
+    }
+  };
+
+  const handleStartEditClientPayment = (payment: ClientPayment) => {
+    setEditingPayment(payment);
+    setPaymentForm({
+      amount: payment.amount.toString(),
+      method: payment.method || "zelle",
+      date: payment.payment_date ? new Date(payment.payment_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      note: payment.note || ""
+    });
+    setIsEditPaymentOpen(true);
+  };
+
+  const handleSaveClientPaymentEdit = async () => {
+    if (!editingPayment || !paymentForm.amount) return;
+    setIsSavingPaymentEdit(true);
+    try {
+      await updateClientPayment(editingPayment.id, {
+        amount: parseFloat(paymentForm.amount),
+        method: paymentForm.method as any,
+        payment_date: paymentForm.date,
+        note: paymentForm.note
+      });
+      toast.success("Pagamento atualizado com sucesso!");
+      setIsEditPaymentOpen(false);
+      setEditingPayment(null);
+      loadJobWorkspace();
+    } catch (err: any) {
+      console.error("Update client payment error:", err);
+      toast.error("Falha ao atualizar pagamento.");
+    } finally {
+      setIsSavingPaymentEdit(false);
     }
   };
 
@@ -1583,25 +1713,79 @@ export default function JobWorkspace() {
                       <tr>
                         <th className="p-3">Date</th>
                         <th className="p-3">Method</th>
-                        <th className="p-3">Notes</th>
+                        <th className="p-3">Notes / Reference</th>
                         <th className="p-3">Status</th>
                         <th className="p-3 text-right">Amount</th>
+                        <th className="p-3 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {payments.map(payment => (
-                        <tr key={payment.id}>
-                          <td className="p-3 font-semibold text-gray-900">{new Date(payment.payment_date).toLocaleDateString()}</td>
-                          <td className="p-3 capitalize text-gray-700">{payment.method}</td>
-                          <td className="p-3 text-gray-500">{payment.note || "Payment received"}</td>
-                          <td className="p-3">
-                            <Badge className="bg-emerald-100 text-emerald-800 capitalize font-bold text-[10px]">
-                              {payment.status}
-                            </Badge>
-                          </td>
-                          <td className="p-3 text-right font-bold text-emerald-700 text-sm">${payment.amount.toLocaleString()}</td>
-                        </tr>
-                      ))}
+                    <tbody className="divide-y divide-gray-100 font-medium">
+                      {payments.map(payment => {
+                        const isPendingValidation = payment.status === 'draft' || (payment.status as string) === 'pending_validation';
+                        const isCancelled = payment.status === 'cancelled';
+                        const isReceived = payment.status === 'received';
+
+                        return (
+                          <tr key={payment.id} className={isPendingValidation ? "bg-amber-50/60" : isCancelled ? "bg-red-50/40" : ""}>
+                            <td className="p-3 font-semibold text-gray-900">{new Date(payment.payment_date || payment.created_at).toLocaleDateString()}</td>
+                            <td className="p-3 uppercase text-gray-700">{payment.method}</td>
+                            <td className="p-3 text-gray-500 max-w-xs truncate">{payment.note || "Payment received"}</td>
+                            <td className="p-3">
+                              {isReceived && <Badge className="bg-emerald-100 text-emerald-800 font-bold text-[10px]">Validado (Recebido)</Badge>}
+                              {isPendingValidation && <Badge className="bg-amber-100 text-amber-800 font-bold text-[10px]">Aguardando Validação</Badge>}
+                              {isCancelled && <Badge className="bg-red-100 text-red-800 font-bold text-[10px]">Cancelado / Rejeitado</Badge>}
+                            </td>
+                            <td className="p-3 text-right font-bold text-emerald-700 text-sm">${payment.amount.toFixed(2)}</td>
+                            <td className="p-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {isPendingValidation && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        setPaymentToValidate(payment);
+                                        setValidationAction('approve');
+                                      }}
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] h-7 px-2 shadow-xs"
+                                    >
+                                      ✓ Validar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setPaymentToValidate(payment);
+                                        setValidationAction('reject');
+                                      }}
+                                      className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-bold text-[10px] h-7 px-2 shadow-xs"
+                                    >
+                                      ✕ Rejeitar
+                                    </Button>
+                                  </>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleStartEditClientPayment(payment)}
+                                  className="h-7 w-7 p-0 text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                                  title="Alterar Pagamento"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteClientPayment(payment.id)}
+                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Excluir Pagamento"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2809,6 +2993,148 @@ export default function JobWorkspace() {
 
             <div className="flex justify-end pt-3 border-t border-gray-100">
               <Button variant="outline" size="sm" onClick={() => setIsCompanyMaterialsModalOpen(false)}>Fechar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VALIDATE CLIENT PAYMENT MODAL */}
+      {paymentToValidate && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-base text-[#0b2a4a] flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                {validationAction === 'approve' ? "Validar Pagamento do Cliente" : "Rejeitar / Cancelar Pagamento"}
+              </h3>
+              <button onClick={() => setPaymentToValidate(null)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1">
+                <p className="font-bold text-gray-900">Detalhes do Pagamento:</p>
+                <p className="text-gray-600">Cliente: <span className="font-semibold text-gray-900">{paymentToValidate.customer_name || clientName}</span></p>
+                <p className="text-gray-600">Valor: <span className="font-black text-emerald-700 text-sm">${paymentToValidate.amount.toFixed(2)}</span></p>
+                <p className="text-gray-600">Método: <span className="uppercase font-semibold">{paymentToValidate.method}</span></p>
+                {paymentToValidate.note && <p className="text-gray-500 italic">Notas: {paymentToValidate.note}</p>}
+              </div>
+
+              <div>
+                <Label className="font-bold text-gray-700 block mb-1">Proprietário / Sócio que está Validando *</Label>
+                <select
+                  value={validatingUserName}
+                  onChange={e => setValidatingUserName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border border-gray-200 text-xs bg-white font-medium"
+                >
+                  <option value="Hugo Luiz Ferreira dos Santos">Hugo Luiz Ferreira dos Santos (Sócio Proprietário)</option>
+                  <option value="Adelmo Ferreira dos Santos">Adelmo Ferreira dos Santos (Sócio Proprietário)</option>
+                  {user?.name && !['Hugo Luiz Ferreira dos Santos', 'Adelmo Ferreira dos Santos'].includes(user.name) && (
+                    <option value={user.name}>{user.name} (Administrador)</option>
+                  )}
+                </select>
+              </div>
+
+              {validationAction === 'reject' && (
+                <div>
+                  <Label className="font-bold text-red-700 block mb-1">Motivo do Cancelamento / Rejeição *</Label>
+                  <textarea
+                    rows={3}
+                    value={cancellationReason}
+                    onChange={e => setCancellationReason(e.target.value)}
+                    placeholder="Ex: Depósito não verificado na conta bancária da empresa ou comprovante ilegível."
+                    className="w-full p-2.5 bg-red-50/50 border border-red-200 rounded-xl text-xs text-red-900 font-medium"
+                  />
+                  <p className="text-[10px] text-red-600 mt-1">
+                    * Este motivo e o saldo devedor atual serão exibidos no Portal do Cliente e incluídos no Recibo de Cancelamento (PDF).
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+              <Button variant="outline" size="sm" onClick={() => setPaymentToValidate(null)}>Cancelar</Button>
+              <Button
+                onClick={handleValidatePaymentSubmit}
+                disabled={isValidatingPayment || (validationAction === 'reject' && !cancellationReason.trim())}
+                className={validationAction === 'approve' ? "bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs" : "bg-red-600 hover:bg-red-700 text-white font-bold text-xs"}
+              >
+                {isValidatingPayment ? "Processando..." : validationAction === 'approve' ? "Confirmar Validação" : "Confirmar Cancelamento"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CLIENT PAYMENT MODAL */}
+      {isEditPaymentOpen && editingPayment && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-base text-[#0b2a4a] flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-blue-600" />
+                Alterar Baixa / Pagamento do Cliente
+              </h3>
+              <button onClick={() => { setIsEditPaymentOpen(false); setEditingPayment(null); }} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Valor ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={paymentForm.amount}
+                    onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                    className="font-bold text-emerald-700"
+                  />
+                </div>
+                <div>
+                  <Label className="font-bold text-gray-700 block mb-1">Data</Label>
+                  <Input
+                    type="date"
+                    value={paymentForm.date}
+                    onChange={e => setPaymentForm({ ...paymentForm, date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="font-bold text-gray-700 block mb-1">Método de Pagamento</Label>
+                <select
+                  value={paymentForm.method}
+                  onChange={e => setPaymentForm({ ...paymentForm, method: e.target.value })}
+                  className="w-full h-10 px-3 rounded-xl border border-gray-200 text-xs bg-white font-medium"
+                >
+                  <option value="zelle">Zelle</option>
+                  <option value="check">Check (Cheque)</option>
+                  <option value="cash">Cash (Dinheiro)</option>
+                  <option value="card">Credit Card</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="venmo">Venmo</option>
+                </select>
+              </div>
+
+              <div>
+                <Label className="font-bold text-gray-700 block mb-1">Observações / Notas</Label>
+                <textarea
+                  rows={2}
+                  value={paymentForm.note}
+                  onChange={e => setPaymentForm({ ...paymentForm, note: e.target.value })}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+              <Button variant="outline" size="sm" onClick={() => { setIsEditPaymentOpen(false); setEditingPayment(null); }}>Cancelar</Button>
+              <Button
+                onClick={handleSaveClientPaymentEdit}
+                disabled={isSavingPaymentEdit || !paymentForm.amount}
+                className="bg-[#0b2a4a] text-white font-bold text-xs"
+              >
+                {isSavingPaymentEdit ? "Salvando..." : "Salvar Alterações"}
+              </Button>
             </div>
           </div>
         </div>
