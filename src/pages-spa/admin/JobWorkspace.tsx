@@ -4,7 +4,7 @@ import {
   ArrowLeft, Clock, Save, FileText, User, Mail, Phone, MapPin, CheckCircle2,
   MoreHorizontal, Images, Wrench, UserCheck, DollarSign, Plus, Download, Copy,
   Printer, ShieldCheck, PenTool, Calendar, AlertCircle, Sparkles, ExternalLink,
-  ChevronRight, Eye, EyeOff, Globe, Tag, CreditCard, Receipt, FileCheck
+  ChevronRight, Eye, EyeOff, Globe, Tag, CreditCard, Receipt, FileCheck, Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -86,8 +86,8 @@ export default function JobWorkspace() {
     receiptDate: new Date().toISOString().slice(0, 10),
     paidByName: user?.name || "Hugo Manager",
     paymentSource: "owner_personal",
-    reimbursableToOwner: true,
-    billToClient: false
+    reimbursableToOwner: false,
+    billToClient: true
   });
 
   // Media Form State
