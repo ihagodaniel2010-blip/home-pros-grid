@@ -107,30 +107,30 @@ export const getServiceExtrasByJobId = async (jobId: string) => {
     return data as ServiceExtra[];
 };
 
-export const getServiceExtrasByJobOrEstimateId = async (jobId?: string | null, estimateId?: string | null) => {
+export const getServiceExtrasByJobOrEstimateId = async (jobId?: string | null, estimateId?: string | null, leadId?: string | null) => {
     if (!supabase) return [];
 
     const cleanJobId = (jobId && jobId !== 'null' && jobId !== 'undefined' && typeof jobId === 'string') ? jobId.trim() : null;
     const cleanEstId = (estimateId && estimateId !== 'null' && estimateId !== 'undefined' && typeof estimateId === 'string') ? estimateId.trim() : null;
+    const cleanLeadId = (leadId && leadId !== 'null' && leadId !== 'undefined' && typeof leadId === 'string') ? leadId.trim() : null;
 
-    if (!cleanJobId && !cleanEstId) return [];
+    if (!cleanJobId && !cleanEstId && !cleanLeadId) return [];
 
     try {
+        const conditions: string[] = [];
+        if (cleanJobId) conditions.push(`service_job_id.eq.${cleanJobId}`);
+        if (cleanEstId) conditions.push(`estimate_id.eq.${cleanEstId}`);
+
         let query = supabase.from('service_extras').select('*');
 
-        if (cleanJobId && cleanEstId) {
-            query = query.or(`service_job_id.eq.${cleanJobId},estimate_id.eq.${cleanEstId}`);
-        } else if (cleanJobId) {
-            query = query.eq('service_job_id', cleanJobId);
-        } else if (cleanEstId) {
-            query = query.eq('estimate_id', cleanEstId);
+        if (conditions.length > 0) {
+            query = query.or(conditions.join(','));
         }
 
         const { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) {
             console.error("Error getting service extras with primary query:", error);
-            // Fallback: If combined query fails, try by estimate_id alone
             if (cleanEstId) {
                 const { data: estData } = await supabase
                     .from('service_extras')

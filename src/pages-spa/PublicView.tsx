@@ -102,11 +102,17 @@ const PublicView = () => {
                 const orgId = data.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
                 getCompanySettings(orgId).then(c => setCompany(c)).catch(() => {});
 
-                const job = await getServiceJobByEstimateId(data.id);
+                let job = await getServiceJobByEstimateId(data.id);
+                if (!job && data.lead_id) {
+                    try {
+                        const { data: jobData } = await supabase.from('service_jobs').select('*').eq('lead_id', data.lead_id).maybeSingle();
+                        if (jobData) job = jobData;
+                    } catch (e) {}
+                }
                 setServiceJob(job);
 
                 const [extrasList, allExpenses, mediaList, allPayments] = await Promise.all([
-                    getServiceExtrasByJobOrEstimateId(job?.id, data.id).catch(() => []),
+                    getServiceExtrasByJobOrEstimateId(job?.id, data.id, data.lead_id).catch(() => []),
                     getExpenses(orgId).catch(() => []),
                     job ? getJobMediaRecords(job.id).catch(() => []) : Promise.resolve([]),
                     getClientPayments(orgId).catch(() => [])
@@ -116,7 +122,7 @@ const PublicView = () => {
 
                 // Filter ONLY Client Materials (never company materials)
                 setClientMaterials((allExpenses || []).filter(e => 
-                    ((job && e.service_job_id === job.id) || e.estimate_id === data.id) && 
+                    ((job && e.service_job_id === job.id) || (data.id && e.estimate_id === data.id) || (data.lead_id && (e as any).related_lead_id === data.lead_id)) && 
                     (e.bill_to_client === true || e.material_responsibility === 'client') &&
                     e.material_responsibility !== 'company'
                 ));
@@ -127,7 +133,7 @@ const PublicView = () => {
 
                 // Filter Client Payments for this project
                 setPayments((allPayments || []).filter(p => 
-                    (job && p.service_job_id === job.id) || p.estimate_id === data.id
+                    (job && p.service_job_id === job.id) || (data.id && p.estimate_id === data.id) || (data.lead_id && (p as any).lead_id === data.lead_id)
                 ));
 
                 // Resolve signed URLs for visible client job media
