@@ -726,6 +726,7 @@ export default function JobWorkspace() {
         setExpenses(prev => prev.map(e => e.id === editingExpense.id ? { ...e, ...updated } : e));
         setEditingExpense(null);
         setIsAddExpenseOpen(false);
+        setIsSavingExpense(false);
         toast.success("Material updated successfully!");
         loadJobWorkspace();
         return;
@@ -741,7 +742,8 @@ export default function JobWorkspace() {
       const { receipt: created } = await createExpense({
         organization_id: orgId,
         service_job_id: job.id,
-        estimate_id: job.estimate_id || null,
+        estimate_id: job.estimate_id || estimate?.id || null,
+        related_lead_id: job.lead_id || (estimate as any)?.lead_id || null,
         amount,
         vendor: expenseForm.vendor.trim() || "Supplier",
         receipt_date: expenseForm.receiptDate,
