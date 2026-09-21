@@ -145,8 +145,14 @@ export async function uploadReceiptFile(
             uploaded_by: userId || null,
           },
         ]);
+
+      // Update receipts table directly with storage path for instant access
+      await supabase
+        .from("receipts")
+        .update({ receipt_storage_path: finalStoragePath })
+        .eq("id", receiptId);
     } catch (recordErr) {
-      console.warn("receipt_files insert record handled:", recordErr);
+      console.warn("receipt_files/receipts update record handled:", recordErr);
     }
   }
 }

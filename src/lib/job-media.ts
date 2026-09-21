@@ -187,15 +187,19 @@ export async function resolveSignedMediaUrl(storagePath: string): Promise<string
     } else if (storagePath.startsWith('images/')) {
         cleanPath = storagePath.replace('images/', '');
         targetBucket = 'images';
+    } else if (storagePath.startsWith('receipts/')) {
+        cleanPath = storagePath.replace('receipts/', '');
+        targetBucket = 'receipts';
     }
 
     let signedUrl = await createTemporarySignedUrl(targetBucket, cleanPath, 3600);
-    if (!signedUrl && targetBucket === 'images') {
-        // Fallback to documents bucket
-        signedUrl = await createTemporarySignedUrl('documents', cleanPath, 3600);
+    const fallbackBuckets = ['images', 'documents', 'receipts'].filter(b => b !== targetBucket);
+    for (const b of fallbackBuckets) {
+        if (signedUrl) break;
+        signedUrl = await createTemporarySignedUrl(b, cleanPath, 3600);
     }
+
     if (!signedUrl) {
-        // Try public URL as last resort
         const { data } = supabase.storage.from(targetBucket).getPublicUrl(cleanPath);
         if (data?.publicUrl) signedUrl = data.publicUrl;
     }
