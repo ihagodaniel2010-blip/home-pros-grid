@@ -102,9 +102,32 @@ export async function getPublicClientMaterials(params: {
   estimateId?: string | null;
   serviceJobId?: string | null;
   leadId?: string | null;
+  token?: string | null;
 }): Promise<Expense[]> {
   if (!supabase) return [];
-  const { estimateId, serviceJobId, leadId } = params;
+  const { estimateId, serviceJobId, leadId, token } = params;
+
+  const cleanToken = (token && token !== 'null' && token !== 'undefined') ? token.trim() : null;
+
+  if (cleanToken) {
+    try {
+      const { data, error } = await supabase.rpc('get_public_client_materials', { p_token: cleanToken });
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return (data as any[]).map(item => ({
+          ...item,
+          bill_to_client: item.bill_to_client ?? true,
+          expense_category: 'client_reimbursable',
+          reimbursement_status: 'pending',
+          client_reimbursement_status: 'pending',
+          reimbursable_to_owner: false,
+          payment_method: 'other',
+          payment_source: 'other'
+        })) as Expense[];
+      }
+    } catch (rpcErr) {
+      console.warn("RPC get_public_client_materials attempt fallback:", rpcErr);
+    }
+  }
 
   const cleanJobId = (serviceJobId && serviceJobId !== 'null' && serviceJobId !== 'undefined') ? serviceJobId.trim() : null;
   const cleanEstId = (estimateId && estimateId !== 'null' && estimateId !== 'undefined') ? estimateId.trim() : null;

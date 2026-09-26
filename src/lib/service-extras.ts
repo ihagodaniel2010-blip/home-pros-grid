@@ -107,8 +107,27 @@ export const getServiceExtrasByJobId = async (jobId: string) => {
     return data as ServiceExtra[];
 };
 
-export const getServiceExtrasByJobOrEstimateId = async (jobId?: string | null, estimateId?: string | null, leadId?: string | null) => {
+export const getServiceExtrasByJobOrEstimateId = async (
+    jobId?: string | null,
+    estimateId?: string | null,
+    leadId?: string | null,
+    token?: string | null
+) => {
     if (!supabase) return [];
+
+    const cleanToken = (token && token !== 'null' && token !== 'undefined') ? token.trim() : null;
+
+    // Attempt RPC first if token is available
+    if (cleanToken) {
+        try {
+            const { data, error } = await supabase.rpc('get_public_estimate_extras', { p_token: cleanToken });
+            if (!error && Array.isArray(data) && data.length > 0) {
+                return data as ServiceExtra[];
+            }
+        } catch (rpcErr) {
+            console.warn("RPC get_public_estimate_extras attempt fallback:", rpcErr);
+        }
+    }
 
     const cleanJobId = (jobId && jobId !== 'null' && jobId !== 'undefined' && typeof jobId === 'string') ? jobId.trim() : null;
     const cleanEstId = (estimateId && estimateId !== 'null' && estimateId !== 'undefined' && typeof estimateId === 'string') ? estimateId.trim() : null;

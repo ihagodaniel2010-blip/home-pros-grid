@@ -228,8 +228,44 @@ export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJ
 /**
  * Fetches public client-visible job media records for a given service job ID.
  */
-export async function getPublicJobMediaByJobId(serviceJobId?: string | null, estimateId?: string | null): Promise<ServiceJobMediaRecord[]> {
+export async function getPublicMediaUrl(token: string, mediaId: string): Promise<string | null> {
+    if (!supabase || !token || !mediaId) return null;
+    try {
+        const { data, error } = await supabase.rpc('get_public_media_url', { p_token: token, p_media_id: mediaId });
+        if (!error && data) return data as string;
+    } catch (e) {
+        console.warn("getPublicMediaUrl error:", e);
+    }
+    return null;
+}
+
+export async function getPublicJobMediaByJobId(
+    serviceJobId?: string | null,
+    estimateId?: string | null,
+    token?: string | null
+): Promise<ServiceJobMediaRecord[]> {
     if (!supabase) return [];
+
+    const cleanToken = (token && token !== 'null' && token !== 'undefined') ? token.trim() : null;
+
+    if (cleanToken) {
+        try {
+            const { data, error } = await supabase.rpc('get_public_job_media', { p_token: cleanToken });
+            if (!error && Array.isArray(data) && data.length > 0) {
+                return (data as any[]).map(item => ({
+                    ...item,
+                    visible_to_client: item.visible_to_client ?? true,
+                    visible_on_public_site: true,
+                    portfolio_approved: false,
+                    media_status: 'approved',
+                    sort_order: 0,
+                    updated_at: item.created_at || new Date().toISOString()
+                })) as ServiceJobMediaRecord[];
+            }
+        } catch (rpcErr) {
+            console.warn("RPC get_public_job_media attempt fallback:", rpcErr);
+        }
+    }
     
     const cleanJobId = (serviceJobId && serviceJobId !== 'null' && serviceJobId !== 'undefined') ? serviceJobId.trim() : null;
     const cleanEstId = (estimateId && estimateId !== 'null' && estimateId !== 'undefined') ? estimateId.trim() : null;

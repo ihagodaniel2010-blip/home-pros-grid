@@ -229,10 +229,10 @@ const PublicView = () => {
                 setServiceJob(job);
 
                 const [extrasList, fetchedClientMats, mediaList, fetchedPayments] = await Promise.all([
-                    getServiceExtrasByJobOrEstimateId(job?.id, data.id, data.lead_id).catch(() => []),
-                    getPublicClientMaterials({ estimateId: data.id, serviceJobId: job?.id, leadId: data.lead_id }).catch(() => []),
-                    getPublicJobMediaByJobId(job?.id, data.id).catch(() => []),
-                    getPublicClientPayments({ estimateId: data.id, serviceJobId: job?.id, leadId: data.lead_id }).catch(() => [])
+                    getServiceExtrasByJobOrEstimateId(job?.id, data.id, data.lead_id, tk).catch(() => []),
+                    getPublicClientMaterials({ estimateId: data.id, serviceJobId: job?.id, leadId: data.lead_id, token: tk }).catch(() => []),
+                    getPublicJobMediaByJobId(job?.id, data.id, tk).catch(() => []),
+                    getPublicClientPayments({ estimateId: data.id, serviceJobId: job?.id, leadId: data.lead_id, token: tk }).catch(() => [])
                 ]);
 
                 setExtras(extrasList || []);

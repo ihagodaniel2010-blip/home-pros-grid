@@ -55,9 +55,23 @@ export async function getPublicClientPayments(params: {
   estimateId?: string | null;
   serviceJobId?: string | null;
   leadId?: string | null;
+  token?: string | null;
 }): Promise<ClientPayment[]> {
   if (!supabase) return [];
-  const { estimateId, serviceJobId, leadId } = params;
+  const { estimateId, serviceJobId, leadId, token } = params;
+
+  const cleanToken = (token && token !== 'null' && token !== 'undefined') ? token.trim() : null;
+
+  if (cleanToken) {
+    try {
+      const { data, error } = await supabase.rpc('get_public_client_payments', { p_token: cleanToken });
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data as ClientPayment[];
+      }
+    } catch (rpcErr) {
+      console.warn("RPC get_public_client_payments attempt fallback:", rpcErr);
+    }
+  }
 
   const cleanJobId = (serviceJobId && serviceJobId !== 'null' && serviceJobId !== 'undefined') ? serviceJobId.trim() : null;
   const cleanEstId = (estimateId && estimateId !== 'null' && estimateId !== 'undefined') ? estimateId.trim() : null;
