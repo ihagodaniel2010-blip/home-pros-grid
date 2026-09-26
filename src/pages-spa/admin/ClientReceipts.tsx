@@ -83,12 +83,17 @@ export default function ClientReceipts() {
   };
 
   const handleUpdate = async (id: string, updates: Partial<ClientPayment>) => {
+    const current = payments.find(p => p.id === id);
+    if (updates.status === 'received' && current?.status === 'received') {
+      toast.error("Ação bloqueada: este pagamento já foi confirmado anteriormente.");
+      return;
+    }
     try {
       await updateClientPayment(id, updates);
-      toast.success("Updated successfully");
+      toast.success("Pagamento atualizado com sucesso!");
       fetchData();
     } catch (error) {
-      toast.error("Update failed");
+      toast.error("Erro ao atualizar pagamento.");
     }
   };
 
