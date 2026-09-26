@@ -228,13 +228,24 @@ export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJ
 /**
  * Fetches public client-visible job media records for a given service job ID.
  */
-export async function getPublicJobMediaByJobId(serviceJobId: string): Promise<ServiceJobMediaRecord[]> {
-    if (!supabase || !serviceJobId) return [];
+export async function getPublicJobMediaByJobId(serviceJobId?: string | null, estimateId?: string | null): Promise<ServiceJobMediaRecord[]> {
+    if (!supabase) return [];
+    
+    let targetJobId = serviceJobId?.trim();
+    if (!targetJobId && estimateId) {
+        try {
+            const { data: jData } = await supabase.from('service_jobs').select('id').eq('estimate_id', estimateId.trim()).maybeSingle();
+            if (jData?.id) targetJobId = jData.id;
+        } catch (e) {}
+    }
+
+    if (!targetJobId) return [];
+
     try {
         const { data, error } = await supabase
             .from('service_job_media')
             .select('*')
-            .eq('service_job_id', serviceJobId)
+            .eq('service_job_id', targetJobId)
             .or('visible_to_client.eq.true,visible_on_public_site.eq.true')
             .order('created_at', { ascending: false });
 
