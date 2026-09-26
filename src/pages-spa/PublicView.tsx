@@ -198,10 +198,32 @@ const PublicView = () => {
                 getCompanySettings(orgId).then(c => setCompany(c)).catch(() => {});
 
                 let job = await getServiceJobByEstimateId(data.id);
+                if (!job && data.id) {
+                    try {
+                        const { data: jobData } = await supabase.from('service_jobs').select('*').eq('id', data.id).maybeSingle();
+                        if (jobData) job = jobData;
+                    } catch (e) {}
+                }
                 if (!job && data.lead_id) {
                     try {
                         const { data: jobData } = await supabase.from('service_jobs').select('*').eq('lead_id', data.lead_id).maybeSingle();
                         if (jobData) job = jobData;
+                    } catch (e) {}
+                }
+
+                // Deep lookup: resolve service_job_id from linked child records if job is still null
+                if (!job) {
+                    try {
+                        const [exSub, recSub, medSub] = await Promise.all([
+                            supabase.from('service_extras').select('service_job_id').eq('estimate_id', data.id).not('service_job_id', 'is', null).limit(1),
+                            supabase.from('receipts').select('service_job_id').eq('estimate_id', data.id).not('service_job_id', 'is', null).limit(1),
+                            supabase.from('service_job_media').select('service_job_id').eq('estimate_id', data.id).not('service_job_id', 'is', null).limit(1)
+                        ]);
+                        const foundJobId = exSub.data?.[0]?.service_job_id || recSub.data?.[0]?.service_job_id || medSub.data?.[0]?.service_job_id;
+                        if (foundJobId) {
+                            const { data: jobData } = await supabase.from('service_jobs').select('*').eq('id', foundJobId).maybeSingle();
+                            if (jobData) job = jobData;
+                        }
                     } catch (e) {}
                 }
                 setServiceJob(job);
@@ -661,11 +683,17 @@ const PublicView = () => {
                             </div>
 
                             <div className="pt-2 flex flex-wrap items-center gap-3 text-xs text-blue-100">
-                                <span className="font-bold text-white text-sm sm:text-base">{estimate.client_name}</span>
+                                <span className="font-bold text-white text-sm sm:text-base">{estimate.client_name || "Cliente"}</span>
                                 <span>·</span>
-                                <span className="flex items-center gap-1 text-blue-200"><MapPin className="h-3.5 w-3.5 text-blue-400" /> {estimate.client_address || "Project Site"}</span>
+                                <span className="flex items-center gap-1 text-blue-200">
+                                    <MapPin className="h-3.5 w-3.5 text-blue-400" /> 
+                                    {estimate.client_address || (estimate.client_city ? `${estimate.client_city}${estimate.client_state ? `, ${estimate.client_state}` : ''}` : null) || serviceJob?.location_address || serviceJob?.address || "Project Site"}
+                                </span>
                                 <span>·</span>
-                                <span className="flex items-center gap-1 text-blue-200"><Tag className="h-3.5 w-3.5 text-blue-400" /> {estimate.title || "Construction Service"}</span>
+                                <span className="flex items-center gap-1 text-blue-200">
+                                    <Tag className="h-3.5 w-3.5 text-blue-400" /> 
+                                    {estimate.project_type || estimate.title || serviceJob?.title || serviceJob?.service_type || "Construction Service"}
+                                </span>
                             </div>
                         </div>
 
