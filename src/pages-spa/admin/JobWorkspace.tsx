@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, Fragment } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Clock, Save, FileText, User, Mail, Phone, MapPin, CheckCircle2,
@@ -248,6 +248,17 @@ export default function JobWorkspace() {
     loadJobWorkspace();
   }, [isUserLoading, loadJobWorkspace]);
 
+  // Helper to identify partner settlements ("pagamentos entre sócios")
+  const isPartnerSettlement = useCallback((e: Expense) => {
+    return (
+      e.expense_category === 'partner_reimbursable' ||
+      (e.expense_category as string) === 'partner_reimbursement' ||
+      e.vendor?.toLowerCase().includes('partner settlement') ||
+      e.notes?.toLowerCase().includes('baixa realizada') ||
+      e.notes?.toLowerCase().includes('pagamento entre socio')
+    );
+  }, []);
+
   // Derived Financial Math (Requirements 5 & 6)
   const financialSummary = useMemo(() => {
     const originalContractValue = estimate?.total_amount || 0;
@@ -281,9 +292,9 @@ export default function JobWorkspace() {
 
     const balanceDue = Math.max(0, totalClientResponsibility - amountPaid);
 
-    // Company Job Costs (materials & expenses paid by company)
+    // Company Job Costs (materials & expenses paid by company, excluding settlements and deleted)
     const companyMaterialsCost = expenses
-      .filter(e => !e.bill_to_client && (e as any).material_responsibility !== 'client')
+      .filter(e => !e.bill_to_client && (e as any).material_responsibility !== 'client' && e.status !== 'deleted' && !isPartnerSettlement(e))
       .reduce((acc, e) => acc + (e.amount || 0), 0);
 
     const grossJobProfit = totalClientResponsibility - companyMaterialsCost;
@@ -303,17 +314,10 @@ export default function JobWorkspace() {
       grossJobProfit,
       profitMargin
     };
-  }, [estimate, extras, expenses, payments]);
+  }, [estimate, extras, expenses, payments, isPartnerSettlement]);
 
   // Derived Partner Accounting Breakdown (Requirements for Hugo vs Partner 50/50)
   const partnerAccountingSummary = useMemo(() => {
-    const isPartnerSettlement = (e: Expense) =>
-      e.expense_category === 'partner_reimbursable' ||
-      (e.expense_category as string) === 'partner_reimbursement' ||
-      e.vendor?.toLowerCase().includes('partner settlement') ||
-      e.notes?.toLowerCase().includes('baixa realizada') ||
-      e.notes?.toLowerCase().includes('pagamento entre socio');
-
     const isCompanyCard = (e: Expense) =>
       e.payment_source === 'company_account' ||
       e.payment_source === 'company_card' ||
@@ -424,6 +428,19 @@ export default function JobWorkspace() {
     }
     return Object.values(map);
   }, [expenses, partners]);
+
+  const sortedCompanyExpenses = useMemo(() => {
+    return expenses
+      .filter(e => !e.bill_to_client && e.status !== 'deleted')
+      .sort((a, b) => {
+        const dateA = new Date(a.receipt_date || a.created_at || 0).getTime();
+        const dateB = new Date(b.receipt_date || b.created_at || 0).getTime();
+        if (dateB !== dateA) return dateB - dateA;
+        const createdA = new Date(a.created_at || 0).getTime();
+        const createdB = new Date(b.created_at || 0).getTime();
+        return createdB - createdA;
+      });
+  }, [expenses]);
 
   const [expenseSelectedFile, setExpenseSelectedFile] = useState<File | null>(null);
   const [isPartnerAuditModalOpen, setIsPartnerAuditModalOpen] = useState(false);
@@ -2310,7 +2327,7 @@ export default function JobWorkspace() {
                 </div>
               </div>
 
-              {expenses.filter(e => !e.bill_to_client).length === 0 ? (
+              {sortedCompanyExpenses.length === 0 ? (
                 <p className="text-xs text-gray-400 italic">No internal company materials logged for this job.</p>
               ) : (
                 <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -2326,14 +2343,10 @@ export default function JobWorkspace() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 font-medium">
-                      {expenses.filter(e => !e.bill_to_client).map(exp => {
+                      {sortedCompanyExpenses.map(exp => {
                         const halfAmount = exp.amount / 2;
                         const paidByName = exp.paid_by_name || "Company Card / Account";
-                        const isSettlement = exp.expense_category === 'partner_reimbursable' || 
-                          (exp.expense_category as string) === 'partner_reimbursement' || 
-                          exp.vendor?.toLowerCase().includes('partner settlement') || 
-                          exp.notes?.toLowerCase().includes('baixa realizada') ||
-                          exp.notes?.toLowerCase().includes('pagamento entre socio');
+                        const isSettlement = isPartnerSettlement(exp);
 
                         const isCompanyCard = exp.payment_source === 'company_account' ||
                           exp.payment_source === 'company_card' ||
@@ -2343,59 +2356,72 @@ export default function JobWorkspace() {
                           exp.paid_by_name.toLowerCase().includes('company');
 
                         return (
-                          <tr key={exp.id} className={isSettlement ? "bg-emerald-50/90 hover:bg-emerald-100/90 border-b border-emerald-200 transition-colors" : ""}>
-                            <td className="p-3 font-semibold text-gray-900">{new Date(exp.receipt_date).toLocaleDateString()}</td>
-                            <td className="p-3 font-bold text-gray-900 flex items-center gap-1.5">
-                              {isSettlement && <Badge className="bg-emerald-600 text-white font-bold text-[9px] uppercase">Pagamento entre Sócios</Badge>}
-                              <span>{exp.vendor}</span>
-                            </td>
-                            <td className="p-3 text-purple-700 font-bold">{paidByName}</td>
-                            <td className="p-3 text-gray-600 text-[11px]">
-                              {isSettlement ? (
-                                <span className="text-emerald-800 font-bold flex items-center gap-1">
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Liquidado / Pagamento entre Sócios (100% Baixa)
-                                </span>
-                              ) : isCompanyCard ? (
-                                <span className="text-slate-700 font-semibold flex items-center gap-1">
-                                  💳 Cartão / Conta da Empresa (${exp.amount.toFixed(2)}) — Sem reembolso de sócios
-                                </span>
-                              ) : (
-                                <span className="font-mono">{paidByName}: ${exp.amount.toFixed(2)} adiantado ({partnerAccountingSummary.hugoName}: ${halfAmount.toFixed(2)} / {partnerAccountingSummary.partner2Name}: ${halfAmount.toFixed(2)})</span>
-                              )}
-                            </td>
-                            <td className="p-3 text-right font-bold text-gray-900 text-sm">${exp.amount.toLocaleString()}</td>
-                            <td className="p-3 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleOpenItemDetail(exp, isSettlement ? 'partner_settlement' : 'company_material')}
-                                  className="h-7 w-7 p-0 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100"
-                                  title="Ver Detalhes e Comprovante"
-                                >
-                                  <Eye className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleStartEditExpense(exp)}
-                                  className="h-7 w-7 p-0 text-gray-600 hover:text-blue-600 hover:bg-blue-50"
-                                  title="Edit Material"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteExpense(exp.id)}
-                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Delete Material"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
+                          <Fragment key={exp.id}>
+                            <tr className={isSettlement ? "bg-emerald-50/90 hover:bg-emerald-100/90 border-b border-emerald-200 transition-colors" : ""}>
+                              <td className="p-3 font-semibold text-gray-900">{new Date(exp.receipt_date).toLocaleDateString()}</td>
+                              <td className="p-3 font-bold text-gray-900 flex items-center gap-1.5">
+                                {isSettlement && <Badge className="bg-emerald-600 text-white font-bold text-[9px] uppercase">Pagamento entre Sócios</Badge>}
+                                <span>{exp.vendor}</span>
+                              </td>
+                              <td className="p-3 text-purple-700 font-bold">{paidByName}</td>
+                              <td className="p-3 text-gray-600 text-[11px]">
+                                {isSettlement ? (
+                                  <span className="text-emerald-800 font-bold flex items-center gap-1">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Liquidado / Pagamento entre Sócios (100% Baixa)
+                                  </span>
+                                ) : isCompanyCard ? (
+                                  <span className="text-slate-700 font-semibold flex items-center gap-1">
+                                    💳 Cartão / Conta da Empresa (${exp.amount.toFixed(2)}) — Sem reembolso de sócios
+                                  </span>
+                                ) : (
+                                  <span className="font-mono">{paidByName}: ${exp.amount.toFixed(2)} adiantado ({partnerAccountingSummary.hugoName}: ${halfAmount.toFixed(2)} / {partnerAccountingSummary.partner2Name}: ${halfAmount.toFixed(2)})</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-right font-bold text-gray-900 text-sm">${exp.amount.toLocaleString()}</td>
+                              <td className="p-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleOpenItemDetail(exp, isSettlement ? 'partner_settlement' : 'company_material')}
+                                    className="h-7 w-7 p-0 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100"
+                                    title="Ver Detalhes e Comprovante"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleStartEditExpense(exp)}
+                                    className="h-7 w-7 p-0 text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                                    title="Edit Material"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteExpense(exp.id)}
+                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    title="Delete Material"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+
+                            {isSettlement && (
+                              <tr key={`equalization-${exp.id}`} className="bg-emerald-100/90 border-y-2 border-emerald-500">
+                                <td colSpan={6} className="p-2.5 text-center text-xs font-bold text-emerald-950 shadow-inner">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                                    <span>🟢 QUITAÇÃO EFETUADA EM {new Date(exp.receipt_date).toLocaleDateString()} — TODAS AS DESPESAS ANTERIORES (ABAIXO DESTA LINHA) FORAM DEVIDAMENTE SALDADAS ENTRE OS SÓCIOS</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
                         );
                       })}
                     </tbody>
