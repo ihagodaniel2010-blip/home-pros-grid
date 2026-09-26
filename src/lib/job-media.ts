@@ -243,34 +243,42 @@ export async function getPublicJobMediaByJobId(serviceJobId?: string | null, est
     }
 
     try {
-        let conditions: string[] = [];
-        if (targetJobId) conditions.push(`service_job_id.eq.${targetJobId}`);
-        if (cleanEstId) conditions.push(`estimate_id.eq.${cleanEstId}`);
+        let rawList: any[] = [];
+        let query = supabase.from('service_job_media').select('*');
 
-        if (conditions.length === 0) return [];
-
-        const { data, error } = await supabase
-            .from('service_job_media')
-            .select('*')
-            .or(conditions.join(','))
-            .or('visible_to_client.eq.true,visible_on_public_site.eq.true')
-            .order('created_at', { ascending: false });
-
-        if (!error && data && data.length > 0) {
-            return data as ServiceJobMediaRecord[];
+        if (targetJobId && cleanEstId) {
+            query = query.or(`service_job_id.eq.${targetJobId},estimate_id.eq.${cleanEstId}`);
+        } else if (targetJobId) {
+            query = query.eq('service_job_id', targetJobId);
+        } else if (cleanEstId) {
+            query = query.eq('estimate_id', cleanEstId);
+        } else {
+            return [];
         }
 
-        // Fallback: search by estimate_id alone
-        if (cleanEstId) {
-            const { data: estMedia } = await supabase
-                .from('service_job_media')
-                .select('*')
-                .eq('estimate_id', cleanEstId)
-                .order('created_at', { ascending: false });
-            if (estMedia && estMedia.length > 0) return estMedia as ServiceJobMediaRecord[];
+        const { data, error } = await query.order('created_at', { ascending: false });
+
+        if (!error && data) {
+            rawList = data;
+        } else {
+            if (targetJobId) {
+                const { data: jData } = await supabase.from('service_job_media').select('*').eq('service_job_id', targetJobId).order('created_at', { ascending: false });
+                if (jData) rawList.push(...jData);
+            }
+            if (cleanEstId) {
+                const { data: eData } = await supabase.from('service_job_media').select('*').eq('estimate_id', cleanEstId).order('created_at', { ascending: false });
+                if (eData) {
+                    eData.forEach(item => {
+                        if (!rawList.some(r => r.id === item.id)) rawList.push(item);
+                    });
+                }
+            }
         }
 
-        return [];
+        // STRICT SECURITY RULE: Filter ONLY client-visible media (never admin-only)
+        return (rawList as ServiceJobMediaRecord[]).filter(
+            m => m.visible_to_client === true || m.visible_on_public_site === true
+        );
     } catch (err) {
         console.error("Exception in getPublicJobMediaByJobId:", err);
         return [];

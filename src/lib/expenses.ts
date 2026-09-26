@@ -105,34 +105,42 @@ export async function getPublicClientMaterials(params: {
 }): Promise<Expense[]> {
   if (!supabase) return [];
   const { estimateId, serviceJobId, leadId } = params;
-  if (!estimateId && !serviceJobId && !leadId) return [];
+
+  const cleanJobId = (serviceJobId && serviceJobId !== 'null' && serviceJobId !== 'undefined') ? serviceJobId.trim() : null;
+  const cleanEstId = (estimateId && estimateId !== 'null' && estimateId !== 'undefined') ? estimateId.trim() : null;
+  const cleanLeadId = (leadId && leadId !== 'null' && leadId !== 'undefined') ? leadId.trim() : null;
+
+  if (!cleanJobId && !cleanEstId && !cleanLeadId) return [];
 
   try {
-    let conditions: string[] = [];
-    if (serviceJobId) conditions.push(`service_job_id.eq.${serviceJobId}`);
-    if (estimateId) conditions.push(`estimate_id.eq.${estimateId}`);
-    if (leadId) conditions.push(`related_lead_id.eq.${leadId}`);
-
     let rawData: any[] = [];
-    const { data, error } = await supabase
-      .from("receipts")
-      .select(`
-        *,
-        receipt_files (*)
-      `)
-      .or(conditions.join(','))
-      .eq("status", "active");
+    let query = supabase.from("receipts").select(`*, receipt_files (*)`).eq("status", "active");
 
-    if (!error && data) {
+    if (cleanJobId && cleanEstId) {
+      query = query.or(`service_job_id.eq.${cleanJobId},estimate_id.eq.${cleanEstId}`);
+    } else if (cleanJobId) {
+      query = query.eq("service_job_id", cleanJobId);
+    } else if (cleanEstId) {
+      query = query.eq("estimate_id", cleanEstId);
+    }
+
+    const { data, error } = await query;
+
+    if (!error && data && data.length > 0) {
       rawData = data;
     } else {
-      // Fallback direct query without joined table
-      const { data: directData } = await supabase
-        .from("receipts")
-        .select('*')
-        .or(conditions.join(','))
-        .eq("status", "active");
-      if (directData) rawData = directData;
+      if (cleanJobId) {
+        const { data: jData } = await supabase.from("receipts").select('*').eq('service_job_id', cleanJobId).eq("status", "active");
+        if (jData) rawData.push(...jData);
+      }
+      if (cleanEstId) {
+        const { data: eData } = await supabase.from("receipts").select('*').eq('estimate_id', cleanEstId).eq("status", "active");
+        if (eData) {
+          eData.forEach(item => {
+            if (!rawData.some(r => r.id === item.id)) rawData.push(item);
+          });
+        }
+      }
     }
 
     return (rawData as Expense[]).filter(

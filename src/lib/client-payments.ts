@@ -58,26 +58,45 @@ export async function getPublicClientPayments(params: {
 }): Promise<ClientPayment[]> {
   if (!supabase) return [];
   const { estimateId, serviceJobId, leadId } = params;
-  if (!estimateId && !serviceJobId && !leadId) return [];
+
+  const cleanJobId = (serviceJobId && serviceJobId !== 'null' && serviceJobId !== 'undefined') ? serviceJobId.trim() : null;
+  const cleanEstId = (estimateId && estimateId !== 'null' && estimateId !== 'undefined') ? estimateId.trim() : null;
+  const cleanLeadId = (leadId && leadId !== 'null' && leadId !== 'undefined') ? leadId.trim() : null;
+
+  if (!cleanJobId && !cleanEstId && !cleanLeadId) return [];
 
   try {
-    let conditions: string[] = [];
-    if (serviceJobId) conditions.push(`service_job_id.eq.${serviceJobId}`);
-    if (estimateId) conditions.push(`estimate_id.eq.${estimateId}`);
-    if (leadId) conditions.push(`lead_id.eq.${leadId}`);
+    let rawData: any[] = [];
+    let query = supabase.from("estimate_payments_manual").select("*");
 
-    const { data, error } = await supabase
-      .from("estimate_payments_manual")
-      .select("*")
-      .or(conditions.join(','))
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.warn("Public fetch client payments error:", error);
-      return [];
+    if (cleanJobId && cleanEstId) {
+      query = query.or(`service_job_id.eq.${cleanJobId},estimate_id.eq.${cleanEstId}`);
+    } else if (cleanJobId) {
+      query = query.eq("service_job_id", cleanJobId);
+    } else if (cleanEstId) {
+      query = query.eq("estimate_id", cleanEstId);
     }
 
-    return (data || []) as ClientPayment[];
+    const { data, error } = await query.order("created_at", { ascending: false });
+
+    if (!error && data && data.length > 0) {
+      rawData = data;
+    } else {
+      if (cleanJobId) {
+        const { data: jPay } = await supabase.from("estimate_payments_manual").select("*").eq('service_job_id', cleanJobId);
+        if (jPay) rawData.push(...jPay);
+      }
+      if (cleanEstId) {
+        const { data: ePay } = await supabase.from("estimate_payments_manual").select("*").eq('estimate_id', cleanEstId);
+        if (ePay) {
+          ePay.forEach(item => {
+            if (!rawData.some(r => r.id === item.id)) rawData.push(item);
+          });
+        }
+      }
+    }
+
+    return (rawData || []) as ClientPayment[];
   } catch (err) {
     console.error("Exception in getPublicClientPayments:", err);
     return [];
