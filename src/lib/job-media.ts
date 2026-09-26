@@ -231,13 +231,18 @@ export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJ
 export async function getPublicSignedMediaUrl(token: string, mediaId: string): Promise<string | null> {
     if (!token || !mediaId) return null;
     try {
-        const res = await fetch(`/api/public/signed-url?token=${encodeURIComponent(token)}&type=media&id=${encodeURIComponent(mediaId)}`);
+        const res = await fetch('/api/public/signed-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, type: 'media', id: mediaId }),
+            cache: 'no-store'
+        });
         if (res.ok) {
             const data = await res.json();
             return data.signedUrl || null;
         }
     } catch (e) {
-        console.warn("getPublicSignedMediaUrl API route error:", e);
+        console.warn("getPublicSignedMediaUrl error:", e);
     }
     return null;
 }
