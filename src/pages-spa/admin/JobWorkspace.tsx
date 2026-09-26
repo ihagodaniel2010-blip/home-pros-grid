@@ -316,16 +316,27 @@ export default function JobWorkspace() {
     };
   }, [estimate, extras, expenses, payments, isPartnerSettlement]);
 
+  // Helper to identify corporate company card expenses (direct company card/account)
+  const isCompanyCard = useCallback((e: Expense) => {
+    if (!e) return false;
+    const pSource = (e.payment_source || '').toLowerCase().trim();
+    const pName = (e.paid_by_name || '').toLowerCase().trim();
+    const notes = (e.notes || '').toLowerCase();
+
+    if (pSource === 'company_card' || pSource === 'company_account' || pSource === 'corporate') {
+      return true;
+    }
+    if (!pName || pName === 'company card' || pName === 'company card / account' || pName.includes('company') || pName.includes('empresa') || pName.includes('cartão') || pName.includes('cartao da empresa') || pName.includes('corporate')) {
+      return true;
+    }
+    if (notes.includes('company card') || notes.includes('cartao da empresa') || notes.includes('cartão da empresa')) {
+      return true;
+    }
+    return false;
+  }, []);
+
   // Derived Partner Accounting Breakdown (Requirements for Hugo vs Partner 50/50)
   const partnerAccountingSummary = useMemo(() => {
-    const isCompanyCard = (e: Expense) =>
-      e.payment_source === 'company_account' ||
-      e.payment_source === 'company_card' ||
-      e.paid_by_name === 'Company Card' ||
-      e.paid_by_name === 'Company Card / Account' ||
-      !e.paid_by_name ||
-      e.paid_by_name.toLowerCase().includes('company');
-
     // Filter ALL internal company job expenses (excluding deleted, client materials, and settlements)
     const companyExpenses = expenses.filter(
       e => !e.bill_to_client && 
@@ -348,7 +359,10 @@ export default function JobWorkspace() {
     const outOfPocketExpenses = companyExpenses.filter(e => !isCompanyCard(e));
 
     const hugoOutofPocketExpenses = outOfPocketExpenses.filter(e => e.paid_by_name?.toLowerCase().includes("hugo"));
-    const partner2OutofPocketExpenses = outOfPocketExpenses.filter(e => !e.paid_by_name?.toLowerCase().includes("hugo"));
+    const partner2OutofPocketExpenses = outOfPocketExpenses.filter(e => 
+      e.paid_by_name?.toLowerCase().includes("adelmo") || 
+      (!e.paid_by_name?.toLowerCase().includes("hugo") && !isCompanyCard(e))
+    );
 
     const hugoPaid = hugoOutofPocketExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const partner2Paid = partner2OutofPocketExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -933,18 +947,52 @@ export default function JobWorkspace() {
     }
   };
 
+  const handleOpenAddClientExpense = () => {
+    setEditingExpense(null);
+    setExpenseForm({
+      description: "",
+      vendor: "",
+      amount: "",
+      receiptDate: new Date().toISOString().slice(0, 10),
+      paidByName: "Company Card / Account",
+      paymentSource: "company_card",
+      reimbursableToOwner: false,
+      billToClient: true
+    });
+    setExpenseSelectedFile(null);
+    setIsAddExpenseOpen(true);
+  };
+
+  const handleOpenAddCompanyExpense = () => {
+    setEditingExpense(null);
+    setExpenseForm({
+      description: "",
+      vendor: "",
+      amount: "",
+      receiptDate: new Date().toISOString().slice(0, 10),
+      paidByName: "Company Card / Account",
+      paymentSource: "company_card",
+      reimbursableToOwner: false,
+      billToClient: false
+    });
+    setExpenseSelectedFile(null);
+    setIsAddExpenseOpen(true);
+  };
+
   const handleStartEditExpense = (exp: Expense) => {
     setEditingExpense(exp);
+    const isComp = isCompanyCard(exp);
     setExpenseForm({
       description: exp.notes?.replace("Job Expense for ", "") || exp.vendor || "",
       vendor: exp.vendor || "",
       amount: exp.amount ? String(exp.amount) : "",
       receiptDate: exp.receipt_date || new Date().toISOString().slice(0, 10),
-      paidByName: exp.paid_by_name || user?.name || "Hugo Manager",
-      paymentSource: exp.payment_source || "owner_personal",
+      paidByName: exp.paid_by_name || (isComp ? "Company Card / Account" : user?.name || "Hugo Manager"),
+      paymentSource: exp.payment_source || (isComp ? "company_card" : "partner_personal"),
       reimbursableToOwner: exp.reimbursable_to_owner,
       billToClient: exp.bill_to_client
     });
+    setExpenseSelectedFile(null);
     setIsAddExpenseOpen(true);
   };
 
@@ -965,6 +1013,7 @@ export default function JobWorkspace() {
           vendor: expenseForm.vendor.trim() || "Supplier",
           receipt_date: expenseForm.receiptDate,
           paid_by_name: expenseForm.paidByName,
+          payment_source: expenseForm.paymentSource as any,
           material_responsibility: isCompanyMaterial ? "company" : "client",
           reimbursable_to_owner: expenseForm.reimbursableToOwner,
           bill_to_client: expenseForm.billToClient,
@@ -2202,7 +2251,7 @@ export default function JobWorkspace() {
                   <Badge className="bg-amber-100 text-amber-900 font-bold text-xs px-3 py-1">
                     Total: ${financialSummary.clientMaterials.toLocaleString()}
                   </Badge>
-                  <Button onClick={() => setIsAddExpenseOpen(true)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9">
+                  <Button onClick={handleOpenAddClientExpense} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9">
                     <Plus className="h-3.5 w-3.5 mr-1" /> + Add Client Material
                   </Button>
                 </div>
@@ -2321,9 +2370,75 @@ export default function JobWorkspace() {
                   >
                     <DollarSign className="h-4 w-4" /> Registrar Baixa entre Sócios
                   </Button>
-                  <Button onClick={() => { setExpenseForm(prev => ({ ...prev, billToClient: false, reimbursableToOwner: true })); setIsAddExpenseOpen(true); }} className="bg-[#0b2a4a] text-white font-bold text-xs h-9">
+                  <Button onClick={handleOpenAddCompanyExpense} className="bg-[#0b2a4a] text-white font-bold text-xs h-9">
                     <Plus className="h-3.5 w-3.5 mr-1" /> + Add Company Material
                   </Button>
+                </div>
+              </div>
+
+              {/* Partner Equalization Summary Box inside Materials Tab */}
+              <div className="p-4 bg-slate-50/80 rounded-xl border border-gray-200 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3 bg-blue-50/80 rounded-xl border border-blue-200 space-y-0.5">
+                    <span className="text-[10px] font-bold uppercase text-blue-800 tracking-wider">
+                      Avançado por {partnerAccountingSummary.hugoName}
+                    </span>
+                    <p className="text-xl font-black text-blue-950">${partnerAccountingSummary.hugoPaid.toFixed(2)}</p>
+                    <p className="text-[10px] text-blue-700 font-medium">{partnerAccountingSummary.hugoOutofPocketExpenses.length} nota(s) pessoal(is)</p>
+                  </div>
+                  <div className="p-3 bg-purple-50/80 rounded-xl border border-purple-200 space-y-0.5">
+                    <span className="text-[10px] font-bold uppercase text-purple-800 tracking-wider">
+                      Avançado por {partnerAccountingSummary.partner2Name}
+                    </span>
+                    <p className="text-xl font-black text-purple-950">${partnerAccountingSummary.partner2Paid.toFixed(2)}</p>
+                    <p className="text-[10px] text-purple-700 font-medium">{partnerAccountingSummary.partner2OutofPocketExpenses.length} nota(s) pessoal(is)</p>
+                  </div>
+                  <div className="p-3 bg-slate-100/80 rounded-xl border border-slate-300 space-y-0.5">
+                    <span className="text-[10px] font-bold uppercase text-slate-700 tracking-wider">Company Card / Account</span>
+                    <p className="text-xl font-black text-slate-900">${partnerAccountingSummary.companyCardPaid.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">Direto da Empresa (Sem Reembolso)</p>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  {partnerAccountingSummary.netOwedAmount > 0 ? (
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-0.5 cursor-pointer" onClick={() => setIsPartnerAuditModalOpen(true)}>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-amber-500 text-white font-bold text-[10px] uppercase">
+                            Pendência entre Sócios
+                          </Badge>
+                          <span className="text-xs font-bold text-amber-950">
+                            {partnerAccountingSummary.netOwedFrom} deve a {partnerAccountingSummary.netOwedTo}:
+                          </span>
+                          <span className="text-base font-black text-amber-900">${partnerAccountingSummary.netOwedAmount.toFixed(2)}</span>
+                        </div>
+                        <p className="text-[11px] text-amber-800 font-medium hover:underline flex items-center gap-1">
+                          🔍 Clique para abrir o extrato detalhado de auditoria.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsPartnerAuditModalOpen(true)}
+                        className="border-amber-300 text-amber-900 bg-white hover:bg-amber-100 font-bold text-xs h-8 gap-1 self-start sm:self-auto"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-amber-700" /> Ver Extrato
+                      </Button>
+                    </div>
+                  ) : partnerAccountingSummary.totalCompanyCost > 0 ? (
+                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs font-bold text-emerald-900">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <span>Saldos e Baixas entre Sócios 100% Quitados</span>
+                      </div>
+                      {partnerAccountingSummary.settlementRecords.length > 0 && (
+                        <Badge className="bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                          {partnerAccountingSummary.settlementRecords.length} Quitação(ões) Registrada(s)
+                        </Badge>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
