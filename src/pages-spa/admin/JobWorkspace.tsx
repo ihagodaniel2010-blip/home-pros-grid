@@ -373,22 +373,44 @@ export default function JobWorkspace() {
     );
     const totalSettledAmount = settlementRecords.reduce((acc, e) => acc + (e.amount || 0), 0);
 
-    // Equalization out-of-pocket calculation (50/50 split of out-of-pocket partner advances ONLY)
-    const outOfPocketDiff = hugoPaid - partner2Paid;
-    const targetTransfer = outOfPocketDiff / 2; // amount to equalize 50/50
+    // Track directional settlement payments
+    let hugoSettledToPartner2 = 0;
+    let partner2SettledToHugo = 0;
+
+    for (const s of settlementRecords) {
+      const amt = s.amount || 0;
+      const payer = (s.paid_by_name || '').toLowerCase();
+      const vendor = (s.vendor || '').toLowerCase();
+      
+      if (payer.includes('hugo') || vendor.includes('hugo ->') || vendor.includes('hugo luiz ->')) {
+        hugoSettledToPartner2 += amt;
+      } else {
+        partner2SettledToHugo += amt;
+      }
+    }
+
+    // Directional Net Outlays:
+    // Hugo Net Credit = Hugo OutOfPocket + Hugo Settlements Paid to Adelmo - Hugo Settlements Received from Adelmo
+    const hugoNetCredit = hugoPaid + hugoSettledToPartner2 - partner2SettledToHugo;
+    
+    // Adelmo Net Credit = Adelmo OutOfPocket + Adelmo Settlements Paid to Hugo - Adelmo Settlements Received from Hugo
+    const partner2NetCredit = partner2Paid + partner2SettledToHugo - hugoSettledToPartner2;
+
+    const netDifference = hugoNetCredit - partner2NetCredit;
+    const targetTransfer = Math.abs(netDifference) / 2;
 
     let netOwedFrom = "";
     let netOwedTo = "";
     let netOwedAmount = 0;
 
-    if (targetTransfer > 0) {
+    if (netDifference > 0.01) {
       netOwedFrom = partner2Name;
       netOwedTo = hugoName;
-      netOwedAmount = Math.max(0, targetTransfer - totalSettledAmount);
-    } else if (targetTransfer < 0) {
+      netOwedAmount = targetTransfer;
+    } else if (netDifference < -0.01) {
       netOwedFrom = hugoName;
       netOwedTo = partner2Name;
-      netOwedAmount = Math.max(0, Math.abs(targetTransfer) - totalSettledAmount);
+      netOwedAmount = targetTransfer;
     }
 
     const isSettled = netOwedAmount <= 0.01;
@@ -944,6 +966,22 @@ export default function JobWorkspace() {
     } catch (err: any) {
       console.error("Delete expense error:", err);
       toast.error("Failed to delete material.");
+    }
+  };
+
+  const handleMarkAsCompanyCard = async (expenseId: string) => {
+    try {
+      await updateExpense(expenseId, {
+        paid_by_name: "Company Card / Account",
+        payment_source: "company_card",
+        reimbursable_to_owner: false,
+        reimbursement_status: "not_reimbursable"
+      });
+      toast.success("Despesa alterada para Cartão da Empresa com sucesso!");
+      loadJobWorkspace();
+    } catch (err) {
+      console.error("Error updating expense to company card:", err);
+      toast.error("Erro ao alterar despesa para Cartão da Empresa.");
     }
   };
 
@@ -3721,6 +3759,7 @@ export default function JobWorkspace() {
                           <th className="pb-2">Data</th>
                           <th className="pb-2">Fornecedor / Item</th>
                           <th className="pb-2 text-right">Valor</th>
+                          <th className="pb-2 text-right">Ação</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-blue-100">
@@ -3729,6 +3768,17 @@ export default function JobWorkspace() {
                             <td className="py-2 font-semibold text-gray-800">{new Date(e.receipt_date).toLocaleDateString()}</td>
                             <td className="py-2 font-bold text-gray-900">{e.vendor} <span className="font-normal text-gray-500">({e.notes?.replace('Job Expense for ', '') || 'Material'})</span></td>
                             <td className="py-2 text-right font-black text-blue-950">${e.amount.toFixed(2)}</td>
+                            <td className="py-2 text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMarkAsCompanyCard(e.id)}
+                                className="h-6 text-[10px] text-purple-700 hover:text-purple-900 hover:bg-purple-100 font-bold px-2 rounded-lg"
+                                title="Mudar para Cartão da Empresa"
+                              >
+                                💳 Mudar p/ Cartão Empresa
+                              </Button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -3754,6 +3804,7 @@ export default function JobWorkspace() {
                           <th className="pb-2">Data</th>
                           <th className="pb-2">Fornecedor / Item</th>
                           <th className="pb-2 text-right">Valor</th>
+                          <th className="pb-2 text-right">Ação</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-purple-100">
@@ -3762,6 +3813,17 @@ export default function JobWorkspace() {
                             <td className="py-2 font-semibold text-gray-800">{new Date(e.receipt_date).toLocaleDateString()}</td>
                             <td className="py-2 font-bold text-gray-900">{e.vendor} <span className="font-normal text-gray-500">({e.notes?.replace('Job Expense for ', '') || 'Material'})</span></td>
                             <td className="py-2 text-right font-black text-purple-950">${e.amount.toFixed(2)}</td>
+                            <td className="py-2 text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMarkAsCompanyCard(e.id)}
+                                className="h-6 text-[10px] text-purple-700 hover:text-purple-900 hover:bg-purple-100 font-bold px-2 rounded-lg"
+                                title="Mudar para Cartão da Empresa"
+                              >
+                                💳 Mudar p/ Cartão Empresa
+                              </Button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
