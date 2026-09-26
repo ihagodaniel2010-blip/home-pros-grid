@@ -37,13 +37,13 @@ const PublicExtraView = () => {
                 if (supabase) {
                     let targetToken = null;
                     if (data.estimate_id) {
-                        const { data: est } = await supabase.from('estimates').select('public_token, id').eq('id', data.estimate_id).maybeSingle();
-                        if (est) targetToken = est.public_token || est.id;
+                        const { data: est } = await supabase.from('estimates').select('id, access_token').eq('id', data.estimate_id).maybeSingle();
+                        if (est) targetToken = (est as any).access_token || est.id;
                     } else if (data.service_job_id) {
                         const { data: job } = await supabase.from('service_jobs').select('estimate_id').eq('id', data.service_job_id).maybeSingle();
                         if (job?.estimate_id) {
-                            const { data: est } = await supabase.from('estimates').select('public_token, id').eq('id', job.estimate_id).maybeSingle();
-                            if (est) targetToken = est.public_token || est.id;
+                            const { data: est } = await supabase.from('estimates').select('id, access_token').eq('id', job.estimate_id).maybeSingle();
+                            if (est) targetToken = (est as any).access_token || est.id;
                         }
                     }
 
