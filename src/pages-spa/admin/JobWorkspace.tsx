@@ -379,18 +379,74 @@ export default function JobWorkspace() {
 
   const clientMaterialsByPartner = useMemo(() => {
     const map: Record<string, { partnerName: string; amount: number }> = {};
-    const clientMats = expenses.filter(e => e.bill_to_client === true || (e as any).material_responsibility === 'client');
+    const clientMats = expenses.filter(e => 
+      (e.bill_to_client === true || (e as any).material_responsibility === 'client') &&
+      e.expense_category !== 'partner_reimbursable' &&
+      (e.expense_category as string) !== 'partner_reimbursement'
+    );
+
     for (const exp of clientMats) {
-      const payer = exp.paid_by_name || "Company Card / Other";
-      if (!map[payer]) {
-        map[payer] = { partnerName: payer, amount: 0 };
+      const rawPayer = (exp.paid_by_name || "Company Card / Account").trim();
+      
+      // Match case-insensitively against partners list
+      const matchedPartner = partners.find(p => {
+        const pName = p.name.trim().toLowerCase();
+        const rawLower = rawPayer.toLowerCase();
+        return pName === rawLower || rawLower.includes(pName) || pName.includes(rawLower) || (pName.split(' ')[0] === rawLower.split(' ')[0] && pName.split(' ')[0].length > 2);
+      });
+
+      const canonicalName = matchedPartner ? matchedPartner.name : rawPayer;
+      const groupKey = canonicalName.toLowerCase();
+
+      if (!map[groupKey]) {
+        map[groupKey] = { partnerName: canonicalName, amount: 0 };
       }
-      map[payer].amount += exp.amount || 0;
+      map[groupKey].amount += exp.amount || 0;
     }
     return Object.values(map);
-  }, [expenses]);
+  }, [expenses, partners]);
 
   const [expenseSelectedFile, setExpenseSelectedFile] = useState<File | null>(null);
+
+  interface DetailItemModalState {
+    type: 'client_material' | 'company_material' | 'partner_settlement' | 'extra';
+    item: any;
+    mediaUrl?: string | null;
+    extraMediaUrls?: string[];
+  }
+
+  const [detailModalItem, setDetailModalItem] = useState<DetailItemModalState | null>(null);
+  const [isLoadingDetailMedia, setIsLoadingDetailMedia] = useState(false);
+
+  const handleOpenItemDetail = async (item: any, type: 'client_material' | 'company_material' | 'partner_settlement' | 'extra') => {
+    setIsLoadingDetailMedia(true);
+    setDetailModalItem({ type, item, mediaUrl: null, extraMediaUrls: [] });
+
+    try {
+      if (type === 'extra') {
+        const records = await getExtraMediaRecords(item.id).catch(() => []);
+        const urls: string[] = [];
+        for (const r of records) {
+          const u = await resolveSignedMediaUrl(r.storage_path);
+          if (u) urls.push(u);
+        }
+        setDetailModalItem(prev => prev ? { ...prev, extraMediaUrls: urls } : null);
+      } else {
+        let path = item.receipt_storage_path || item.storage_path;
+        if (!path && item.receipt_files && item.receipt_files.length > 0) {
+          path = item.receipt_files[0].storage_path;
+        }
+        if (path) {
+          const u = await resolveSignedMediaUrl(path);
+          setDetailModalItem(prev => prev ? { ...prev, mediaUrl: u } : null);
+        }
+      }
+    } catch (err) {
+      console.warn("Error resolving detail media:", err);
+    } finally {
+      setIsLoadingDetailMedia(false);
+    }
+  };
 
   const handleStartEditSettlement = (exp: Expense) => {
     setEditingExpense(exp);
@@ -1882,14 +1938,26 @@ export default function JobWorkspace() {
                           {extra.schedule_impact && <span className="text-gray-500 font-medium">Impact: {extra.schedule_impact}</span>}
                         </div>
 
-                        {(extra.public_token || estimate?.public_token) && (
-                          <button
-                            onClick={() => handleCopyExtraLink(extra)}
-                            className="font-bold text-blue-600 hover:underline"
+                        <div className="flex items-center gap-3">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenItemDetail(extra, 'extra')}
+                            className="h-7 text-xs font-bold text-purple-700 hover:bg-purple-100 gap-1 px-2 rounded-lg"
+                            title="Ver Detalhes Ampliados e Fotos"
                           >
-                            Copy Client Approval Link
-                          </button>
-                        )}
+                            <Eye className="h-3.5 w-3.5" /> Ver Detalhes
+                          </Button>
+
+                          {(extra.public_token || estimate?.public_token) && (
+                            <button
+                              onClick={() => handleCopyExtraLink(extra)}
+                              className="font-bold text-blue-600 hover:underline"
+                            >
+                              Copy Client Approval Link
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -2134,6 +2202,15 @@ export default function JobWorkspace() {
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                onClick={() => handleOpenItemDetail(mat, 'client_material')}
+                                className="h-7 w-7 p-0 text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+                                title="Ver Detalhes e Comprovante"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => handleStartEditExpense(mat)}
                                 className="h-7 w-7 p-0 text-gray-600 hover:text-blue-600 hover:bg-blue-50"
                                 title="Edit Material"
@@ -2210,23 +2287,46 @@ export default function JobWorkspace() {
                         <th className="p-3 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-100 font-medium">
                       {expenses.filter(e => !e.bill_to_client).map(exp => {
                         const halfAmount = exp.amount / 2;
                         const paidByName = exp.paid_by_name || "Company Account";
+                        const isSettlement = exp.expense_category === 'partner_reimbursable' || 
+                          (exp.expense_category as string) === 'partner_reimbursement' || 
+                          exp.vendor?.toLowerCase().includes('partner settlement') || 
+                          exp.notes?.toLowerCase().includes('baixa realizada');
+
                         return (
-                          <tr key={exp.id}>
+                          <tr key={exp.id} className={isSettlement ? "bg-emerald-50/90 hover:bg-emerald-100/90 border-b border-emerald-200 transition-colors" : ""}>
                             <td className="p-3 font-semibold text-gray-900">{new Date(exp.receipt_date).toLocaleDateString()}</td>
-                            <td className="p-3 font-medium text-gray-900">{exp.vendor}</td>
+                            <td className="p-3 font-bold text-gray-900 flex items-center gap-1.5">
+                              {isSettlement && <Badge className="bg-emerald-600 text-white font-bold text-[9px] uppercase">Baixa de Ajuste</Badge>}
+                              <span>{exp.vendor}</span>
+                            </td>
                             <td className="p-3 text-purple-700 font-bold">{paidByName}</td>
-                            <td className="p-3 text-gray-600 font-mono text-[11px]">
-                              {exp.payment_source === 'partner_personal' || exp.reimbursable_to_owner
-                                ? `${paidByName}: $${exp.amount.toFixed(2)} advanced (Hugo: $${halfAmount.toFixed(2)} / Brother: $${halfAmount.toFixed(2)})`
-                                : `Company Card ($${exp.amount.toFixed(2)})`}
+                            <td className="p-3 text-gray-600 text-[11px]">
+                              {isSettlement ? (
+                                <span className="text-emerald-800 font-bold flex items-center gap-1">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Liquidado / Baixa Direta entre Sócios (100% Baixa)
+                                </span>
+                              ) : (exp.payment_source === 'partner_personal' || exp.reimbursable_to_owner) ? (
+                                <span className="font-mono">{paidByName}: ${exp.amount.toFixed(2)} advanced (Hugo: ${halfAmount.toFixed(2)} / Brother: ${halfAmount.toFixed(2)})</span>
+                              ) : (
+                                <span>Company Card (${exp.amount.toFixed(2)})</span>
+                              )}
                             </td>
                             <td className="p-3 text-right font-bold text-gray-900 text-sm">${exp.amount.toLocaleString()}</td>
                             <td className="p-3 text-right">
                               <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleOpenItemDetail(exp, isSettlement ? 'partner_settlement' : 'company_material')}
+                                  className="h-7 w-7 p-0 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100"
+                                  title="Ver Detalhes e Comprovante"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -3215,6 +3315,135 @@ export default function JobWorkspace() {
                 className="bg-[#0b2a4a] text-white font-bold text-xs"
               >
                 {isSavingPaymentEdit ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. Item Detail Expanded View Modal */}
+      {detailModalItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl overflow-y-auto max-h-[90vh] border border-gray-100">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-100 text-blue-800 rounded-xl">
+                  <Info className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-gray-900">Detalhes Ampliados do Lançamento</h3>
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider font-semibold">
+                    {detailModalItem.type === 'client_material' && "Material do Cliente"}
+                    {detailModalItem.type === 'company_material' && "Material Interno da Empresa"}
+                    {detailModalItem.type === 'partner_settlement' && "Baixa de Acerto entre Sócios"}
+                    {detailModalItem.type === 'extra' && "Order de Alteração / Extra"}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setDetailModalItem(null)} className="p-2 text-gray-400 hover:text-gray-700 rounded-full">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Main Details */}
+            <div className="space-y-4 text-xs">
+              {/* Item Title & Value */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Item / Descrição</span>
+                  <p className="font-bold text-sm text-gray-900">
+                    {detailModalItem.type === 'extra' 
+                      ? (detailModalItem.item.description || "Change Order")
+                      : (detailModalItem.item.vendor || detailModalItem.item.notes || "Lançamento")}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Valor Total</span>
+                  <p className="font-black text-lg text-emerald-700">
+                    ${(detailModalItem.item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Audit Details */}
+              <div className="grid grid-cols-2 gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Data do Lançamento</span>
+                  <p className="font-bold text-gray-800">
+                    {new Date(detailModalItem.item.receipt_date || detailModalItem.item.created_at || detailModalItem.item.payment_date || Date.now()).toLocaleDateString()}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Quem Pagou / Solicitou</span>
+                  <p className="font-bold text-purple-800">
+                    {detailModalItem.item.paid_by_name || detailModalItem.item.uploaded_by || user?.name || "Administração"}
+                  </p>
+                </div>
+                {detailModalItem.item.payment_method && (
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block">Forma de Pagamento</span>
+                    <p className="font-bold text-gray-800 uppercase">{detailModalItem.item.payment_method}</p>
+                  </div>
+                )}
+                {detailModalItem.type === 'partner_settlement' && (
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block">Tipo de Transação</span>
+                    <p className="font-bold text-emerald-700">Baixa Direta entre Sócios (100%)</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Detailed Notes / Scope */}
+              {(detailModalItem.item.notes || detailModalItem.item.reason || detailModalItem.item.description) && (
+                <div className="p-3.5 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-blue-900 block">Observações / Motivo Completo</span>
+                  <p className="text-gray-800 font-medium whitespace-pre-wrap leading-relaxed">
+                    {detailModalItem.item.notes || detailModalItem.item.reason || detailModalItem.item.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Attached Proof / Receipts */}
+              <div className="pt-2 border-t border-gray-100 space-y-2">
+                <span className="font-bold text-gray-900 text-xs flex items-center gap-1.5">
+                  <Receipt className="h-4 w-4 text-amber-600" /> Comprovante / Anexo Anexado
+                </span>
+
+                {isLoadingDetailMedia ? (
+                  <p className="text-xs text-gray-400 italic py-2">Carregando anexo do comprovante...</p>
+                ) : detailModalItem.mediaUrl ? (
+                  <div className="rounded-2xl border border-gray-200 overflow-hidden bg-slate-900 max-h-64 flex items-center justify-center relative group">
+                    <img
+                      src={detailModalItem.mediaUrl}
+                      alt="Comprovante Anexado"
+                      className="w-full h-full object-contain cursor-pointer"
+                      onClick={() => setSelectedMediaUrl(detailModalItem.mediaUrl!)}
+                    />
+                    <button
+                      onClick={() => setSelectedMediaUrl(detailModalItem.mediaUrl!)}
+                      className="absolute bottom-2 right-2 px-3 py-1.5 bg-black/70 hover:bg-black/90 text-white font-bold text-[10px] rounded-xl backdrop-blur-sm"
+                    >
+                      🔍 Expandir Imagem
+                    </button>
+                  </div>
+                ) : detailModalItem.extraMediaUrls && detailModalItem.extraMediaUrls.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {detailModalItem.extraMediaUrls.map((url, idx) => (
+                      <div key={idx} className="aspect-video rounded-xl overflow-hidden border border-gray-200 bg-slate-900 relative group cursor-pointer" onClick={() => setSelectedMediaUrl(url)}>
+                        <img src={url} alt={`Anexo ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">Nenhum comprovante/foto anexado a este lançamento.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-gray-100">
+              <Button onClick={() => setDetailModalItem(null)} className="bg-[#0b2a4a] text-white font-bold text-xs rounded-xl px-5">
+                Fechar
               </Button>
             </div>
           </div>
