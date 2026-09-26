@@ -5,7 +5,7 @@ import {
   MoreHorizontal, Images, Wrench, UserCheck, DollarSign, Plus, Download, Copy,
   Printer, ShieldCheck, PenTool, Calendar, AlertCircle, Sparkles, ExternalLink,
   ChevronRight, Eye, EyeOff, Globe, Tag, CreditCard, Receipt, FileCheck, Building2,
-  Pencil, Trash2
+  Pencil, Trash2, Info, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -307,39 +307,55 @@ export default function JobWorkspace() {
 
   // Derived Partner Accounting Breakdown (Requirements for Hugo vs Partner 50/50)
   const partnerAccountingSummary = useMemo(() => {
-    const companyExpenses = expenses.filter(
-      e => !e.bill_to_client && (e as any).material_responsibility !== 'client' && e.status !== 'deleted' && e.expense_category !== 'partner_reimbursement'
-    );
+    const isPartnerSettlement = (e: Expense) =>
+      e.expense_category === 'partner_reimbursable' ||
+      (e.expense_category as string) === 'partner_reimbursement' ||
+      e.vendor?.toLowerCase().includes('partner settlement') ||
+      e.notes?.toLowerCase().includes('baixa realizada') ||
+      e.notes?.toLowerCase().includes('pagamento entre socio');
 
-    const totalsByPartner: Record<string, number> = {};
-    companyExpenses.forEach(exp => {
-      const name = exp.paid_by_name?.trim() || "Company Account";
-      totalsByPartner[name] = (totalsByPartner[name] || 0) + (exp.amount || 0);
-    });
+    const isCompanyCard = (e: Expense) =>
+      e.payment_source === 'company_account' ||
+      e.payment_source === 'company_card' ||
+      e.paid_by_name === 'Company Card' ||
+      e.paid_by_name === 'Company Card / Account' ||
+      !e.paid_by_name ||
+      e.paid_by_name.toLowerCase().includes('company');
+
+    // Filter ALL internal company job expenses (excluding deleted, client materials, and settlements)
+    const companyExpenses = expenses.filter(
+      e => !e.bill_to_client && 
+           (e as any).material_responsibility !== 'client' && 
+           e.status !== 'deleted' && 
+           !isPartnerSettlement(e)
+    );
 
     const totalCompanyCost = companyExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
 
+    // Active partners names
     const activePartners = partners.filter(p => p.active !== false);
     const hugoName = activePartners.find(p => p.name.toLowerCase().includes("hugo"))?.name || "Hugo Luiz Ferreira dos Santos";
     const partner2Name = activePartners.find(p => !p.name.toLowerCase().includes("hugo"))?.name || "Adelmo Partner";
 
-    const hugoPaid = Object.entries(totalsByPartner)
-      .filter(([name]) => name.toLowerCase().includes("hugo"))
-      .reduce((sum, [, amt]) => sum + amt, 0);
+    // Split company expenses into out-of-pocket (partner cards/cash) vs corporate company card
+    const companyCardExpenses = companyExpenses.filter(e => isCompanyCard(e));
+    const companyCardPaid = companyCardExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
-    const partner2Paid = Object.entries(totalsByPartner)
-      .filter(([name]) => !name.toLowerCase().includes("hugo") && name !== "Company Account")
-      .reduce((sum, [, amt]) => sum + amt, 0);
+    const outOfPocketExpenses = companyExpenses.filter(e => !isCompanyCard(e));
 
-    const companyCardPaid = totalsByPartner["Company Account"] || 0;
+    const hugoOutofPocketExpenses = outOfPocketExpenses.filter(e => e.paid_by_name?.toLowerCase().includes("hugo"));
+    const partner2OutofPocketExpenses = outOfPocketExpenses.filter(e => !e.paid_by_name?.toLowerCase().includes("hugo"));
 
-    // Calculate settlements ("baixas")
+    const hugoPaid = hugoOutofPocketExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const partner2Paid = partner2OutofPocketExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    // Calculate settlements ("pagamentos entre sócios")
     const settlementRecords = expenses.filter(
-      e => e.expense_category === 'partner_reimbursement' || (e as any).reimbursement_status === 'settled' || (e as any).reimbursement_status === 'reimbursed'
+      e => e.status !== 'deleted' && isPartnerSettlement(e)
     );
     const totalSettledAmount = settlementRecords.reduce((acc, e) => acc + (e.amount || 0), 0);
 
-    // Target equalization out-of-pocket (50/50 split of out-of-pocket partner advances)
+    // Equalization out-of-pocket calculation (50/50 split of out-of-pocket partner advances ONLY)
     const outOfPocketDiff = hugoPaid - partner2Paid;
     const targetTransfer = outOfPocketDiff / 2; // amount to equalize 50/50
 
@@ -361,7 +377,9 @@ export default function JobWorkspace() {
 
     return {
       companyExpenses,
-      totalsByPartner,
+      outOfPocketExpenses,
+      hugoOutofPocketExpenses,
+      partner2OutofPocketExpenses,
       totalCompanyCost,
       hugoPaid,
       partner2Paid,
@@ -373,6 +391,7 @@ export default function JobWorkspace() {
       netOwedFrom,
       netOwedTo,
       netOwedAmount,
+      targetTransfer,
       isSettled
     };
   }, [expenses, partners]);
@@ -407,6 +426,7 @@ export default function JobWorkspace() {
   }, [expenses, partners]);
 
   const [expenseSelectedFile, setExpenseSelectedFile] = useState<File | null>(null);
+  const [isPartnerAuditModalOpen, setIsPartnerAuditModalOpen] = useState(false);
 
   interface DetailItemModalState {
     type: 'client_material' | 'company_material' | 'partner_settlement' | 'extra';
@@ -1512,10 +1532,18 @@ export default function JobWorkspace() {
                   </h3>
                   <p className="text-xs text-gray-500">Internal company job costs paid out-of-pocket by partners, split 50/50.</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge className="bg-purple-100 text-purple-900 font-bold text-xs px-3 py-1">
                     Total Company Job Cost: ${partnerAccountingSummary.totalCompanyCost.toLocaleString()}
                   </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsPartnerAuditModalOpen(true)}
+                    className="text-xs font-bold border-purple-200 text-purple-900 bg-purple-50 hover:bg-purple-100 gap-1.5"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-purple-600" /> Extrato de Transações (Audit)
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1534,19 +1562,19 @@ export default function JobWorkspace() {
                     {partnerAccountingSummary.hugoName} Paid
                   </span>
                   <p className="text-xl font-black text-blue-950">${partnerAccountingSummary.hugoPaid.toFixed(2)}</p>
-                  <p className="text-[10px] text-blue-700">Out-of-pocket advanced</p>
+                  <p className="text-[10px] text-blue-700 font-medium">Cartão pessoal avançado</p>
                 </div>
                 <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200 space-y-1">
                   <span className="text-[10px] font-bold uppercase text-purple-800 tracking-wider">
                     {partnerAccountingSummary.partner2Name} Paid
                   </span>
                   <p className="text-xl font-black text-purple-950">${partnerAccountingSummary.partner2Paid.toFixed(2)}</p>
-                  <p className="text-[10px] text-purple-700">Out-of-pocket advanced</p>
+                  <p className="text-[10px] text-purple-700 font-medium">Cartão pessoal avançado</p>
                 </div>
                 <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-200 space-y-1">
                   <span className="text-[10px] font-bold uppercase text-slate-700 tracking-wider">Company Card/Account</span>
                   <p className="text-xl font-black text-slate-900">${partnerAccountingSummary.companyCardPaid.toFixed(2)}</p>
-                  <p className="text-[10px] text-slate-500">Corporate company card</p>
+                  <p className="text-[10px] text-slate-500">Cartão direto da empresa (Sem dívida)</p>
                 </div>
               </div>
 
@@ -1554,7 +1582,7 @@ export default function JobWorkspace() {
               <div className="pt-2">
                 {partnerAccountingSummary.netOwedAmount > 0 ? (
                   <div className="p-4 bg-amber-50 rounded-xl border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                    <div className="space-y-0.5">
+                    <div className="space-y-0.5 cursor-pointer" onClick={() => setIsPartnerAuditModalOpen(true)}>
                       <div className="flex items-center gap-2">
                         <Badge className="bg-amber-500 text-white font-bold text-[10px] uppercase">
                           Pending Partner Settlement
@@ -1564,26 +1592,36 @@ export default function JobWorkspace() {
                         </span>
                         <span className="text-base font-black text-amber-900">${partnerAccountingSummary.netOwedAmount.toFixed(2)}</span>
                       </div>
-                      <p className="text-[11px] text-amber-800">
-                        Equalization required to balance out-of-pocket job material expenses 50/50.
+                      <p className="text-[11px] text-amber-800 font-medium hover:underline flex items-center gap-1">
+                        🔍 Clique aqui para ver o extrato de transações completo de onde surgiu este valor.
                       </p>
                     </div>
-                    <Button
-                      onClick={() => {
-                        setSettlementForm({
-                          payerName: partnerAccountingSummary.netOwedFrom,
-                          receiverName: partnerAccountingSummary.netOwedTo,
-                          amount: partnerAccountingSummary.netOwedAmount.toFixed(2),
-                          date: new Date().toISOString().slice(0, 10),
-                          paymentMethod: "zelle",
-                          notes: ""
-                        });
-                        setIsPartnerSettlementOpen(true);
-                      }}
-                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 h-9 shadow-sm shrink-0 gap-1.5"
-                    >
-                      <DollarSign className="h-4 w-4" /> Registrar Baixa / Pay Partner
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsPartnerAuditModalOpen(true)}
+                        className="border-amber-300 text-amber-900 bg-white hover:bg-amber-100 font-bold text-xs h-9 gap-1"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-amber-700" /> Ver Extrato
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setSettlementForm({
+                            payerName: partnerAccountingSummary.netOwedFrom,
+                            receiverName: partnerAccountingSummary.netOwedTo,
+                            amount: partnerAccountingSummary.netOwedAmount.toFixed(2),
+                            date: new Date().toISOString().slice(0, 10),
+                            paymentMethod: "zelle",
+                            notes: ""
+                          });
+                          setIsPartnerSettlementOpen(true);
+                        }}
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 h-9 shadow-sm shrink-0 gap-1.5"
+                      >
+                        <DollarSign className="h-4 w-4" /> Registrar Baixa / Pay Partner
+                      </Button>
+                    </div>
                   </div>
                 ) : partnerAccountingSummary.totalCompanyCost > 0 ? (
                   <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs font-bold text-emerald-900">
@@ -2290,29 +2328,39 @@ export default function JobWorkspace() {
                     <tbody className="divide-y divide-gray-100 font-medium">
                       {expenses.filter(e => !e.bill_to_client).map(exp => {
                         const halfAmount = exp.amount / 2;
-                        const paidByName = exp.paid_by_name || "Company Account";
+                        const paidByName = exp.paid_by_name || "Company Card / Account";
                         const isSettlement = exp.expense_category === 'partner_reimbursable' || 
                           (exp.expense_category as string) === 'partner_reimbursement' || 
                           exp.vendor?.toLowerCase().includes('partner settlement') || 
-                          exp.notes?.toLowerCase().includes('baixa realizada');
+                          exp.notes?.toLowerCase().includes('baixa realizada') ||
+                          exp.notes?.toLowerCase().includes('pagamento entre socio');
+
+                        const isCompanyCard = exp.payment_source === 'company_account' ||
+                          exp.payment_source === 'company_card' ||
+                          exp.paid_by_name === 'Company Card' ||
+                          exp.paid_by_name === 'Company Card / Account' ||
+                          !exp.paid_by_name ||
+                          exp.paid_by_name.toLowerCase().includes('company');
 
                         return (
                           <tr key={exp.id} className={isSettlement ? "bg-emerald-50/90 hover:bg-emerald-100/90 border-b border-emerald-200 transition-colors" : ""}>
                             <td className="p-3 font-semibold text-gray-900">{new Date(exp.receipt_date).toLocaleDateString()}</td>
                             <td className="p-3 font-bold text-gray-900 flex items-center gap-1.5">
-                              {isSettlement && <Badge className="bg-emerald-600 text-white font-bold text-[9px] uppercase">Baixa de Ajuste</Badge>}
+                              {isSettlement && <Badge className="bg-emerald-600 text-white font-bold text-[9px] uppercase">Pagamento entre Sócios</Badge>}
                               <span>{exp.vendor}</span>
                             </td>
                             <td className="p-3 text-purple-700 font-bold">{paidByName}</td>
                             <td className="p-3 text-gray-600 text-[11px]">
                               {isSettlement ? (
                                 <span className="text-emerald-800 font-bold flex items-center gap-1">
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Liquidado / Baixa Direta entre Sócios (100% Baixa)
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Liquidado / Pagamento entre Sócios (100% Baixa)
                                 </span>
-                              ) : (exp.payment_source === 'partner_personal' || exp.reimbursable_to_owner) ? (
-                                <span className="font-mono">{paidByName}: ${exp.amount.toFixed(2)} advanced (Hugo: ${halfAmount.toFixed(2)} / Brother: ${halfAmount.toFixed(2)})</span>
+                              ) : isCompanyCard ? (
+                                <span className="text-slate-700 font-semibold flex items-center gap-1">
+                                  💳 Cartão / Conta da Empresa (${exp.amount.toFixed(2)}) — Sem reembolso de sócios
+                                </span>
                               ) : (
-                                <span>Company Card (${exp.amount.toFixed(2)})</span>
+                                <span className="font-mono">{paidByName}: ${exp.amount.toFixed(2)} adiantado ({partnerAccountingSummary.hugoName}: ${halfAmount.toFixed(2)} / {partnerAccountingSummary.partner2Name}: ${halfAmount.toFixed(2)})</span>
                               )}
                             </td>
                             <td className="p-3 text-right font-bold text-gray-900 text-sm">${exp.amount.toLocaleString()}</td>
@@ -2711,16 +2759,40 @@ export default function JobWorkspace() {
                 <Label className="font-bold text-gray-700 block mb-1">Who Paid (Payment Source)</Label>
                 <select
                   value={expenseForm.paidByName}
-                  onChange={e => setExpenseForm({ ...expenseForm, paidByName: e.target.value })}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === "Company Card" || val === "Company Card / Account") {
+                      setExpenseForm({
+                        ...expenseForm,
+                        paidByName: "Company Card / Account",
+                        paymentSource: "company_card",
+                        reimbursableToOwner: false
+                      });
+                    } else if (val === "Customer Paid Direct") {
+                      setExpenseForm({
+                        ...expenseForm,
+                        paidByName: val,
+                        paymentSource: "customer_paid_direct",
+                        reimbursableToOwner: false
+                      });
+                    } else {
+                      setExpenseForm({
+                        ...expenseForm,
+                        paidByName: val,
+                        paymentSource: "partner_personal",
+                        reimbursableToOwner: !expenseForm.billToClient
+                      });
+                    }
+                  }}
                   className="w-full h-10 px-3 rounded-xl border border-gray-200 text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="Company Card">Company Card / Account</option>
-                  {partners.filter(p => p.active === true).map(p => (
+                  <option value="Company Card / Account">💳 Company Card / Corporate Account</option>
+                  {partners.filter(p => p.active !== false).map(p => (
                     <option key={p.id} value={p.name}>
-                      {p.name} (Partner Personal Card / Cash)
+                      👤 {p.name} (Partner Personal Card / Cash)
                     </option>
                   ))}
-                  <option value="Customer Paid Direct">Customer Paid Direct</option>
+                  <option value="Customer Paid Direct">💵 Customer Paid Direct</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
@@ -3444,6 +3516,191 @@ export default function JobWorkspace() {
             <div className="flex justify-end pt-2 border-t border-gray-100">
               <Button onClick={() => setDetailModalItem(null)} className="bg-[#0b2a4a] text-white font-bold text-xs rounded-xl px-5">
                 Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Partner Transactions Audit Extrato Modal */}
+      {isPartnerAuditModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh] border border-gray-100">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 bg-purple-100 text-purple-800 rounded-2xl">
+                  <Building2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900">Extrato Auditável de Acerto entre Sócios</h3>
+                  <p className="text-xs text-gray-500">Demonstrativo completo de despesas pessoais avançadas (50/50) e pagamentos efetuados.</p>
+                </div>
+              </div>
+              <button onClick={() => setIsPartnerAuditModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-700 rounded-full">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Audit Summary Box */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3 bg-blue-50 rounded-2xl border border-blue-200 space-y-1">
+                <span className="text-[10px] font-bold uppercase text-blue-800 tracking-wider">Avançado por {partnerAccountingSummary.hugoName}</span>
+                <p className="text-xl font-black text-blue-950">${partnerAccountingSummary.hugoPaid.toFixed(2)}</p>
+                <p className="text-[10px] text-blue-700 font-medium">{partnerAccountingSummary.hugoOutofPocketExpenses.length} nota(s) pessoal(is)</p>
+              </div>
+              <div className="p-3 bg-purple-50 rounded-2xl border border-purple-200 space-y-1">
+                <span className="text-[10px] font-bold uppercase text-purple-800 tracking-wider">Avançado por {partnerAccountingSummary.partner2Name}</span>
+                <p className="text-xl font-black text-purple-950">${partnerAccountingSummary.partner2Paid.toFixed(2)}</p>
+                <p className="text-[10px] text-purple-700 font-medium">{partnerAccountingSummary.partner2OutofPocketExpenses.length} nota(s) pessoal(is)</p>
+              </div>
+              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-1">
+                <span className="text-[10px] font-bold uppercase text-emerald-800 tracking-wider">Total Já Liquidado</span>
+                <p className="text-xl font-black text-emerald-950">${partnerAccountingSummary.totalSettledAmount.toFixed(2)}</p>
+                <p className="text-[10px] text-emerald-700 font-medium">{partnerAccountingSummary.settlementRecords.length} pagamento(s) entre sócios</p>
+              </div>
+            </div>
+
+            {/* Out-of-Pocket Items Lists */}
+            <div className="space-y-4 text-xs">
+              {/* Hugo Out-of-Pocket List */}
+              <div className="space-y-2 border border-blue-200 rounded-2xl p-4 bg-blue-50/30">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-blue-950 text-sm flex items-center gap-1.5">
+                    👤 Despesas Pessoais Avançadas — {partnerAccountingSummary.hugoName} (${partnerAccountingSummary.hugoPaid.toFixed(2)})
+                  </h4>
+                </div>
+                {partnerAccountingSummary.hugoOutofPocketExpenses.length === 0 ? (
+                  <p className="text-gray-400 italic text-[11px]">Nenhuma despesa de material da empresa paga com cartão pessoal de Hugo.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="border-b border-blue-200 text-blue-900 font-bold uppercase text-[10px]">
+                        <tr>
+                          <th className="pb-2">Data</th>
+                          <th className="pb-2">Fornecedor / Item</th>
+                          <th className="pb-2 text-right">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-blue-100">
+                        {partnerAccountingSummary.hugoOutofPocketExpenses.map(e => (
+                          <tr key={e.id}>
+                            <td className="py-2 font-semibold text-gray-800">{new Date(e.receipt_date).toLocaleDateString()}</td>
+                            <td className="py-2 font-bold text-gray-900">{e.vendor} <span className="font-normal text-gray-500">({e.notes?.replace('Job Expense for ', '') || 'Material'})</span></td>
+                            <td className="py-2 text-right font-black text-blue-950">${e.amount.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Adelmo Out-of-Pocket List */}
+              <div className="space-y-2 border border-purple-200 rounded-2xl p-4 bg-purple-50/30">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-purple-950 text-sm flex items-center gap-1.5">
+                    👤 Despesas Pessoais Avançadas — {partnerAccountingSummary.partner2Name} (${partnerAccountingSummary.partner2Paid.toFixed(2)})
+                  </h4>
+                </div>
+                {partnerAccountingSummary.partner2OutofPocketExpenses.length === 0 ? (
+                  <p className="text-gray-400 italic text-[11px]">Nenhuma despesa de material da empresa paga com cartão pessoal de Adelmo.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="border-b border-purple-200 text-purple-900 font-bold uppercase text-[10px]">
+                        <tr>
+                          <th className="pb-2">Data</th>
+                          <th className="pb-2">Fornecedor / Item</th>
+                          <th className="pb-2 text-right">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-purple-100">
+                        {partnerAccountingSummary.partner2OutofPocketExpenses.map(e => (
+                          <tr key={e.id}>
+                            <td className="py-2 font-semibold text-gray-800">{new Date(e.receipt_date).toLocaleDateString()}</td>
+                            <td className="py-2 font-bold text-gray-900">{e.vendor} <span className="font-normal text-gray-500">({e.notes?.replace('Job Expense for ', '') || 'Material'})</span></td>
+                            <td className="py-2 text-right font-black text-purple-950">${e.amount.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Payments / Settlements List */}
+              <div className="space-y-2 border border-emerald-200 rounded-2xl p-4 bg-emerald-50/30">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-emerald-950 text-sm flex items-center gap-1.5">
+                    💳 Pagamentos &amp; Baixas Efetuadas entre Sócios (${partnerAccountingSummary.totalSettledAmount.toFixed(2)})
+                  </h4>
+                </div>
+                {partnerAccountingSummary.settlementRecords.length === 0 ? (
+                  <p className="text-gray-400 italic text-[11px]">Nenhum pagamento registrado entre sócios para este projeto ainda.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="border-b border-emerald-200 text-emerald-900 font-bold uppercase text-[10px]">
+                        <tr>
+                          <th className="pb-2">Data</th>
+                          <th className="pb-2">Transação</th>
+                          <th className="pb-2">Método</th>
+                          <th className="pb-2 text-right">Valor Baixado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-emerald-100">
+                        {partnerAccountingSummary.settlementRecords.map(e => (
+                          <tr key={e.id}>
+                            <td className="py-2 font-semibold text-gray-800">{new Date(e.receipt_date).toLocaleDateString()}</td>
+                            <td className="py-2 font-bold text-emerald-900">{e.vendor || "Pagamento entre Sócios"}</td>
+                            <td className="py-2 uppercase text-gray-600 font-medium">{e.payment_method || "Zelle"}</td>
+                            <td className="py-2 text-right font-black text-emerald-800">-${e.amount.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Net Balance Status */}
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-amber-800 tracking-wider">Resultado da Igualação 50/50</span>
+                  <p className="text-base font-black text-amber-950 mt-0.5">
+                    {partnerAccountingSummary.netOwedAmount > 0 ? (
+                      <>{partnerAccountingSummary.netOwedFrom} deve a {partnerAccountingSummary.netOwedTo}: <span className="text-amber-900 text-lg">${partnerAccountingSummary.netOwedAmount.toFixed(2)}</span></>
+                    ) : (
+                      <span className="text-emerald-800">Contas 100% Saldadas entre os Sócios!</span>
+                    )}
+                  </p>
+                </div>
+                {partnerAccountingSummary.netOwedAmount > 0 && (
+                  <Button
+                    onClick={() => {
+                      setIsPartnerAuditModalOpen(false);
+                      setSettlementForm({
+                        payerName: partnerAccountingSummary.netOwedFrom,
+                        receiverName: partnerAccountingSummary.netOwedTo,
+                        amount: partnerAccountingSummary.netOwedAmount.toFixed(2),
+                        date: new Date().toISOString().slice(0, 10),
+                        paymentMethod: "zelle",
+                        notes: ""
+                      });
+                      setIsPartnerSettlementOpen(true);
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-xs"
+                  >
+                    <DollarSign className="h-4 w-4 mr-1" /> Registrar Baixa / Pagar Partner
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-gray-100">
+              <Button onClick={() => setIsPartnerAuditModalOpen(false)} className="bg-[#0b2a4a] text-white font-bold text-xs rounded-xl px-5">
+                Fechar Extrato
               </Button>
             </div>
           </div>
