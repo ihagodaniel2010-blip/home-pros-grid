@@ -51,6 +51,39 @@ export async function getClientPayments(organizationId: string): Promise<ClientP
   return data as ClientPayment[];
 }
 
+export async function getPublicClientPayments(params: {
+  estimateId?: string | null;
+  serviceJobId?: string | null;
+  leadId?: string | null;
+}): Promise<ClientPayment[]> {
+  if (!supabase) return [];
+  const { estimateId, serviceJobId, leadId } = params;
+  if (!estimateId && !serviceJobId && !leadId) return [];
+
+  try {
+    let conditions: string[] = [];
+    if (serviceJobId) conditions.push(`service_job_id.eq.${serviceJobId}`);
+    if (estimateId) conditions.push(`estimate_id.eq.${estimateId}`);
+    if (leadId) conditions.push(`lead_id.eq.${leadId}`);
+
+    const { data, error } = await supabase
+      .from("estimate_payments_manual")
+      .select("*")
+      .or(conditions.join(','))
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Public fetch client payments error:", error);
+      return [];
+    }
+
+    return (data || []) as ClientPayment[];
+  } catch (err) {
+    console.error("Exception in getPublicClientPayments:", err);
+    return [];
+  }
+}
+
 export async function createClientPayment(paymentData: Partial<ClientPayment>): Promise<ClientPayment> {
   const public_token = crypto.randomUUID(); // generate random token
 

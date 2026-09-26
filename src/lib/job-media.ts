@@ -226,6 +226,31 @@ export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJ
 }
 
 /**
+ * Fetches public client-visible job media records for a given service job ID.
+ */
+export async function getPublicJobMediaByJobId(serviceJobId: string): Promise<ServiceJobMediaRecord[]> {
+    if (!supabase || !serviceJobId) return [];
+    try {
+        const { data, error } = await supabase
+            .from('service_job_media')
+            .select('*')
+            .eq('service_job_id', serviceJobId)
+            .or('visible_to_client.eq.true,visible_on_public_site.eq.true')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.warn("Public fetch job media error:", error);
+            return [];
+        }
+
+        return (data || []) as ServiceJobMediaRecord[];
+    } catch (err) {
+        console.error("Exception in getPublicJobMediaByJobId:", err);
+        return [];
+    }
+}
+
+/**
  * Deletes a job media record from the database.
  */
 export async function deleteJobMediaRecord(mediaId: string): Promise<void> {

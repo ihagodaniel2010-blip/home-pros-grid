@@ -98,6 +98,46 @@ export async function getExpenses(organizationId: string): Promise<Expense[]> {
   return data as Expense[];
 }
 
+export async function getPublicClientMaterials(params: {
+  estimateId?: string | null;
+  serviceJobId?: string | null;
+  leadId?: string | null;
+}): Promise<Expense[]> {
+  if (!supabase) return [];
+  const { estimateId, serviceJobId, leadId } = params;
+  if (!estimateId && !serviceJobId && !leadId) return [];
+
+  try {
+    let conditions: string[] = [];
+    if (serviceJobId) conditions.push(`service_job_id.eq.${serviceJobId}`);
+    if (estimateId) conditions.push(`estimate_id.eq.${estimateId}`);
+    if (leadId) conditions.push(`related_lead_id.eq.${leadId}`);
+
+    const { data, error } = await supabase
+      .from("receipts")
+      .select(`
+        *,
+        receipt_files (*)
+      `)
+      .or(conditions.join(','))
+      .eq("status", "active");
+
+    if (error) {
+      console.warn("Public fetch receipts error:", error);
+      return [];
+    }
+
+    return ((data || []) as Expense[]).filter(
+      e => (e.bill_to_client === true || (e as any).material_responsibility === 'client') &&
+           e.material_responsibility !== 'company' &&
+           e.status !== 'deleted'
+    );
+  } catch (err) {
+    console.error("Exception in getPublicClientMaterials:", err);
+    return [];
+  }
+}
+
 export async function uploadReceiptFile(
   organizationId: string,
   receiptId: string,
