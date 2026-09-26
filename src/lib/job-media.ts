@@ -229,17 +229,16 @@ export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJ
  * Fetches public client-visible job media records for a given service job ID.
  */
 export async function getPublicSignedMediaUrl(token: string, mediaId: string): Promise<string | null> {
-    if (!supabase || !token || !mediaId) return null;
+    if (!token || !mediaId) return null;
     try {
-        const { data, error } = await supabase.rpc('get_public_signed_media_url', { p_token: token, p_media_id: mediaId });
-        if (!error && data) return data as string;
+        const res = await fetch(`/api/public/signed-url?token=${encodeURIComponent(token)}&type=media&id=${encodeURIComponent(mediaId)}`);
+        if (res.ok) {
+            const data = await res.json();
+            return data.signedUrl || null;
+        }
     } catch (e) {
-        console.warn("getPublicSignedMediaUrl error:", e);
+        console.warn("getPublicSignedMediaUrl API route error:", e);
     }
-    try {
-        const { data, error } = await supabase.rpc('get_public_media_url', { p_token: token, p_media_id: mediaId });
-        if (!error && data) return data as string;
-    } catch (e) {}
     return null;
 }
 

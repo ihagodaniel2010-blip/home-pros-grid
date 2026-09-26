@@ -99,17 +99,16 @@ export async function getExpenses(organizationId: string): Promise<Expense[]> {
 }
 
 export async function getPublicSignedReceiptUrl(token: string, receiptId: string): Promise<string | null> {
-  if (!supabase || !token || !receiptId) return null;
+  if (!token || !receiptId) return null;
   try {
-    const { data, error } = await supabase.rpc('get_public_signed_receipt_url', { p_token: token, p_receipt_id: receiptId });
-    if (!error && data) return data as string;
+    const res = await fetch(`/api/public/signed-url?token=${encodeURIComponent(token)}&type=receipt&id=${encodeURIComponent(receiptId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.signedUrl || null;
+    }
   } catch (e) {
-    console.warn("getPublicSignedReceiptUrl error:", e);
+    console.warn("getPublicSignedReceiptUrl API route error:", e);
   }
-  try {
-    const { data, error } = await supabase.rpc('get_public_receipt_url', { p_token: token, p_receipt_id: receiptId });
-    if (!error && data) return data as string;
-  } catch (e) {}
   return null;
 }
 
