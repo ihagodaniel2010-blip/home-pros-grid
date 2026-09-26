@@ -987,6 +987,12 @@ export default function JobWorkspace() {
   };
 
   const handleDeleteExpense = async (expenseId: string) => {
+    const target = expenses.find(e => e.id === expenseId);
+    if (target && (target.reimbursement_status === 'reimbursed' || target.reimbursement_status === 'paid' || (partnerAccountingSummary?.partnerSettlementList && partnerAccountingSummary.partnerSettlementList.length > 0))) {
+      toast.error("Ação bloqueada: esta despesa possui liquidação/acerto de sócios vinculada. Não é possível excluí-la diretamente sem realizar o estorno auditável.");
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this material record?")) return;
     try {
       await deleteExpense(expenseId);
@@ -1000,6 +1006,12 @@ export default function JobWorkspace() {
   };
 
   const handleMarkAsCompanyCard = async (expenseId: string) => {
+    const target = expenses.find(e => e.id === expenseId);
+    if (target && (target.reimbursement_status === 'reimbursed' || target.reimbursement_status === 'paid' || (partnerAccountingSummary?.partnerSettlementList && partnerAccountingSummary.partnerSettlementList.length > 0))) {
+      toast.error("Ação bloqueada: esta despesa possui liquidação/acerto de sócios associada. Para manter a auditoria contábil, realize um estorno/ajuste de acerto antes de reclassificar.");
+      return;
+    }
+
     try {
       await updateExpense(expenseId, {
         paid_by_name: "Company Card / Account",
@@ -1428,11 +1440,13 @@ export default function JobWorkspace() {
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 onClick={() => {
-                  const portalToken = estimate?.public_token || job?.id || estimate?.id;
+                  const portalToken = (estimate as any)?.access_token || estimate?.public_token;
                   if (portalToken) {
                     const url = `${window.location.origin}/estimate/${portalToken}`;
                     navigator.clipboard.writeText(url);
                     toast.success("Client Project Portal link copied to clipboard!");
+                  } else {
+                    toast.error("Nenhum token público gerado para este orçamento.");
                   }
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold h-9 px-3 rounded-xl shadow-sm gap-1.5"
@@ -1854,9 +1868,13 @@ export default function JobWorkspace() {
                       <span className="text-gray-400 font-bold uppercase">Public Share Link</span>
                       <button
                         onClick={() => {
-                          const targetTk = estimate.public_token || estimate.id;
-                          navigator.clipboard.writeText(`${window.location.origin}/estimate/${targetTk}`);
-                          toast.success("Client Project Portal link copied!");
+                          const targetTk = (estimate as any)?.access_token || estimate?.public_token;
+                          if (targetTk) {
+                            navigator.clipboard.writeText(`${window.location.origin}/estimate/${targetTk}`);
+                            toast.success("Client Project Portal link copied!");
+                          } else {
+                            toast.error("Nenhum token público disponível.");
+                          }
                         }}
                         className="font-bold text-blue-600 hover:underline block"
                       >

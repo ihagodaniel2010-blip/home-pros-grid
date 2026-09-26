@@ -304,24 +304,26 @@ export const createPayment = async (payment: EstimatePayment): Promise<EstimateP
 export const getEstimateByToken = async (token: string): Promise<Estimate | null> => {
     if (!supabase || !token) return null;
 
-    // Strict Security Rule: Reject Lead IDs passed as public tokens
-    if (token.startsWith('lead_')) {
-        console.warn(`[SECURITY REJECT] Direct Lead ID access attempted on public route: ${token}`);
+    const cleanToken = token.trim();
+
+    // Strict Security Rule: Reject Lead IDs, Emails, or non-token identifiers
+    if (cleanToken.startsWith('lead_') || cleanToken.includes('@')) {
+        console.warn(`[SECURITY REJECT] Invalid identifier passed to public route: ${cleanToken}`);
         return null;
     }
 
-    // Tier 1: Try public RPC for estimate header
+    // Tier 1: Try public RPC for estimate header using public token
     try {
         const { data: estimate, error: estimateError } = await supabase
-            .rpc('get_public_estimate', { p_token: token });
+            .rpc('get_public_estimate', { p_token: cleanToken });
 
         if (!estimateError && estimate) {
             const { data: items } = await supabase
-                .rpc('get_public_estimate_items', { p_token: token });
+                .rpc('get_public_estimate_items', { p_token: cleanToken });
             let files: any[] = [];
             try {
                 const { data: filesData } = await supabase
-                    .rpc('get_public_estimate_files', { p_token: token });
+                    .rpc('get_public_estimate_files', { p_token: cleanToken });
                 if (filesData) files = filesData;
             } catch (e) {}
 
@@ -332,39 +334,15 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
             } as Estimate;
         }
     } catch (rpcErr) {
-        console.warn('RPC get_public_estimate failed, trying direct select:', rpcErr);
+        console.warn('RPC get_public_estimate failed, trying direct token lookup:', rpcErr);
     }
 
-    // Tier 2: Direct SELECT by id
-    try {
-        const { data: directEst, error: directErr } = await supabase
-            .from('estimates')
-            .select('*')
-            .eq('id', token)
-            .maybeSingle();
-
-        if (!directErr && directEst) {
-            const { data: items } = await supabase
-                .from('estimate_items')
-                .select('*')
-                .eq('estimate_id', directEst.id);
-
-            return {
-                ...directEst,
-                items: items || [],
-                files: []
-            } as Estimate;
-        }
-    } catch (selectErr) {
-        console.warn('Direct select estimate by id error:', selectErr);
-    }
-
-    // Tier 3: Direct SELECT by access_token
+    // Tier 2: Direct SELECT by public token column (access_token)
     try {
         const { data: accessEst, error: accessErr } = await supabase
             .from('estimates')
             .select('*')
-            .eq('access_token', token)
+            .eq('access_token', cleanToken)
             .maybeSingle();
 
         if (!accessErr && accessEst) {
@@ -379,7 +357,9 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
                 files: []
             } as Estimate;
         }
-    } catch (tokenErr) {}
+    } catch (tokenErr) {
+        console.warn('Direct select estimate by access_token error:', tokenErr);
+    }
 
     return null;
 };
