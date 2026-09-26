@@ -3,9 +3,9 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Estimate } from "@/lib/estimates";
 import { getServiceJobByEstimateId } from "@/lib/service-jobs";
 import { getServiceExtrasByJobId, getServiceExtrasByJobOrEstimateId, respondPublicServiceExtra, ServiceExtra, cleanReasonForDisplay } from "@/lib/service-extras";
-import { getExpenses, Expense } from "@/lib/expenses";
-import { getClientPayments, ClientPayment, createClientPayment } from "@/lib/client-payments";
-import { getJobMediaRecords, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
+import { getExpenses, getPublicClientMaterials, Expense } from "@/lib/expenses";
+import { getClientPayments, getPublicClientPayments, ClientPayment, createClientPayment } from "@/lib/client-payments";
+import { getJobMediaRecords, getPublicJobMediaByJobId, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { 
@@ -206,22 +206,16 @@ const PublicView = () => {
                 }
                 setServiceJob(job);
 
-                const [extrasList, allExpenses, mediaList, allPayments] = await Promise.all([
+                const [extrasList, fetchedClientMats, mediaList, fetchedPayments] = await Promise.all([
                     getServiceExtrasByJobOrEstimateId(job?.id, data.id, data.lead_id).catch(() => []),
-                    getExpenses(orgId).catch(() => []),
-                    job ? getJobMediaRecords(job.id).catch(() => []) : Promise.resolve([]),
-                    getClientPayments(orgId).catch(() => [])
+                    getPublicClientMaterials({ estimateId: data.id, serviceJobId: job?.id, leadId: data.lead_id }).catch(() => []),
+                    job ? getPublicJobMediaByJobId(job.id).catch(() => []) : Promise.resolve([]),
+                    getPublicClientPayments({ estimateId: data.id, serviceJobId: job?.id, leadId: data.lead_id }).catch(() => [])
                 ]);
 
                 setExtras(extrasList || []);
-
-                // Filter ONLY Client Materials (never company materials)
-                const filteredClientMats = (allExpenses || []).filter(e => 
-                    ((job && e.service_job_id === job.id) || (data.id && e.estimate_id === data.id) || (data.lead_id && (e as any).related_lead_id === data.lead_id)) && 
-                    (e.bill_to_client === true || e.material_responsibility === 'client') &&
-                    e.material_responsibility !== 'company'
-                );
-                setClientMaterials(filteredClientMats);
+                setClientMaterials(fetchedClientMats || []);
+                setPayments(fetchedPayments || []);
 
                 // Pre-resolve signed URLs for material receipts
                 const receiptUrlMap: Record<string, string> = {};

@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { supabase } from "@/lib/supabase";
 import { getEstimateById, Estimate } from "@/lib/estimates";
-import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra, extractMediaFromText } from "@/lib/service-extras";
+import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra, extractMediaFromText, respondPublicServiceExtra } from "@/lib/service-extras";
 import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, deleteJobMediaRecord, resolveSignedMediaUrl, uploadExtraMediaRecord, ServiceJobMediaRecord } from "@/lib/job-media";
 import { getExpenses, createExpense, Expense, updateExpense, deleteExpense } from "@/lib/expenses";
 import { getClientPayments, createClientPayment, updateClientPayment, deleteClientPayment, ClientPayment } from "@/lib/client-payments";
@@ -953,6 +953,36 @@ export default function JobWorkspace() {
       toast.success("Extra proposal link copied!");
     } else {
       toast.error("Could not resolve estimate public token for this extra.");
+    }
+  };
+
+  const handleAdminApproveExtra = async (extraId: string) => {
+    try {
+      const success = await respondPublicServiceExtra(extraId, 'approved');
+      if (success) {
+        toast.success("Extra/Change Order aprovado e confirmado pelo Administrador!");
+        loadJobWorkspace();
+      } else {
+        toast.error("Erro ao aprovar extra.");
+      }
+    } catch (err) {
+      console.error("Error approving extra:", err);
+      toast.error("Erro ao aprovar extra.");
+    }
+  };
+
+  const handleAdminRejectExtra = async (extraId: string) => {
+    try {
+      const success = await respondPublicServiceExtra(extraId, 'rejected');
+      if (success) {
+        toast.success("Extra marcado como recusado.");
+        loadJobWorkspace();
+      } else {
+        toast.error("Erro ao recusar extra.");
+      }
+    } catch (err) {
+      console.error("Error rejecting extra:", err);
+      toast.error("Erro ao recusar extra.");
     }
   };
 
@@ -2080,7 +2110,29 @@ export default function JobWorkspace() {
                           {extra.schedule_impact && <span className="text-gray-500 font-medium">Impact: {extra.schedule_impact}</span>}
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {extra.status === 'pending' && (
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                onClick={() => handleAdminApproveExtra(extra.id)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-7 px-2.5 rounded-lg shadow-2xs gap-1"
+                                title="Aprovar Extra Verbalmente/SMS (Admin)"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Confirmar / Aprovar (Admin)
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAdminRejectExtra(extra.id)}
+                                className="border-red-300 text-red-700 hover:bg-red-50 font-bold text-xs h-7 px-2.5 rounded-lg gap-1"
+                                title="Recusar Extra"
+                              >
+                                <X className="h-3.5 w-3.5" /> Recusar
+                              </Button>
+                            </div>
+                          )}
+
                           <Button
                             variant="ghost"
                             size="sm"
