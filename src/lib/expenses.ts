@@ -98,6 +98,23 @@ export async function getExpenses(organizationId: string): Promise<Expense[]> {
   return data as Expense[];
 }
 
+export async function getPublicSignedReceiptUrl(token: string, receiptId: string): Promise<string | null> {
+  if (!supabase || !token || !receiptId) return null;
+  try {
+    const { data, error } = await supabase.rpc('get_public_signed_receipt_url', { p_token: token, p_receipt_id: receiptId });
+    if (!error && data) return data as string;
+  } catch (e) {
+    console.warn("getPublicSignedReceiptUrl error:", e);
+  }
+  try {
+    const { data, error } = await supabase.rpc('get_public_receipt_url', { p_token: token, p_receipt_id: receiptId });
+    if (!error && data) return data as string;
+  } catch (e) {}
+  return null;
+}
+
+export const getPublicReceiptUrl = getPublicSignedReceiptUrl;
+
 export async function getPublicClientMaterials(params: {
   estimateId?: string | null;
   serviceJobId?: string | null;

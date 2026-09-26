@@ -3,9 +3,9 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Estimate } from "@/lib/estimates";
 import { getServiceJobByEstimateId } from "@/lib/service-jobs";
 import { getServiceExtrasByJobId, getServiceExtrasByJobOrEstimateId, respondPublicServiceExtra, ServiceExtra, cleanReasonForDisplay } from "@/lib/service-extras";
-import { getExpenses, getPublicClientMaterials, Expense } from "@/lib/expenses";
+import { getExpenses, getPublicClientMaterials, getPublicSignedReceiptUrl, Expense } from "@/lib/expenses";
 import { getClientPayments, getPublicClientPayments, ClientPayment, createClientPayment } from "@/lib/client-payments";
-import { getJobMediaRecords, getPublicJobMediaByJobId, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
+import { getJobMediaRecords, getPublicJobMediaByJobId, getPublicSignedMediaUrl, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { 
@@ -239,17 +239,18 @@ const PublicView = () => {
                 setClientMaterials(fetchedClientMats || []);
                 setPayments(fetchedPayments || []);
 
-                // Pre-resolve signed URLs for material receipts
+                // Pre-resolve signed URLs for material receipts using public token + receipt_id
                 const receiptUrlMap: Record<string, string> = {};
                 await Promise.all((fetchedClientMats || []).map(async (mat) => {
-                    let path = mat.receipt_url || (mat as any).receipt_storage_path || (mat as any).storage_path;
-                    if (!path && mat.receipt_files && mat.receipt_files.length > 0) {
-                        path = mat.receipt_files[0].storage_path;
+                    let resolved = await getPublicSignedReceiptUrl(tk, mat.id);
+                    if (!resolved) {
+                        let path = mat.receipt_url || (mat as any).receipt_storage_path || (mat as any).storage_path;
+                        if (!path && mat.receipt_files && mat.receipt_files.length > 0) {
+                            path = mat.receipt_files[0].storage_path;
+                        }
+                        if (path) resolved = await resolveSignedMediaUrl(path);
                     }
-                    if (path) {
-                        const resolved = await resolveSignedMediaUrl(path);
-                        if (resolved) receiptUrlMap[mat.id] = resolved;
-                    }
+                    if (resolved) receiptUrlMap[mat.id] = resolved;
                 }));
                 setMaterialReceiptUrls(receiptUrlMap);
 
@@ -262,10 +263,13 @@ const PublicView = () => {
                     (job && p.service_job_id === job.id) || (data.id && p.estimate_id === data.id) || (data.lead_id && (p as any).lead_id === data.lead_id)
                 ));
 
-                // Resolve signed URLs for visible client job media
+                // Resolve signed URLs for visible client job media using public token + media_id
                 const jobMediaUrlMap: Record<string, string> = {};
                 await Promise.all(visibleMedia.map(async (m) => {
-                    const resolved = await resolveSignedMediaUrl(m.storage_path);
+                    let resolved = await getPublicSignedMediaUrl(tk, m.id);
+                    if (!resolved && m.storage_path) {
+                        resolved = await resolveSignedMediaUrl(m.storage_path);
+                    }
                     if (resolved) jobMediaUrlMap[m.id] = resolved;
                 }));
                 setClientMediaUrls(jobMediaUrlMap);

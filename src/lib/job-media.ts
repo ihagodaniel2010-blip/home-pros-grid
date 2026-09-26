@@ -228,16 +228,22 @@ export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJ
 /**
  * Fetches public client-visible job media records for a given service job ID.
  */
-export async function getPublicMediaUrl(token: string, mediaId: string): Promise<string | null> {
+export async function getPublicSignedMediaUrl(token: string, mediaId: string): Promise<string | null> {
     if (!supabase || !token || !mediaId) return null;
+    try {
+        const { data, error } = await supabase.rpc('get_public_signed_media_url', { p_token: token, p_media_id: mediaId });
+        if (!error && data) return data as string;
+    } catch (e) {
+        console.warn("getPublicSignedMediaUrl error:", e);
+    }
     try {
         const { data, error } = await supabase.rpc('get_public_media_url', { p_token: token, p_media_id: mediaId });
         if (!error && data) return data as string;
-    } catch (e) {
-        console.warn("getPublicMediaUrl error:", e);
-    }
+    } catch (e) {}
     return null;
 }
+
+export const getPublicMediaUrl = getPublicSignedMediaUrl;
 
 export async function getPublicJobMediaByJobId(
     serviceJobId?: string | null,
