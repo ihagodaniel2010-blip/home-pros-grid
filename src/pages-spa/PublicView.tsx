@@ -236,7 +236,7 @@ const PublicView = () => {
                 setClientMedia(visibleMedia);
 
                 // Filter Client Payments for this project
-                setPayments((allPayments || []).filter(p => 
+                setPayments((fetchedPayments || []).filter(p => 
                     (job && p.service_job_id === job.id) || (data.id && p.estimate_id === data.id) || (data.lead_id && (p as any).lead_id === data.lead_id)
                 ));
 

@@ -113,6 +113,7 @@ export async function getPublicClientMaterials(params: {
     if (estimateId) conditions.push(`estimate_id.eq.${estimateId}`);
     if (leadId) conditions.push(`related_lead_id.eq.${leadId}`);
 
+    let rawData: any[] = [];
     const { data, error } = await supabase
       .from("receipts")
       .select(`
@@ -122,13 +123,20 @@ export async function getPublicClientMaterials(params: {
       .or(conditions.join(','))
       .eq("status", "active");
 
-    if (error) {
-      console.warn("Public fetch receipts error:", error);
-      return [];
+    if (!error && data) {
+      rawData = data;
+    } else {
+      // Fallback direct query without joined table
+      const { data: directData } = await supabase
+        .from("receipts")
+        .select('*')
+        .or(conditions.join(','))
+        .eq("status", "active");
+      if (directData) rawData = directData;
     }
 
-    return ((data || []) as Expense[]).filter(
-      e => (e.bill_to_client === true || (e as any).material_responsibility === 'client') &&
+    return (rawData as Expense[]).filter(
+      e => (e.bill_to_client === true || (e as any).material_responsibility === 'client' || e.expense_category === 'client_reimbursable') &&
            e.material_responsibility !== 'company' &&
            e.status !== 'deleted'
     );

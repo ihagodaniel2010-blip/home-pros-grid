@@ -231,30 +231,46 @@ export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJ
 export async function getPublicJobMediaByJobId(serviceJobId?: string | null, estimateId?: string | null): Promise<ServiceJobMediaRecord[]> {
     if (!supabase) return [];
     
-    let targetJobId = serviceJobId?.trim();
-    if (!targetJobId && estimateId) {
+    const cleanJobId = (serviceJobId && serviceJobId !== 'null' && serviceJobId !== 'undefined') ? serviceJobId.trim() : null;
+    const cleanEstId = (estimateId && estimateId !== 'null' && estimateId !== 'undefined') ? estimateId.trim() : null;
+
+    let targetJobId = cleanJobId;
+    if (!targetJobId && cleanEstId) {
         try {
-            const { data: jData } = await supabase.from('service_jobs').select('id').eq('estimate_id', estimateId.trim()).maybeSingle();
+            const { data: jData } = await supabase.from('service_jobs').select('id').eq('estimate_id', cleanEstId).maybeSingle();
             if (jData?.id) targetJobId = jData.id;
         } catch (e) {}
     }
 
-    if (!targetJobId) return [];
-
     try {
+        let conditions: string[] = [];
+        if (targetJobId) conditions.push(`service_job_id.eq.${targetJobId}`);
+        if (cleanEstId) conditions.push(`estimate_id.eq.${cleanEstId}`);
+
+        if (conditions.length === 0) return [];
+
         const { data, error } = await supabase
             .from('service_job_media')
             .select('*')
-            .eq('service_job_id', targetJobId)
+            .or(conditions.join(','))
             .or('visible_to_client.eq.true,visible_on_public_site.eq.true')
             .order('created_at', { ascending: false });
 
-        if (error) {
-            console.warn("Public fetch job media error:", error);
-            return [];
+        if (!error && data && data.length > 0) {
+            return data as ServiceJobMediaRecord[];
         }
 
-        return (data || []) as ServiceJobMediaRecord[];
+        // Fallback: search by estimate_id alone
+        if (cleanEstId) {
+            const { data: estMedia } = await supabase
+                .from('service_job_media')
+                .select('*')
+                .eq('estimate_id', cleanEstId)
+                .order('created_at', { ascending: false });
+            if (estMedia && estMedia.length > 0) return estMedia as ServiceJobMediaRecord[];
+        }
+
+        return [];
     } catch (err) {
         console.error("Exception in getPublicJobMediaByJobId:", err);
         return [];

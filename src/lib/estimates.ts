@@ -332,15 +332,15 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
             } as Estimate;
         }
     } catch (rpcErr) {
-        console.warn('RPC get_public_estimate failed, trying direct select by public_token/id:', rpcErr);
+        console.warn('RPC get_public_estimate failed, trying direct select:', rpcErr);
     }
 
-    // Tier 2: Direct SELECT by public_token or id
+    // Tier 2: Direct SELECT by id
     try {
         const { data: directEst, error: directErr } = await supabase
             .from('estimates')
             .select('*')
-            .or(`public_token.eq.${token},id.eq.${token}`)
+            .eq('id', token)
             .maybeSingle();
 
         if (!directErr && directEst) {
@@ -356,8 +356,30 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
             } as Estimate;
         }
     } catch (selectErr) {
-        console.warn('Direct select estimate by public_token/id error:', selectErr);
+        console.warn('Direct select estimate by id error:', selectErr);
     }
+
+    // Tier 3: Direct SELECT by access_token
+    try {
+        const { data: accessEst, error: accessErr } = await supabase
+            .from('estimates')
+            .select('*')
+            .eq('access_token', token)
+            .maybeSingle();
+
+        if (!accessErr && accessEst) {
+            const { data: items } = await supabase
+                .from('estimate_items')
+                .select('*')
+                .eq('estimate_id', accessEst.id);
+
+            return {
+                ...accessEst,
+                items: items || [],
+                files: []
+            } as Estimate;
+        }
+    } catch (tokenErr) {}
 
     return null;
 };
