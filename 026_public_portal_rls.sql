@@ -1,9 +1,9 @@
 -- ============================================================================
--- MIGRAÇÃO 026 (FINAL AUDITADA, CONSOLIDADA E BLINDADA - V4)
--- TÍTULO: PUBLIC CLIENT PORTAL RPCs WITH SERVER-SIDE SIGNED URL GENERATION
--- ============================================================================
+-- PROPOSTA DE MIGRAÇÃO 026 (FINAL CONSOLIDADA E AUDITADA)
+-- TÍTULO: PUBLIC CLIENT PORTAL RPCs FOR SECURE READ ACCESS
+-- PROJETO: Carpentry (H&A Construction)
 -- DATA: 2026-09-26
--- STATUS: AGUARDANDO APLICAÇÃO MANUAL NO SUPABASE SQL EDITOR
+-- INSTRUÇÕES: Copiar e executar no Supabase SQL Editor
 -- EXECUÇÃO AUTOMÁTICA: NÃO (SQL EXECUTED: NO)
 -- ============================================================================
 
@@ -40,6 +40,7 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Validar token público exclusivo (NÃO aceita UUID interno da Estimate)
     SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
     FROM public.estimates est
     WHERE (est.access_token = v_clean_token OR (COALESCE(est.public_token, '') = v_clean_token AND v_clean_token <> ''))
@@ -50,6 +51,7 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Resolver o Job correspondente na mesma organização
     SELECT j.id INTO v_job_id
     FROM public.service_jobs j
     WHERE (j.estimate_id = v_estimate_id)
@@ -212,7 +214,7 @@ BEGIN
     FROM public.service_job_media m
     WHERE m.organization_id = v_org_id
       AND (m.estimate_id = v_estimate_id OR (v_job_id IS NOT NULL AND m.service_job_id = v_job_id))
-      AND m.visible_to_client = true
+      AND m.visible_to_client = true -- APENAS MÍDIAS CLIENT VISIBLE (EXCLUI ADMIN ONLY)
     ORDER BY m.created_at DESC;
 END;
 $$;
@@ -291,252 +293,9 @@ END;
 $$;
 
 -- ----------------------------------------------------------------------------
--- 5. RPC: get_public_signed_media_url(p_token text, p_media_id uuid, p_expires_in integer)
--- ----------------------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.get_public_signed_media_url(text, uuid, integer);
-DROP FUNCTION IF EXISTS public.get_public_signed_media_url(text, uuid);
-DROP FUNCTION IF EXISTS public.get_public_media_url(text, uuid);
-CREATE OR REPLACE FUNCTION public.get_public_signed_media_url(
-    p_token text, 
-    p_media_id uuid, 
-    p_expires_in integer DEFAULT 3600
-)
-RETURNS text
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-    v_clean_token text := trim(p_token);
-    v_estimate_id uuid;
-    v_job_id uuid;
-    v_org_id uuid;
-    v_storage_path text;
-    v_bucket text := 'images';
-    v_clean_path text;
-    v_jwt_secret text;
-    v_exp bigint;
-    v_payload text;
-    v_header text := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
-    v_signature text;
-    v_token text;
-BEGIN
-    IF v_clean_token IS NULL OR v_clean_token = '' OR p_media_id IS NULL THEN
-        RETURN NULL;
-    END IF;
-
-    SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
-    FROM public.estimates est
-    WHERE (est.access_token = v_clean_token OR (COALESCE(est.public_token, '') = v_clean_token AND v_clean_token <> ''))
-      AND (est.access_token_revoked IS NOT TRUE)
-    LIMIT 1;
-
-    IF v_estimate_id IS NULL THEN
-        RETURN NULL;
-    END IF;
-
-    SELECT j.id INTO v_job_id
-    FROM public.service_jobs j
-    WHERE (j.estimate_id = v_estimate_id)
-      AND j.organization_id = v_org_id
-    LIMIT 1;
-
-    SELECT m.storage_path INTO v_storage_path
-    FROM public.service_job_media m
-    WHERE m.id = p_media_id
-      AND m.organization_id = v_org_id
-      AND (m.estimate_id = v_estimate_id OR (v_job_id IS NOT NULL AND m.service_job_id = v_job_id))
-      AND m.visible_to_client = true
-    LIMIT 1;
-
-    IF v_storage_path IS NULL THEN
-        RETURN NULL;
-    END IF;
-
-    IF v_storage_path LIKE 'http://%' OR v_storage_path LIKE 'https://%' OR v_storage_path LIKE 'data:%' THEN
-        RETURN v_storage_path;
-    END IF;
-
-    v_clean_path := v_storage_path;
-    IF v_storage_path LIKE 'documents/%' THEN
-        v_bucket := 'documents';
-        v_clean_path := substring(v_storage_path from 11);
-    ELSIF v_storage_path LIKE 'images/%' THEN
-        v_bucket := 'images';
-        v_clean_path := substring(v_storage_path from 8);
-    ELSIF v_storage_path LIKE 'receipts/%' THEN
-        v_bucket := 'receipts';
-        v_clean_path := substring(v_storage_path from 10);
-    END IF;
-
-    v_exp := extract(epoch from (now() + (COALESCE(p_expires_in, 3600) || ' seconds')::interval))::bigint;
-
-    v_jwt_secret := COALESCE(
-        current_setting('app.settings.jwt_secret', true),
-        current_setting('pgrst.jwt_secret', true),
-        'super-secret-jwt-token-with-at-least-32-characters-long'
-    );
-
-    v_payload := translate(encode(('{"url":"' || v_bucket || '/' || v_clean_path || '","exp":' || v_exp || '}')::bytea, 'base64'), '+/=', '-_');
-    v_payload := regexp_replace(v_payload, '=+$', '');
-
-    v_signature := translate(encode(hmac((v_header || '.' || v_payload)::bytea, v_jwt_secret::bytea, 'sha256'), 'base64'), '+/=', '-_');
-    v_signature := regexp_replace(v_signature, '=+$', '');
-
-    v_token := v_header || '.' || v_payload || '.' || v_signature;
-
-    RETURN '/storage/v1/object/sign/' || v_bucket || '/' || v_clean_path || '?token=' || v_token;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.get_public_media_url(p_token text, p_media_id uuid)
-RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-BEGIN
-    RETURN public.get_public_signed_media_url(p_token, p_media_id, 3600);
-END;
-$$;
-
--- ----------------------------------------------------------------------------
--- 6. RPC: get_public_signed_receipt_url(p_token text, p_receipt_id uuid, p_expires_in integer)
--- ----------------------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.get_public_signed_receipt_url(text, uuid, integer);
-DROP FUNCTION IF EXISTS public.get_public_signed_receipt_url(text, uuid);
-DROP FUNCTION IF EXISTS public.get_public_receipt_url(text, uuid);
-CREATE OR REPLACE FUNCTION public.get_public_signed_receipt_url(
-    p_token text, 
-    p_receipt_id uuid, 
-    p_expires_in integer DEFAULT 3600
-)
-RETURNS text
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-    v_clean_token text := trim(p_token);
-    v_estimate_id uuid;
-    v_job_id uuid;
-    v_org_id uuid;
-    v_receipt_url text;
-    v_bucket text := 'receipts';
-    v_clean_path text;
-    v_jwt_secret text;
-    v_exp bigint;
-    v_payload text;
-    v_header text := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
-    v_signature text;
-    v_token text;
-BEGIN
-    IF v_clean_token IS NULL OR v_clean_token = '' OR p_receipt_id IS NULL THEN
-        RETURN NULL;
-    END IF;
-
-    SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
-    FROM public.estimates est
-    WHERE (est.access_token = v_clean_token OR (COALESCE(est.public_token, '') = v_clean_token AND v_clean_token <> ''))
-      AND (est.access_token_revoked IS NOT TRUE)
-    LIMIT 1;
-
-    IF v_estimate_id IS NULL THEN
-        RETURN NULL;
-    END IF;
-
-    SELECT j.id INTO v_job_id
-    FROM public.service_jobs j
-    WHERE (j.estimate_id = v_estimate_id)
-      AND j.organization_id = v_org_id
-    LIMIT 1;
-
-    SELECT r.receipt_url INTO v_receipt_url
-    FROM public.receipts r
-    WHERE r.id = p_receipt_id
-      AND r.organization_id = v_org_id
-      AND (r.estimate_id = v_estimate_id OR (v_job_id IS NOT NULL AND r.service_job_id = v_job_id))
-      AND r.status = 'active'
-      AND (r.bill_to_client = true OR r.material_responsibility = 'client' OR r.expense_category = 'client_reimbursable')
-      AND (r.material_responsibility IS NULL OR r.material_responsibility != 'company')
-    LIMIT 1;
-
-    IF v_receipt_url IS NULL THEN
-        RETURN NULL;
-    END IF;
-
-    IF v_receipt_url LIKE 'http://%' OR v_receipt_url LIKE 'https://%' OR v_receipt_url LIKE 'data:%' THEN
-        RETURN v_receipt_url;
-    END IF;
-
-    v_clean_path := v_receipt_url;
-    IF v_receipt_url LIKE 'receipts/%' THEN
-        v_bucket := 'receipts';
-        v_clean_path := substring(v_receipt_url from 10);
-    ELSIF v_receipt_url LIKE 'documents/%' THEN
-        v_bucket := 'documents';
-        v_clean_path := substring(v_receipt_url from 11);
-    ELSIF v_receipt_url LIKE 'images/%' THEN
-        v_bucket := 'images';
-        v_clean_path := substring(v_receipt_url from 8);
-    END IF;
-
-    v_exp := extract(epoch from (now() + (COALESCE(p_expires_in, 3600) || ' seconds')::interval))::bigint;
-
-    v_jwt_secret := COALESCE(
-        current_setting('app.settings.jwt_secret', true),
-        current_setting('pgrst.jwt_secret', true),
-        'super-secret-jwt-token-with-at-least-32-characters-long'
-    );
-
-    v_payload := translate(encode(('{"url":"' || v_bucket || '/' || v_clean_path || '","exp":' || v_exp || '}')::bytea, 'base64'), '+/=', '-_');
-    v_payload := regexp_replace(v_payload, '=+$', '');
-
-    v_signature := translate(encode(hmac((v_header || '.' || v_payload)::bytea, v_jwt_secret::bytea, 'sha256'), 'base64'), '+/=', '-_');
-    v_signature := regexp_replace(v_signature, '=+$', '');
-
-    v_token := v_header || '.' || v_payload || '.' || v_signature;
-
-    RETURN '/storage/v1/object/sign/' || v_bucket || '/' || v_clean_path || '?token=' || v_token;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.get_public_receipt_url(p_token text, p_receipt_id uuid)
-RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-BEGIN
-    RETURN public.get_public_signed_receipt_url(p_token, p_receipt_id, 3600);
-END;
-$$;
-
--- ----------------------------------------------------------------------------
--- 7. PERMISSÕES DE EXECUÇÃO PÚBLICA (ANON & AUTHENTICATED)
+-- 5. PERMISSÕES DE EXECUÇÃO PÚBLICA (ANON & AUTHENTICATED)
 -- ----------------------------------------------------------------------------
 GRANT EXECUTE ON FUNCTION public.get_public_estimate_extras(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_public_client_materials(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_public_job_media(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_public_client_payments(text) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.get_public_signed_media_url(text, uuid, integer) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.get_public_media_url(text, uuid) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.get_public_signed_receipt_url(text, uuid, integer) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.get_public_receipt_url(text, uuid) TO anon, authenticated;
-
--- ============================================================================
--- SCRIPT DE ROLLBACK (PRESERVA FUNÇÕES PREEXISTENTES DO PROJETO CARPENTRY)
--- ============================================================================
-/*
-REVOKE EXECUTE ON FUNCTION public.get_public_estimate_extras(text) FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.get_public_client_materials(text) FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.get_public_job_media(text) FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.get_public_client_payments(text) FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.get_public_signed_media_url(text, uuid, integer) FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.get_public_media_url(text, uuid) FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.get_public_signed_receipt_url(text, uuid, integer) FROM anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.get_public_receipt_url(text, uuid) FROM anon, authenticated;
-
-DROP FUNCTION IF EXISTS public.get_public_estimate_extras(text);
-DROP FUNCTION IF EXISTS public.get_public_client_materials(text);
-DROP FUNCTION IF EXISTS public.get_public_job_media(text);
-DROP FUNCTION IF EXISTS public.get_public_client_payments(text);
-DROP FUNCTION IF EXISTS public.get_public_signed_media_url(text, uuid, integer);
-DROP FUNCTION IF EXISTS public.get_public_signed_media_url(text, uuid);
-DROP FUNCTION IF EXISTS public.get_public_media_url(text, uuid);
-DROP FUNCTION IF EXISTS public.get_public_signed_receipt_url(text, uuid, integer);
-DROP FUNCTION IF EXISTS public.get_public_signed_receipt_url(text, uuid);
-DROP FUNCTION IF EXISTS public.get_public_receipt_url(text, uuid);
-*/
