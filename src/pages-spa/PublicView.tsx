@@ -209,7 +209,7 @@ const PublicView = () => {
                 const [extrasList, fetchedClientMats, mediaList, fetchedPayments] = await Promise.all([
                     getServiceExtrasByJobOrEstimateId(job?.id, data.id, data.lead_id).catch(() => []),
                     getPublicClientMaterials({ estimateId: data.id, serviceJobId: job?.id, leadId: data.lead_id }).catch(() => []),
-                    job ? getPublicJobMediaByJobId(job.id).catch(() => []) : Promise.resolve([]),
+                    getPublicJobMediaByJobId(job?.id, data.id).catch(() => []),
                     getPublicClientPayments({ estimateId: data.id, serviceJobId: job?.id, leadId: data.lead_id }).catch(() => [])
                 ]);
 
@@ -219,7 +219,7 @@ const PublicView = () => {
 
                 // Pre-resolve signed URLs for material receipts
                 const receiptUrlMap: Record<string, string> = {};
-                await Promise.all(filteredClientMats.map(async (mat) => {
+                await Promise.all((fetchedClientMats || []).map(async (mat) => {
                     let path = mat.receipt_url || (mat as any).receipt_storage_path || (mat as any).storage_path;
                     if (!path && mat.receipt_files && mat.receipt_files.length > 0) {
                         path = mat.receipt_files[0].storage_path;
@@ -232,7 +232,7 @@ const PublicView = () => {
                 setMaterialReceiptUrls(receiptUrlMap);
 
                 // Filter ONLY Client-Visible Job Media (never admin-only media)
-                const visibleMedia = (mediaList || []).filter(m => m.visible_to_client);
+                const visibleMedia = (mediaList || []).filter(m => m.visible_to_client || m.visible_on_public_site);
                 setClientMedia(visibleMedia);
 
                 // Filter Client Payments for this project

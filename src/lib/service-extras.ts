@@ -117,7 +117,7 @@ export const getServiceExtrasByJobOrEstimateId = async (jobId?: string | null, e
     if (!cleanJobId && !cleanEstId && !cleanLeadId) return [];
 
     try {
-        const conditions: string[] = [];
+        let conditions: string[] = [];
         if (cleanJobId) conditions.push(`service_job_id.eq.${cleanJobId}`);
         if (cleanEstId) conditions.push(`estimate_id.eq.${cleanEstId}`);
 
@@ -129,25 +129,63 @@ export const getServiceExtrasByJobOrEstimateId = async (jobId?: string | null, e
 
         const { data, error } = await query.order('created_at', { ascending: false });
 
-        if (error) {
-            console.error("Error getting service extras with primary query:", error);
-            if (cleanEstId) {
-                const { data: estData } = await supabase
-                    .from('service_extras')
-                    .select('*')
-                    .eq('estimate_id', cleanEstId)
-                    .order('created_at', { ascending: false });
-                if (estData) return estData as ServiceExtra[];
-            }
-            return [];
+        if (!error && data && data.length > 0) {
+            return data as ServiceExtra[];
         }
 
-        return data as ServiceExtra[];
+        // Fallback 1: Query by estimate_id alone
+        if (cleanEstId) {
+            const { data: estData } = await supabase
+                .from('service_extras')
+                .select('*')
+                .eq('estimate_id', cleanEstId)
+                .order('created_at', { ascending: false });
+            if (estData && estData.length > 0) return estData as ServiceExtra[];
+        }
+
+        // Fallback 2: Resolve service_job_id from estimate_id
+        if (cleanEstId) {
+            const { data: jobData } = await supabase
+                .from('service_jobs')
+                .select('id')
+                .eq('estimate_id', cleanEstId)
+                .maybeSingle();
+            
+            if (jobData?.id) {
+                const { data: jobExtras } = await supabase
+                    .from('service_extras')
+                    .select('*')
+                    .eq('service_job_id', jobData.id)
+                    .order('created_at', { ascending: false });
+                if (jobExtras && jobExtras.length > 0) return jobExtras as ServiceExtra[];
+            }
+        }
+
+        // Fallback 3: Try leadId
+        if (cleanLeadId) {
+            const { data: leadJob } = await supabase
+                .from('service_jobs')
+                .select('id')
+                .eq('lead_id', cleanLeadId)
+                .maybeSingle();
+            if (leadJob?.id) {
+                const { data: leadExtras } = await supabase
+                    .from('service_extras')
+                    .select('*')
+                    .eq('service_job_id', leadJob.id)
+                    .order('created_at', { ascending: false });
+                if (leadExtras && leadExtras.length > 0) return leadExtras as ServiceExtra[];
+            }
+        }
+
+        return (data || []) as ServiceExtra[];
     } catch (err) {
         console.error("Exception getting service extras:", err);
         return [];
     }
 };
+
+export const getPublicServiceExtras = getServiceExtrasByJobOrEstimateId;
 
 export const respondPublicServiceExtra = async (tokenOrId: string, status: 'approved' | 'rejected') => {
     if (!supabase || !tokenOrId) return false;
