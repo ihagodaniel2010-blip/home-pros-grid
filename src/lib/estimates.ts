@@ -361,6 +361,30 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
         console.warn('Direct select estimate by access_token error:', tokenErr);
     }
 
+    // Tier 3: Direct SELECT by id (preserves existing public links sent using estimate UUID)
+    try {
+        const { data: idEst, error: idErr } = await supabase
+            .from('estimates')
+            .select('*')
+            .eq('id', cleanToken)
+            .maybeSingle();
+
+        if (!idErr && idEst) {
+            const { data: items } = await supabase
+                .from('estimate_items')
+                .select('*')
+                .eq('estimate_id', idEst.id);
+
+            return {
+                ...idEst,
+                items: items || [],
+                files: []
+            } as Estimate;
+        }
+    } catch (idErr) {
+        console.warn('Direct select estimate by id error:', idErr);
+    }
+
     return null;
 };
 
