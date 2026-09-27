@@ -267,7 +267,7 @@ const HeroSection = () => {
 
           {/* Right Lead Capture Form Card (Canonical Refactored Homepage Form) */}
           <div className="lg:col-span-6" id="hero-estimate-form">
-            <div className="bg-white/85 backdrop-blur-md text-slate-900 rounded-2xl p-6 sm:p-7 shadow-2xl border border-white/60">
+            <div className="bg-white/91 backdrop-blur-sm text-slate-900 rounded-2xl p-6 sm:p-7 shadow-2xl border border-white/70">
               <div className="mb-4 border-b border-slate-200/60 pb-3">
                 <h2 className="text-2xl font-black tracking-tight text-[#0b2a4a]">
                   Get a Free Estimate
@@ -318,7 +318,7 @@ const HeroSection = () => {
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                         required
-                        className="h-10 bg-slate-50 border-slate-200 text-xs font-medium focus:bg-white"
+                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
                       />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -327,7 +327,7 @@ const HeroSection = () => {
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         required
-                        className="h-10 bg-slate-50 border-slate-200 text-xs font-medium focus:bg-white"
+                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
                       />
                       <Input
                         type="email"
@@ -335,13 +335,13 @@ const HeroSection = () => {
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         required
-                        className="h-10 bg-slate-50 border-slate-200 text-xs font-medium focus:bg-white"
+                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
                       />
                     </div>
                   </div>
 
                   {/* Section 2: Full Project Address */}
-                  <div className="space-y-2 pt-1 border-t border-slate-100">
+                  <div className="space-y-2 pt-1 border-t border-slate-200/60">
                     <span className="text-[11px] font-extrabold text-[#0b2a4a] uppercase tracking-wider block">
                       2. Project Address
                     </span>
@@ -352,7 +352,7 @@ const HeroSection = () => {
                           value={formData.streetAddress}
                           onChange={(e) => setFormData({ ...formData, streetAddress: e.target.value })}
                           required
-                          className="h-10 bg-slate-50 border-slate-200 text-xs font-medium focus:bg-white"
+                          className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
                         />
                       </div>
                       <div>
@@ -360,7 +360,7 @@ const HeroSection = () => {
                           placeholder="Apt/Unit (Opt)"
                           value={formData.unit}
                           onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                          className="h-10 bg-slate-50 border-slate-200 text-xs font-medium focus:bg-white"
+                          className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
                         />
                       </div>
                     </div>
@@ -371,12 +371,12 @@ const HeroSection = () => {
                         value={formData.city}
                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                         required
-                        className="h-10 bg-slate-50 border-slate-200 text-xs font-medium focus:bg-white"
+                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
                       />
                       <select
                         value={formData.state}
                         onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                        className="h-10 bg-slate-50 border border-slate-200 rounded-md px-2 text-xs font-medium text-slate-700 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0b2a4a]"
+                        className="h-10 bg-white border border-slate-200 rounded-md px-2 text-xs font-medium text-slate-700 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0b2a4a] shadow-xs"
                       >
                         <option value="Maine (ME)">Maine (ME)</option>
                         <option value="New Hampshire (NH)">New Hampshire (NH)</option>
@@ -387,13 +387,13 @@ const HeroSection = () => {
                         value={formData.zip}
                         onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
                         required
-                        className="h-10 bg-slate-50 border-slate-200 text-xs font-medium focus:bg-white"
+                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
                       />
                     </div>
                   </div>
 
                   {/* Section 3: Service Information */}
-                  <div className="space-y-2 pt-1 border-t border-slate-100">
+                  <div className="space-y-2 pt-1 border-t border-slate-200/60">
                     <span className="text-[11px] font-extrabold text-[#0b2a4a] uppercase tracking-wider block">
                       3. Service &amp; Project Info
                     </span>
@@ -401,7 +401,7 @@ const HeroSection = () => {
                       <select
                         value={formData.projectType}
                         onChange={(e) => setFormData({ ...formData, projectType: e.target.value })}
-                        className="w-full h-10 bg-slate-50 border border-slate-200 rounded-md px-3 text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0b2a4a]"
+                        className="w-full h-10 bg-white border border-slate-200 rounded-md px-3 text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0b2a4a] shadow-xs"
                       >
                         {categories.length > 0 ? (
                           categories.map((c) => (
@@ -430,7 +430,7 @@ const HeroSection = () => {
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         rows={2}
                         required
-                        className="bg-slate-50 border-slate-200 text-xs font-medium focus:bg-white resize-none"
+                        className="bg-white border-slate-200 text-xs font-medium focus:bg-white resize-none shadow-xs"
                       />
                     </div>
                   </div>
@@ -443,7 +443,7 @@ const HeroSection = () => {
                     <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-700">
                       <label 
                         onClick={() => handlePrefToggle('phone')}
-                        className="flex items-center gap-2 p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                        className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
                       >
                         {contactPrefs.phone ? <CheckSquare className="w-4 h-4 text-[#ea580c] shrink-0" /> : <Square className="w-4 h-4 text-slate-300 shrink-0" />}
                         <span className="truncate">Phone Call</span>
@@ -451,7 +451,7 @@ const HeroSection = () => {
 
                       <label 
                         onClick={() => handlePrefToggle('sms')}
-                        className="flex items-center gap-2 p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                        className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
                       >
                         {contactPrefs.sms ? <CheckSquare className="w-4 h-4 text-[#ea580c] shrink-0" /> : <Square className="w-4 h-4 text-slate-300 shrink-0" />}
                         <span className="truncate">SMS / Text</span>
@@ -459,7 +459,7 @@ const HeroSection = () => {
 
                       <label 
                         onClick={() => handlePrefToggle('email')}
-                        className="flex items-center gap-2 p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                        className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
                       >
                         {contactPrefs.email ? <CheckSquare className="w-4 h-4 text-[#ea580c] shrink-0" /> : <Square className="w-4 h-4 text-slate-300 shrink-0" />}
                         <span className="truncate">Email</span>
@@ -467,7 +467,7 @@ const HeroSection = () => {
 
                       <label 
                         onClick={() => handlePrefToggle('any')}
-                        className="flex items-center gap-2 p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                        className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
                       >
                         {contactPrefs.any ? <CheckSquare className="w-4 h-4 text-[#ea580c] shrink-0" /> : <Square className="w-4 h-4 text-slate-300 shrink-0" />}
                         <span className="truncate">Any Method</span>
