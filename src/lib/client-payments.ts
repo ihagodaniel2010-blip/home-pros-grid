@@ -65,7 +65,7 @@ export async function getPublicClientPayments(params: {
   if (cleanToken) {
     try {
       const { data, error } = await supabase.rpc('get_public_client_payments', { p_token: cleanToken });
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         return data as ClientPayment[];
       }
     } catch (rpcErr) {

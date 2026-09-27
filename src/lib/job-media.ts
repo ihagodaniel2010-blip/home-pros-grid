@@ -174,36 +174,44 @@ export async function createTemporarySignedUrl(bucket: string, storagePath: stri
  */
 export async function resolveSignedMediaUrl(storagePath: string): Promise<string | null> {
     if (!storagePath) return null;
-    if (storagePath.startsWith('http://') || storagePath.startsWith('https://') || storagePath.startsWith('data:')) {
-        return storagePath;
+    
+    // STRICT SECURITY RULE: Never return Base64 inline URIs directly
+    if (storagePath.startsWith('data:')) {
+        return null;
     }
 
-    // Clean relative path if bucket prefix was included
-    let cleanPath = storagePath;
     let targetBucket = 'images';
-    if (storagePath.startsWith('documents/')) {
-        cleanPath = storagePath.replace('documents/', '');
-        targetBucket = 'documents';
-    } else if (storagePath.startsWith('images/')) {
-        cleanPath = storagePath.replace('images/', '');
-        targetBucket = 'images';
-    } else if (storagePath.startsWith('receipts/')) {
-        cleanPath = storagePath.replace('receipts/', '');
-        targetBucket = 'receipts';
+    let cleanPath = storagePath;
+
+    // Handle full URLs
+    if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+        if (storagePath.includes('/storage/v1/object/')) {
+            const parts = storagePath.split('/storage/v1/object/')[1]?.split('/');
+            if (parts && parts.length >= 3) {
+                targetBucket = parts[1];
+                cleanPath = parts.slice(2).join('/');
+            } else {
+                return null;
+            }
+        } else {
+            // STRICT SECURITY RULE: External HTTP links cannot be signed via SDK, return null for admin review
+            return null;
+        }
+    } else {
+        // Clean relative path if bucket prefix was included
+        if (storagePath.startsWith('documents/')) {
+            cleanPath = storagePath.slice(10);
+            targetBucket = 'documents';
+        } else if (storagePath.startsWith('images/')) {
+            cleanPath = storagePath.slice(7);
+            targetBucket = 'images';
+        } else if (storagePath.startsWith('receipts/')) {
+            cleanPath = storagePath.slice(9);
+            targetBucket = 'receipts';
+        }
     }
 
-    let signedUrl = await createTemporarySignedUrl(targetBucket, cleanPath, 3600);
-    const fallbackBuckets = ['images', 'documents', 'receipts'].filter(b => b !== targetBucket);
-    for (const b of fallbackBuckets) {
-        if (signedUrl) break;
-        signedUrl = await createTemporarySignedUrl(b, cleanPath, 3600);
-    }
-
-    if (!signedUrl) {
-        const { data } = supabase.storage.from(targetBucket).getPublicUrl(cleanPath);
-        if (data?.publicUrl) signedUrl = data.publicUrl;
-    }
-
+    const signedUrl = await createTemporarySignedUrl(targetBucket, cleanPath, 300);
     return signedUrl;
 }
 
@@ -261,7 +269,7 @@ export async function getPublicJobMediaByJobId(
     if (cleanToken) {
         try {
             const { data, error } = await supabase.rpc('get_public_job_media', { p_token: cleanToken });
-            if (!error && Array.isArray(data) && data.length > 0) {
+            if (!error && Array.isArray(data)) {
                 return (data as any[]).map(item => ({
                     ...item,
                     visible_to_client: item.visible_to_client ?? true,
