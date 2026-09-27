@@ -25,7 +25,13 @@ export async function POST(request: Request) {
     }
 
     if (!supabaseAdmin) {
-      return NextResponse.json({ error: "Supabase server client not initialized" }, { status: 500, headers: NO_CACHE_HEADERS });
+      return NextResponse.json(
+        { 
+          error: "SUPABASE_SERVICE_ROLE_KEY is missing in production environment variables. Please add SUPABASE_SERVICE_ROLE_KEY in Vercel Project Settings.", 
+          serviceRoleMissing: true 
+        }, 
+        { status: 500, headers: NO_CACHE_HEADERS }
+      );
     }
 
     // 1. Validate estimate via public_token exclusively
