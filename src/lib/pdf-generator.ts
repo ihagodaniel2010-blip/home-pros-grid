@@ -87,7 +87,20 @@ export const generateProfessionalPDF = async (
     if (estimate.client_address) {
         doc.text(estimate.client_address, 20, currentY);
         currentY += 5;
-        doc.text(`${estimate.client_city || ""}, ${estimate.client_state || ""} ${estimate.client_zip || ""}`, 20, currentY);
+    }
+    const cszParts: string[] = [];
+    if (estimate.client_city) cszParts.push(estimate.client_city);
+    if (estimate.client_state) {
+        if (cszParts.length > 0) {
+            cszParts[0] = `${cszParts[0]}, ${estimate.client_state}`;
+        } else {
+            cszParts.push(estimate.client_state);
+        }
+    }
+    if (estimate.client_zip) cszParts.push(estimate.client_zip);
+    const cszText = cszParts.join(" ");
+    if (cszText.trim()) {
+        doc.text(cszText, 20, currentY);
     }
 
     // Estimate Meta

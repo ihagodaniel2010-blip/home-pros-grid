@@ -16,7 +16,7 @@ import {
 import { getAssistantDraftById, saveAssistantDraft } from "@/lib/estimate-assistant";
 import { createServiceJob, getServiceJobByEstimateId } from "@/lib/service-jobs";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
-import { getLeads } from "@/lib/leads";
+import { getLeads, parseLeadAddressComplete, cleanProjectScopeNotes } from "@/lib/leads";
 import EstimateForm from "@/components/admin/estimates/EstimateForm";
 import EstimateItemsTable from "@/components/admin/estimates/EstimateItemsTable";
 import TotalsSummary from "@/components/admin/estimates/TotalsSummary";
@@ -219,15 +219,16 @@ const EstimateEditor = () => {
                         const lead = leads.find(l => l.id === draft.lead_id);
                         if (lead) {
                             if (lead.preferred_contact_methods) setLeadContactPrefs(lead.preferred_contact_methods);
+                            const parsedAddr = parseLeadAddressComplete(lead);
                             setFormData(prev => ({
                                 ...prev,
                                 client_name: lead.fullName,
                                 client_email: lead.email,
                                 client_phone: lead.phone,
-                                client_address: lead.street_address || lead.address || prev.client_address,
-                                client_city: lead.city || prev.client_city,
-                                client_state: lead.state || prev.client_state,
-                                client_zip: lead.zip || prev.client_zip
+                                client_address: parsedAddr.full_street_address || prev.client_address,
+                                client_city: parsedAddr.city || prev.client_city,
+                                client_state: parsedAddr.state || prev.client_state,
+                                client_zip: parsedAddr.zip || prev.client_zip
                             }));
                         }
                     }
@@ -257,35 +258,21 @@ const EstimateEditor = () => {
                         derivedProjectType = slugMap[lead.serviceSlug.toLowerCase()] || "";
                     }
 
-                    // Properly format structured address fields
-                    let street = lead.street_address || "";
-                    if (lead.unit && street && !street.toLowerCase().includes(lead.unit.toLowerCase())) {
-                        street = `${street}, ${lead.unit}`;
-                    } else if (!street && lead.unit) {
-                        street = lead.unit;
-                    }
-
-                    if (!street && lead.address) {
-                        const parts = String(lead.address).split(",").map(s => s.trim());
-                        if (parts.length >= 3) {
-                            street = parts[0];
-                        } else {
-                            street = lead.address;
-                        }
-                    }
+                    const parsedAddr = parseLeadAddressComplete(lead);
+                    const cleanedNotes = cleanProjectScopeNotes(lead.details || lead.description);
 
                     setFormData(prev => ({
                         ...prev,
                         client_name: lead.fullName,
                         client_email: lead.email,
                         client_phone: lead.phone,
-                        client_address: street || prev.client_address,
-                        client_city: lead.city || prev.client_city,
-                        client_state: lead.state || prev.client_state,
-                        client_zip: lead.zip || prev.client_zip,
+                        client_address: parsedAddr.full_street_address || prev.client_address,
+                        client_city: parsedAddr.city || prev.client_city,
+                        client_state: parsedAddr.state || prev.client_state,
+                        client_zip: parsedAddr.zip || prev.client_zip,
                         lead_id: lead.id,
-                        project_type: derivedProjectType || prev.project_type || "General Repair",
-                        notes: lead.details || lead.description || `${t("estimate.converted_from")} [${serviceInfo}]`
+                        project_type: derivedProjectType || lead.selectedServiceOption || prev.project_type || "General Repair",
+                        notes: cleanedNotes || `${t("estimate.converted_from")} [${serviceInfo}]`
                     }));
                 }
             }

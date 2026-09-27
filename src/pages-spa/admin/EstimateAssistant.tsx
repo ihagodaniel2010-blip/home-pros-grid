@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useUser } from "@/context/UserContext";
-import { getLeads } from "@/lib/leads";
+import { getLeads, cleanProjectScopeNotes } from "@/lib/leads";
 import { 
   EstimateAssistantInput, 
   EstimateAssistantOutput, 
@@ -60,7 +60,7 @@ export default function EstimateAssistant() {
           setInput(prev => ({
             ...prev,
             serviceType: lead.selectedServiceOption || "other",
-            jobDescription: lead.details || ""
+            jobDescription: cleanProjectScopeNotes(lead.details || lead.description || "")
           }));
         }
       });

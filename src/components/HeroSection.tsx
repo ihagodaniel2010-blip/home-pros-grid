@@ -158,6 +158,17 @@ const HeroSection = () => {
 
     setIsSubmitting(true);
     try {
+      const clientAnswersPayload = {
+        street_address: formData.streetAddress.trim(),
+        unit: formData.unit.trim() || undefined,
+        city: formData.city.trim(),
+        state: formData.state.trim(),
+        zip: formData.zip.trim(),
+        preferred_contact_methods: selectedPrefsList,
+        project_type: formData.projectType,
+        project_description: formData.description.trim()
+      };
+
       await createLead({
         organization_id: DEFAULT_ORG_ID,
         fullName: formData.fullName.trim(),
@@ -179,7 +190,8 @@ const HeroSection = () => {
         ownerNotes: "Lead captured via Homepage Hero Form.",
         preferred_contact_methods: selectedPrefsList,
         preferred_contact_method: contactPrefs.phone ? "phone" : contactPrefs.email ? "email" : "text",
-        lead_source: "Homepage — Hero Estimate Form"
+        lead_source: "Homepage — Hero Estimate Form",
+        clientAnswers: clientAnswersPayload
       });
 
       setSubmittedSuccess(true);
