@@ -1188,7 +1188,7 @@ const PublicView = () => {
                                                             <td className="py-3.5 text-gray-400">{new Date(mat.expense_date || mat.receipt_date || mat.created_at).toLocaleDateString()}</td>
                                                             <td className="py-3.5 text-right font-bold text-gray-900">${mat.amount.toFixed(2)}</td>
                                                             <td className="py-3.5 text-center">
-                                                                {status === 'success' && signedUrl ? (
+                                                                {signedUrl ? (
                                                                     <button onClick={() => setSelectedReceiptUrl(signedUrl)} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-200 transition-colors mx-auto text-[11px]">
                                                                         <Receipt className="h-3.5 w-3.5 text-amber-600" /> Ver Comprovante
                                                                     </button>

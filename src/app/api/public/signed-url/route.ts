@@ -150,7 +150,7 @@ export async function POST(request: Request) {
       let receipt: any = null;
       const { data: directReceipt } = await supabaseAdmin
         .from("receipts")
-        .select("id, receipt_url, receipt_storage_path, storage_path, bill_to_client, material_responsibility, expense_category, status, organization_id, estimate_id, service_job_id, receipt_files(storage_path, storage_bucket)")
+        .select("id, bill_to_client, material_responsibility, expense_category, status, organization_id, estimate_id, service_job_id, receipt_files(storage_path, storage_bucket)")
         .eq("id", id)
         .eq("organization_id", orgId)
         .eq("status", "active")
