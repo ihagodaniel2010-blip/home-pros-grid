@@ -133,7 +133,7 @@ export async function getPublicClientMaterials(params: {
   if (cleanToken) {
     try {
       const { data, error } = await supabase.rpc('get_public_client_materials', { p_token: cleanToken });
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         return (data as any[]).map(item => ({
           ...item,
           bill_to_client: item.bill_to_client ?? true,
