@@ -1,5 +1,5 @@
 -- ============================================================================
--- MIGRAÇÃO 026 (PROPOSTA DEFINITIVA E AUDITADA - V3)
+-- MIGRAÇÃO 026 (PROPOSTA DEFINITIVA E CORRIGIDA)
 -- TÍTULO: PUBLIC CLIENT PORTAL RPCs FOR SECURE READ ACCESS
 -- PROJETO: Carpentry (H&A Construction)
 -- DATA: 2026-09-26
@@ -8,35 +8,6 @@
 -- ============================================================================
 
 BEGIN;
-
--- ----------------------------------------------------------------------------
--- EVIDÊNCIA DE AUDITORIA DO SCHEMA REAL E SUPORTE A TOKEN / ESTIMATE UUID:
--- 1. `public.service_extras`:
---    - Colunas reais utilizadas: `id` (uuid), `organization_id` (uuid), `service_job_id` (uuid),
---      `estimate_id` (uuid), `description` (text), `reason` (text), `amount` (numeric),
---      `schedule_impact` (text), `status` (text), `public_token` (text), `created_at` (timestamptz).
---    - Alias `title`: Derivado de `description` (`e.description AS title`).
---    - Alias `schedule_impact_days`: Derivado de `schedule_impact` (`COALESCE(e.schedule_impact, '') AS schedule_impact_days`).
---
--- 2. `public.receipts`:
---    - Colunas reais utilizadas: `id` (uuid), `organization_id` (uuid), `service_job_id` (uuid),
---      `estimate_id` (uuid), `vendor` (text), `notes` (text), `amount` (numeric),
---      `receipt_date` (timestamptz), `bill_to_client` (boolean), `material_responsibility` (text),
---      `expense_category` (text), `status` (text), `created_at` (timestamptz).
---    - Conversão: `r.receipt_date::date` para corresponder ao tipo `date` na assinatura `RETURNS TABLE`.
---
--- 3. `public.service_job_media`:
---    - Colunas reais utilizadas: `id` (uuid), `organization_id` (uuid), `service_job_id` (uuid),
---      `estimate_id` (uuid), `media_type` (text), `file_name` (text), `mime_type` (text),
---      `file_size_bytes` (bigint), `caption` (text), `visible_to_client` (boolean), `created_at` (timestamptz).
---    - Tipo `file_size_bytes`: `bigint` na assinatura `RETURNS TABLE` (exatamente igual ao schema real).
---
--- 4. `public.estimate_payments_manual`:
---    - Colunas reais utilizadas: `id` (uuid), `organization_id` (uuid), `service_job_id` (uuid),
---      `estimate_id` (uuid), `customer_name` (text), `amount` (numeric), `method` (text),
---      `payment_date` (date/timestamptz), `note` (text), `status` (text), `receipt_status` (text), `created_at` (timestamptz).
---    - Conversão: `p.payment_date::date` para corresponder ao tipo `date` na assinatura `RETURNS TABLE`.
--- ----------------------------------------------------------------------------
 
 -- ----------------------------------------------------------------------------
 -- 1. RPC: public.get_public_estimate_extras(p_token text)
@@ -72,18 +43,15 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Validar token público ou ID da Estimate (NÃO aceita tokens inválidos)
     SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
     FROM public.estimates est
-    WHERE (est.access_token = v_clean_token OR (COALESCE(est.public_token, '') = v_clean_token AND v_clean_token <> '') OR est.id::text = v_clean_token)
-      AND (est.access_token_revoked IS NOT TRUE)
+    WHERE (COALESCE(est.public_token, '') = v_clean_token OR est.id::text = v_clean_token)
     LIMIT 1;
 
     IF v_estimate_id IS NULL THEN
         RETURN;
     END IF;
 
-    -- Resolver o Job correspondente na mesma organização
     SELECT j.id INTO v_job_id
     FROM public.service_jobs j
     WHERE (j.estimate_id = v_estimate_id)
@@ -146,8 +114,7 @@ BEGIN
 
     SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
     FROM public.estimates est
-    WHERE (est.access_token = v_clean_token OR (COALESCE(est.public_token, '') = v_clean_token AND v_clean_token <> '') OR est.id::text = v_clean_token)
-      AND (est.access_token_revoked IS NOT TRUE)
+    WHERE (COALESCE(est.public_token, '') = v_clean_token OR est.id::text = v_clean_token)
     LIMIT 1;
 
     IF v_estimate_id IS NULL THEN
@@ -218,8 +185,7 @@ BEGIN
 
     SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
     FROM public.estimates est
-    WHERE (est.access_token = v_clean_token OR (COALESCE(est.public_token, '') = v_clean_token AND v_clean_token <> '') OR est.id::text = v_clean_token)
-      AND (est.access_token_revoked IS NOT TRUE)
+    WHERE (COALESCE(est.public_token, '') = v_clean_token OR est.id::text = v_clean_token)
     LIMIT 1;
 
     IF v_estimate_id IS NULL THEN
@@ -248,7 +214,7 @@ BEGIN
     FROM public.service_job_media m
     WHERE m.organization_id = v_org_id
       AND (m.estimate_id = v_estimate_id OR (v_job_id IS NOT NULL AND m.service_job_id = v_job_id))
-      AND m.visible_to_client = true -- APENAS MÍDIAS VISÍVEIS AO CLIENTE (NUNCA ADMIN ONLY)
+      AND m.visible_to_client = true
     ORDER BY m.created_at DESC;
 END;
 $$;
@@ -289,8 +255,7 @@ BEGIN
 
     SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
     FROM public.estimates est
-    WHERE (est.access_token = v_clean_token OR (COALESCE(est.public_token, '') = v_clean_token AND v_clean_token <> '') OR est.id::text = v_clean_token)
-      AND (est.access_token_revoked IS NOT TRUE)
+    WHERE (COALESCE(est.public_token, '') = v_clean_token OR est.id::text = v_clean_token)
     LIMIT 1;
 
     IF v_estimate_id IS NULL THEN
@@ -328,7 +293,7 @@ END;
 $$;
 
 -- ----------------------------------------------------------------------------
--- 5. PERMISSÕES EXPLÍCITAS: REVOGAR DE PUBLIC E CONCEDER APENAS AOS PAPÉIS NECESSÁRIOS
+-- 5. PERMISSÕES EXPLÍCITAS
 -- ----------------------------------------------------------------------------
 REVOKE EXECUTE ON FUNCTION public.get_public_estimate_extras(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_public_estimate_extras(text) TO anon, authenticated, service_role;
