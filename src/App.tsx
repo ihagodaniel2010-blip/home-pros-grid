@@ -73,6 +73,7 @@ const AdminBilling = lazy(() => import("./pages-spa/admin/Billing"));
 const AdminCommunications = lazy(() => import("./pages-spa/admin/Communications"));
 const JobWorkspace = lazy(() => import("./pages-spa/admin/JobWorkspace"));
 const ProjectsList = lazy(() => import("./pages-spa/admin/ProjectsList"));
+const WebsiteCMS = lazy(() => import("./pages-spa/admin/WebsiteCMS"));
 const PublicView = lazy(() => import("./pages-spa/PublicView"));
 const PublicExtraView = lazy(() => import("./pages-spa/PublicExtraView"));
 
@@ -129,6 +130,7 @@ const App = () => (
             <Route path="jobs" element={<ProjectsList />} />
             <Route path="jobs/:jobId" element={<JobWorkspace />} />
             <Route path="jobs/:id" element={<JobWorkspace />} />
+            <Route path="website" element={<WebsiteCMS />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="locations" element={<Locations />} />
             <Route path="services" element={<AdminServices />} />

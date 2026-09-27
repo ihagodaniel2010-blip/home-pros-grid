@@ -1,98 +1,168 @@
-import { Link } from "react-router-dom";
-import { siteConfig } from "@/config/site";
-import { Phone, Mail, MapPin } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "@/lib/navigation-compat";
+import { MapPin, Phone, Mail, ArrowRight } from "lucide-react";
+import { fetchWebsiteSettings, DEFAULT_WEBSITE_SETTINGS, WebsiteSettings } from "@/lib/website-cms";
+import { DEFAULT_ORG_ID } from "@/context/UserContext";
 
-export default function Footer() {
+const Footer = () => {
+  const navigate = useNavigate();
+  const [settings, setSettings] = useState<WebsiteSettings>(DEFAULT_WEBSITE_SETTINGS);
+
+  useEffect(() => {
+    fetchWebsiteSettings(DEFAULT_ORG_ID).then(setSettings).catch(() => {});
+  }, []);
+
   return (
-    <footer className="bg-slate-950 text-white border-t border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
-          {/* Col 1: Brand & Description */}
-          <div className="space-y-4 md:col-span-1">
-            <Link to="/" className="text-xl font-extrabold tracking-tight text-white block">
-              {siteConfig.businessName}
-            </Link>
-            <p className="text-slate-200 text-sm leading-relaxed">
-              Professional residential construction, remodeling, carpentry, flooring, painting, roofing, and finish work in Saco, Old Orchard Beach, Biddeford, Scarborough, and Southern Maine.
-            </p>
-            <div className="pt-2 text-xs text-slate-300 font-medium">
-              © {new Date().getFullYear()} {siteConfig.businessName}. All rights reserved.
+    <footer className="bg-[#0b2a4a] text-white pt-16 pb-8 px-6 border-t border-slate-800">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-slate-800/80">
+        
+        {/* Column 1: Brand & Bio */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center gap-3">
+            <img
+              src="/brand/icon-512.png"
+              alt="H&A Construction Emblem"
+              className="h-10 w-10 object-contain rounded-xl shadow-xs"
+            />
+            <div className="flex flex-col">
+              <span className="text-xl font-black tracking-tight text-white leading-none">
+                H &amp; A <span className="text-slate-300 font-bold">CONSTRUCTION LLC</span>
+              </span>
+              <span className="text-[10px] font-bold tracking-widest uppercase mt-1 text-amber-400">
+                SOUTHERN MAINE
+              </span>
             </div>
           </div>
 
-          {/* Col 2: Services & Contact */}
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-4">Direct Contact</h4>
-            <ul className="space-y-3 text-sm text-slate-200">
-              <li className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-sky-400 shrink-0" />
-                <a href={`tel:${siteConfig.primaryPhone.replace(/[^0-9]/g, '')}`} className="hover:text-white transition-colors">
-                  {siteConfig.primaryPhone}
-                </a>
-              </li>
-              <li className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-sky-400 shrink-0" />
-                <a href={`tel:${siteConfig.secondaryPhone.replace(/[^0-9]/g, '')}`} className="hover:text-white transition-colors">
-                  {siteConfig.secondaryPhone}
-                </a>
-              </li>
-              <li className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-sky-400 shrink-0" />
-                <a href={`mailto:${siteConfig.contactEmail}`} className="hover:text-white transition-colors">
-                  {siteConfig.contactEmail}
-                </a>
-              </li>
-              <li className="flex items-center gap-2 text-xs text-slate-300">
-                <MapPin className="w-4 h-4 text-sky-400 shrink-0" />
-                <span>Southern Maine</span>
-              </li>
-            </ul>
-          </div>
+          <p className="text-xs text-slate-300 leading-relaxed max-w-sm">
+            Professional residential construction, remodeling, roofing, siding, flooring, and custom finish carpentry serving homeowners across Southern Maine with quality craftsmanship and integrity.
+          </p>
 
-          {/* Col 3: Service Areas */}
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-4">Primary Service Areas</h4>
-            <ul className="space-y-2 text-sm text-slate-200">
-              <li>Saco, ME</li>
-              <li>Old Orchard Beach, ME</li>
-              <li>Biddeford, ME</li>
-              <li>Scarborough, ME</li>
-              <li className="text-xs text-slate-300 italic pt-1">{siteConfig.serviceAreasPlus}</li>
-            </ul>
+          <div className="pt-2">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Follow Us</p>
+            <div className="flex items-center gap-2">
+              {settings.facebook_enabled && (
+                <a
+                  href={settings.facebook_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-md bg-blue-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
+                  title="Facebook"
+                >
+                  f
+                </a>
+              )}
+              {settings.instagram_enabled && (
+                <a
+                  href={settings.instagram_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-md bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
+                  title="Instagram"
+                >
+                  📷
+                </a>
+              )}
+              {settings.tiktok_enabled && (
+                <a
+                  href={settings.tiktok_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-md bg-black border border-slate-700 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
+                  title="TikTok"
+                >
+                  ♪
+                </a>
+              )}
+              {settings.youtube_enabled && (
+                <a
+                  href={settings.youtube_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-md bg-red-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
+                  title="YouTube"
+                >
+                  ▶
+                </a>
+              )}
+            </div>
           </div>
+        </div>
 
-          {/* Col 4: Navigation & Legal */}
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-4">Navigation & Legal</h4>
-            <ul className="space-y-2 text-sm text-slate-200 mb-4">
-              <li>
-                <Link to="/" className="hover:text-white transition-colors">Home</Link>
-              </li>
-              <li>
-                <Link to="/about" className="hover:text-white transition-colors">About Us</Link>
-              </li>
-              <li>
-                <Link to="/contact" className="hover:text-white transition-colors">Contact Us</Link>
-              </li>
-              <li>
-                <Link to="/cost-guide" className="hover:text-white transition-colors">Portfolio</Link>
-              </li>
-              <li>
-                <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
-              </li>
-              <li>
-                <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-              </li>
-              <li>
-                <Link to="/disclaimer" className="hover:text-white transition-colors">Legal Disclaimer</Link>
-              </li>
-              <li>
-                <Link to="/refund-policy" className="hover:text-white transition-colors">Refund Policy</Link>
-              </li>
-            </ul>
-          </div>
+        {/* Column 2: Quick Links */}
+        <div>
+          <h4 className="font-extrabold text-sm uppercase tracking-wider text-amber-400 mb-4">
+            Quick Links
+          </h4>
+          <ul className="space-y-2.5 text-xs text-slate-300 font-semibold">
+            <li><Link to="/" className="hover:text-white transition-colors">Home</Link></li>
+            <li><Link to="/services" className="hover:text-white transition-colors">Services</Link></li>
+            <li><Link to="/projects" className="hover:text-white transition-colors">Projects</Link></li>
+            <li><Link to="/reviews" className="hover:text-white transition-colors">Reviews</Link></li>
+            <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
+            <li><Link to="/contact" className="hover:text-white transition-colors">Contact</Link></li>
+          </ul>
+        </div>
+
+        {/* Column 3: Our Services */}
+        <div>
+          <h4 className="font-extrabold text-sm uppercase tracking-wider text-amber-400 mb-4">
+            Our Services
+          </h4>
+          <ul className="space-y-2.5 text-xs text-slate-300 font-semibold">
+            <li><Link to="/services/remodeling" className="hover:text-white transition-colors">Remodeling</Link></li>
+            <li><Link to="/services/kitchens" className="hover:text-white transition-colors">Kitchens &amp; Bathrooms</Link></li>
+            <li><Link to="/services/decks" className="hover:text-white transition-colors">Decks &amp; Additions</Link></li>
+            <li><Link to="/services/roofing" className="hover:text-white transition-colors">Roofing &amp; Siding</Link></li>
+            <li><Link to="/services/flooring" className="hover:text-white transition-colors">Flooring &amp; Drywall</Link></li>
+            <li><Link to="/services/finish-carpentry" className="hover:text-white transition-colors">Finish Carpentry</Link></li>
+          </ul>
+        </div>
+
+        {/* Column 4: Contact Us */}
+        <div>
+          <h4 className="font-extrabold text-sm uppercase tracking-wider text-amber-400 mb-4">
+            Contact Us
+          </h4>
+          <ul className="space-y-3 text-xs text-slate-300">
+            <li className="flex items-center gap-2.5">
+              <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{settings.company_address}</span>
+            </li>
+            <li className="flex items-center gap-2.5">
+              <Phone className="w-4 h-4 text-amber-400 shrink-0" />
+              <a href={`tel:${settings.company_phone}`} className="hover:text-white transition-colors">{settings.company_phone}</a>
+            </li>
+            <li className="flex items-center gap-2.5">
+              <Mail className="w-4 h-4 text-amber-400 shrink-0" />
+              <a href={`mailto:${settings.company_email}`} className="hover:text-white transition-colors">{settings.company_email}</a>
+            </li>
+            <li className="pt-2">
+              <button
+                onClick={() => navigate("/contact")}
+                className="text-xs font-bold text-[#ea580c] hover:underline flex items-center gap-1"
+              >
+                Get a Free Estimate <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </li>
+          </ul>
+        </div>
+
+      </div>
+
+      {/* Bottom Copyright & Guarantee Bar */}
+      <div className="max-w-7xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+        <p>&copy; {new Date().getFullYear()} H &amp; A Construction LLC. All rights reserved.</p>
+        <div className="flex flex-wrap items-center gap-4 text-[11px]">
+          <span>Licensed &amp; Insured</span>
+          <span>•</span>
+          <span>Serving Southern Maine</span>
+          <span>•</span>
+          <span>Built on Quality, Trust &amp; Relationships</span>
         </div>
       </div>
     </footer>
   );
-}
+};
+
+export default Footer;

@@ -70,6 +70,7 @@ const AdminLayout = () => {
   // Company & Site Nav Items
   const companyNavItems = useMemo(
     () => [
+      { label: "Website CMS", icon: Globe, path: "/admin/website" },
       { label: "Services", icon: Store, path: "/admin/services" },
       { label: "Service Areas", icon: MapPin, path: "/admin/locations" },
       { label: t("nav.portfolio"), icon: Images, path: "/admin/portfolio" },

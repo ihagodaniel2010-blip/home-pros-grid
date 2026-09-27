@@ -225,6 +225,8 @@ export const saveLead = async (
   return saveLeadLocal(lead);
 };
 
+export const createLead = saveLead;
+
 export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Lead | null> => {
   if (isSupabaseConfigured && supabase) return updateLeadSupabase(id, updates);
   return updateLeadLocal(id, updates);
