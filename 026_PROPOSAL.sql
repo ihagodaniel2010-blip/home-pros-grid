@@ -1,6 +1,5 @@
 -- ============================================================================
--- MIGRAÇÃO 026 (PROPOSTA DEFINITIVA E CORRIGIDA)
--- TÍTULO: PUBLIC CLIENT PORTAL RPCs FOR SECURE READ ACCESS
+-- PATCH MIGRAÇÃO 026 (CORREÇÃO DA COLUNA PUBLIC_TOKEN - CREATE OR REPLACE)
 -- PROJETO: Carpentry (H&A Construction)
 -- DATA: 2026-09-26
 -- INSTRUÇÕES: Copiar e executar no Supabase SQL Editor
@@ -12,8 +11,6 @@ BEGIN;
 -- ----------------------------------------------------------------------------
 -- 1. RPC: public.get_public_estimate_extras(p_token text)
 -- ----------------------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.get_public_estimate_extras(text);
-
 CREATE OR REPLACE FUNCTION public.get_public_estimate_extras(p_token text)
 RETURNS TABLE (
     id uuid,
@@ -43,9 +40,10 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Validar token público EXCLUSIVAMENTE via public_token
     SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
     FROM public.estimates est
-    WHERE (COALESCE(est.public_token, '') = v_clean_token OR est.id::text = v_clean_token)
+    WHERE est.public_token = v_clean_token
     LIMIT 1;
 
     IF v_estimate_id IS NULL THEN
@@ -82,8 +80,6 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 2. RPC: public.get_public_client_materials(p_token text)
 -- ----------------------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.get_public_client_materials(text);
-
 CREATE OR REPLACE FUNCTION public.get_public_client_materials(p_token text)
 RETURNS TABLE (
     id uuid,
@@ -112,9 +108,10 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Validar token público EXCLUSIVAMENTE via public_token
     SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
     FROM public.estimates est
-    WHERE (COALESCE(est.public_token, '') = v_clean_token OR est.id::text = v_clean_token)
+    WHERE est.public_token = v_clean_token
     LIMIT 1;
 
     IF v_estimate_id IS NULL THEN
@@ -153,8 +150,6 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 3. RPC: public.get_public_job_media(p_token text)
 -- ----------------------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.get_public_job_media(text);
-
 CREATE OR REPLACE FUNCTION public.get_public_job_media(p_token text)
 RETURNS TABLE (
     id uuid,
@@ -183,9 +178,10 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Validar token público EXCLUSIVAMENTE via public_token
     SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
     FROM public.estimates est
-    WHERE (COALESCE(est.public_token, '') = v_clean_token OR est.id::text = v_clean_token)
+    WHERE est.public_token = v_clean_token
     LIMIT 1;
 
     IF v_estimate_id IS NULL THEN
@@ -222,8 +218,6 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 4. RPC: public.get_public_client_payments(p_token text)
 -- ----------------------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.get_public_client_payments(text);
-
 CREATE OR REPLACE FUNCTION public.get_public_client_payments(p_token text)
 RETURNS TABLE (
     id uuid,
@@ -253,9 +247,10 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Validar token público EXCLUSIVAMENTE via public_token
     SELECT est.id, est.organization_id INTO v_estimate_id, v_org_id
     FROM public.estimates est
-    WHERE (COALESCE(est.public_token, '') = v_clean_token OR est.id::text = v_clean_token)
+    WHERE est.public_token = v_clean_token
     LIMIT 1;
 
     IF v_estimate_id IS NULL THEN

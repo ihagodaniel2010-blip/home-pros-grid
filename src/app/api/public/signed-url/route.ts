@@ -28,15 +28,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Supabase server client not initialized" }, { status: 500, headers: NO_CACHE_HEADERS });
     }
 
-    // 1. Validate estimate via public token (access_token, public_token, or estimate id)
+    // 1. Validate estimate via public_token exclusively
     const { data: est, error: estErr } = await supabaseAdmin
       .from("estimates")
-      .select("id, organization_id, access_token, public_token, access_token_revoked")
-      .or(`access_token.eq.${token},public_token.eq.${token},id.eq.${token}`)
+      .select("id, organization_id, public_token")
+      .eq("public_token", token)
       .maybeSingle();
 
-    if (estErr || !est || est.access_token_revoked === true) {
-      return NextResponse.json({ error: "Unauthorized: Invalid or revoked estimate token" }, { status: 403, headers: NO_CACHE_HEADERS });
+    if (estErr || !est) {
+      return NextResponse.json({ error: "Unauthorized: Invalid estimate token" }, { status: 403, headers: NO_CACHE_HEADERS });
     }
 
     // 2. Resolve job associated with this estimate within the same organization
