@@ -34,6 +34,109 @@ export async function POST(request: Request) {
       );
     }
 
+    // 0. Handle Institutional Public Portfolio Showcase query (No estimate token required)
+    if (type === "portfolio") {
+      let mediaList: any[] = [];
+      const { data: dbList, error: mErr } = await supabaseAdmin
+        .from("service_job_media")
+        .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at, service_jobs(title, project_type)")
+        .eq("visible_on_public_site", true)
+        .eq("portfolio_approved", true)
+        .order("created_at", { ascending: false });
+
+      if (!mErr && dbList) {
+        mediaList = dbList;
+      } else {
+        // Fallback to RPC get_public_portfolio_media
+        const { data: rpcMedia } = await supabaseAdmin.rpc("get_public_portfolio_media");
+        if (Array.isArray(rpcMedia)) {
+          mediaList = rpcMedia;
+        }
+      }
+
+      const itemsWithUrls = await Promise.all(
+        mediaList.map(async (m: any) => {
+          let signedUrl: string | null = null;
+          let storagePath = m.storage_path;
+
+          if (storagePath) {
+            if (storagePath.startsWith("data:")) {
+              signedUrl = storagePath;
+            } else {
+              let targetBucket = "images";
+              let cleanPath = storagePath;
+
+              if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
+                if (storagePath.includes("/storage/v1/object/")) {
+                  const urlParts = storagePath.split("/storage/v1/object/")[1]?.split("/");
+                  if (urlParts && urlParts.length >= 3) {
+                    targetBucket = urlParts[1];
+                    cleanPath = urlParts.slice(2).join("/");
+                  }
+                }
+              } else {
+                if (storagePath.startsWith("documents/")) {
+                  targetBucket = "documents";
+                  cleanPath = storagePath.slice(10);
+                } else if (storagePath.startsWith("images/")) {
+                  targetBucket = "images";
+                  cleanPath = storagePath.slice(7);
+                } else if (storagePath.startsWith("job-media/")) {
+                  targetBucket = "job-media";
+                  cleanPath = storagePath.slice(10);
+                } else if (storagePath.startsWith("receipts/")) {
+                  targetBucket = "receipts";
+                  cleanPath = storagePath.slice(9);
+                }
+              }
+
+              const { data: signedData } = await supabaseAdmin.storage
+                .from(targetBucket)
+                .createSignedUrl(cleanPath, 3600);
+
+              if (signedData?.signedUrl) {
+                signedUrl = signedData.signedUrl;
+              } else {
+                // Fallback attempt across other buckets
+                const bucketsToTry = ["images", "documents", "job-media"].filter(b => b !== targetBucket);
+                for (const b of bucketsToTry) {
+                  const { data: fbData } = await supabaseAdmin.storage.from(b).createSignedUrl(cleanPath, 3600);
+                  if (fbData?.signedUrl) {
+                    signedUrl = fbData.signedUrl;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          // Category classification
+          const projectType = m.service_jobs?.project_type || m.service_jobs?.title || "";
+          const text = `${m.caption || ''} ${m.file_name || ''} ${projectType}`.toLowerCase();
+          let category = "Recent Projects";
+          if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(text)) category = "Framing & Structure";
+          else if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(text)) category = "Roofing & Gutters";
+          else if (/drywall|gesso|sheetrock|wall|parede|teto/i.test(text)) category = "Drywall & Painting";
+          else if (/siding|revestimento|facade|exterior|cladding/i.test(text)) category = "Siding & Exterior";
+          else if (/deck|porch|patio|varanda|decking|rail/i.test(text)) category = "Decks & Patios";
+          else if (/remodel|reforma|kitchen|bath|cozinha|banheiro|tile|flooring/i.test(text)) category = "Remodeling";
+
+          return {
+            id: m.id,
+            media_type: m.media_type || "image",
+            file_name: m.file_name,
+            caption: m.caption,
+            signedUrl: signedUrl || "",
+            category,
+            created_at: m.created_at
+          };
+        })
+      );
+
+      const validPortfolio = itemsWithUrls.filter(item => item.signedUrl && item.signedUrl.length > 0);
+      return NextResponse.json({ portfolio: validPortfolio }, { status: 200, headers: NO_CACHE_HEADERS });
+    }
+
     // 1. Validate estimate via public_token exclusively
     let estId: string | null = null;
     let orgId: string | null = null;

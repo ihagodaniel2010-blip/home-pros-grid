@@ -128,11 +128,6 @@ export async function getClientJobMediaByToken(jobToken: string) {
     const { data, error } = await supabase
         .rpc('get_client_job_media', { p_job_token: jobToken });
 
-    if (error) {
-        console.error("Error fetching client job media via RPC:", error);
-        throw error;
-    }
-
     return data || [];
 }
 
@@ -150,6 +145,62 @@ export async function getPublicPortfolioMedia() {
 
     return data || [];
 }
+
+export interface PublicPortfolioShowcaseItem {
+    id: string;
+    media_type: MediaType;
+    file_name?: string;
+    caption?: string | null;
+    signedUrl: string;
+    category: string;
+    created_at: string;
+}
+
+export async function getPublicPortfolioShowcase(): Promise<PublicPortfolioShowcaseItem[]> {
+    try {
+        const res = await fetch('/api/public/signed-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: 'public', type: 'portfolio', id: 'all' }),
+            cache: 'no-store'
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.portfolio)) {
+                return data.portfolio;
+            }
+        }
+    } catch (err) {
+        console.warn("getPublicPortfolioShowcase API error:", err);
+    }
+
+    // Fallback via RPC get_public_portfolio_media
+    try {
+        const rpcItems = await getPublicPortfolioMedia();
+        if (Array.isArray(rpcItems) && rpcItems.length > 0) {
+            const resolved = await Promise.all(
+                rpcItems.map(async (item: any) => {
+                    const signedUrl = item.storage_path ? await resolveSignedMediaUrl(item.storage_path) : null;
+                    return {
+                        id: item.id,
+                        media_type: item.media_type || 'image',
+                        file_name: item.file_name,
+                        caption: item.caption,
+                        signedUrl: signedUrl || '',
+                        category: autoCategorizePhoto(item.caption, item.file_name),
+                        created_at: item.created_at
+                    };
+                })
+            );
+            return resolved.filter(i => !!i.signedUrl);
+        }
+    } catch (rpcErr) {
+        console.warn("getPublicPortfolioShowcase RPC fallback error:", rpcErr);
+    }
+
+    return [];
+}
+
 
 /**
  * Generates a short-lived signed URL (default 15 minutes) for a private storage asset.

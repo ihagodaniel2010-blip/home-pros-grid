@@ -1339,14 +1339,25 @@ export default function JobWorkspace() {
     if (!target) return;
 
     let updates: Partial<ServiceJobMediaRecord> = {};
-    if (mode === "client") updates.visible_to_client = !target.visible_to_client;
-    if (mode === "public") updates.visible_on_public_site = !target.visible_on_public_site;
-    if (mode === "portfolio") updates.portfolio_approved = !target.portfolio_approved;
+    if (mode === "client") {
+      updates.visible_to_client = !target.visible_to_client;
+    }
+    if (mode === "public" || mode === "portfolio") {
+      const isCurrentlyPublished = target.visible_on_public_site && target.portfolio_approved;
+      const nextVal = !isCurrentlyPublished;
+      updates.visible_on_public_site = nextVal;
+      updates.portfolio_approved = nextVal;
+      updates.media_status = nextVal ? 'approved' : 'pending';
+    }
 
     try {
       await updateJobMediaVisibility(mediaId, updates);
       setMedia(prev => prev.map(m => m.id === mediaId ? { ...m, ...updates } : m));
-      toast.success("Photo visibility updated!");
+      toast.success(
+        mode === "client"
+          ? `Client Portal visibility: ${updates.visible_to_client ? 'ON' : 'OFF'}`
+          : `Public Website publication: ${updates.visible_on_public_site ? 'PUBLISHED' : 'REVOKED'}`
+      );
     } catch (err) {
       toast.error("Failed to update media visibility.");
     }
@@ -2354,15 +2365,21 @@ export default function JobWorkspace() {
                             <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-1 text-[10px]">
                               <button
                                 onClick={() => handleToggleMediaVisibility(m.id, "client")}
-                                className={`px-2 py-0.5 rounded border font-semibold ${m.visible_to_client ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-600'}`}
+                                className={`px-2 py-0.5 rounded border font-semibold ${m.visible_to_client ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                                title="Visible in Client Portal"
                               >
-                                Client: {m.visible_to_client ? 'ON' : 'OFF'}
+                                Client Portal: {m.visible_to_client ? 'ON' : 'OFF'}
                               </button>
                               <button
                                 onClick={() => handleToggleMediaVisibility(m.id, "public")}
-                                className={`px-2 py-0.5 rounded border font-semibold ${m.visible_on_public_site ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
+                                className={`px-2 py-0.5 rounded border font-semibold ${
+                                  m.visible_on_public_site && m.portfolio_approved
+                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                    : 'bg-gray-50 text-gray-600 border-gray-200'
+                                }`}
+                                title="Visible on Institutional Public Website (Home)"
                               >
-                                Public Candidate: {m.visible_on_public_site ? 'ON' : 'OFF'}
+                                Public Site: {m.visible_on_public_site && m.portfolio_approved ? 'PUBLISHED' : 'OFF'}
                               </button>
                             </div>
                           )}
