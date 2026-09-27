@@ -5,13 +5,21 @@ import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { fetchWebsiteSettings, DEFAULT_WEBSITE_SETTINGS, WebsiteSettings } from "@/lib/website-cms";
+import { 
+  fetchWebsiteSettings, 
+  DEFAULT_WEBSITE_SETTINGS, 
+  WebsiteSettings,
+  fetchPublicWebsiteCategories,
+  getServicesMenuCategories,
+  WebsiteCategory
+} from "@/lib/website-cms";
 
 const Header = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [settings, setSettings] = useState<WebsiteSettings>(DEFAULT_WEBSITE_SETTINGS);
+  const [menuCategories, setMenuCategories] = useState<WebsiteCategory[]>([]);
 
   const servicesRef = useRef<HTMLDivElement>(null);
   const loginRef = useRef<HTMLDivElement>(null);
@@ -25,6 +33,9 @@ const Header = () => {
 
   useEffect(() => {
     fetchWebsiteSettings(orgId).then(setSettings).catch(() => {});
+    fetchPublicWebsiteCategories(orgId).then(cats => {
+      setMenuCategories(getServicesMenuCategories(cats));
+    }).catch(() => {});
   }, [orgId]);
 
   const isHeroPage = location.pathname === "/";
@@ -97,22 +108,15 @@ const Header = () => {
             </button>
 
             {servicesOpen && (
-              <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 animate-in fade-in">
-                {[
-                  { label: "Remodeling", slug: "remodeling" },
-                  { label: "Kitchens & Bathrooms", slug: "kitchens" },
-                  { label: "Decks & Additions", slug: "decks" },
-                  { label: "Roofing & Siding", slug: "roofing" },
-                  { label: "Flooring & Drywall", slug: "flooring" },
-                  { label: "Finish Carpentry", slug: "finish-carpentry" },
-                ].map((s) => (
+              <div className="absolute top-full left-0 mt-2 w-60 max-h-[70vh] overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 animate-in fade-in">
+                {menuCategories.map((s) => (
                   <Link
-                    key={s.slug}
+                    key={s.id || s.slug}
                     to={`/services/${s.slug}`}
                     onClick={() => setServicesOpen(false)}
                     className="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 hover:text-[#0b2a4a] transition-colors"
                   >
-                    {s.label}
+                    {s.name}
                   </Link>
                 ))}
                 <div className="border-t border-slate-100 mt-1 pt-1">

@@ -153,6 +153,7 @@ export interface PublicPortfolioShowcaseItem {
     caption?: string | null;
     signedUrl: string;
     category: string;
+    categories?: string[];
     created_at: string;
 }
 

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import DevLoginSimulator from "@/components/DevLoginSimulator";
 import Index from "./pages-spa/Index";
 import Services from "./pages-spa/Services";
+import ServiceDetail from "./pages-spa/ServiceDetail";
 import Quote from "./pages-spa/Quote";
 import Success from "./pages-spa/Success";
 import Login from "./pages-spa/Login";
@@ -92,6 +93,7 @@ const App = () => (
           {/* Public Fast-Paint Marketing Routes */}
           <Route path="/" element={<Index />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/services/:slug" element={<ServiceDetail />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/quote/:serviceSlug" element={<Quote />} />
           <Route path="/success" element={<Success />} />

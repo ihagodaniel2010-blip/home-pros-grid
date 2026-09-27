@@ -423,6 +423,81 @@ export async function fetchWebsiteCategories(orgId: string, includeArchived: boo
   }
 }
 
+/**
+ * Public website categories fetcher with single-source-of-truth from public.website_categories
+ */
+export async function fetchPublicWebsiteCategories(orgId: string = '45689bbf-193b-4ae8-82f4-e32bbe63b6dd'): Promise<WebsiteCategory[]> {
+  const defaultPublished = INITIAL_14_CATEGORIES
+    .filter(c => c.is_published && !c.is_archived)
+    .map((c, i) => ({
+      id: `default-public-${i}`,
+      ...c,
+      organization_id: orgId,
+      created_at: new Date().toISOString()
+    }));
+
+  if (!supabase) return defaultPublished;
+
+  try {
+    const { data, error } = await supabase
+      .from('website_categories')
+      .select('*')
+      .eq('organization_id', orgId)
+      .eq('is_published', true)
+      .or('is_archived.is.null,is_archived.eq.false')
+      .order('display_order', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      return defaultPublished;
+    }
+
+    const { resolveSignedMediaUrl } = await import('./job-media');
+    const resolvedData = await Promise.all(
+      data.map(async (cat: any) => {
+        let cover = cat.cover_image_url;
+        if (cover) {
+          const res = await resolveSignedMediaUrl(cover).catch(() => null);
+          if (res) cover = res;
+        }
+        return {
+          ...cat,
+          cover_image_url: cover,
+          show_on_homepage: cat.show_on_homepage ?? true,
+          show_in_services_menu: cat.show_in_services_menu ?? true,
+          show_in_projects_gallery: cat.show_in_projects_gallery ?? true,
+          has_individual_page: cat.has_individual_page ?? true,
+        };
+      })
+    );
+
+    return resolvedData as WebsiteCategory[];
+  } catch (err) {
+    console.warn("Exception in fetchPublicWebsiteCategories:", err);
+    return defaultPublished;
+  }
+}
+
+export function getHomepageCategories(categories: WebsiteCategory[]): WebsiteCategory[] {
+  return categories.filter(c => c.show_on_homepage !== false && c.is_published !== false);
+}
+
+export function getServicesMenuCategories(categories: WebsiteCategory[]): WebsiteCategory[] {
+  return categories.filter(c => c.show_in_services_menu !== false && c.is_published !== false);
+}
+
+export function getProjectsGalleryCategories(categories: WebsiteCategory[]): WebsiteCategory[] {
+  return categories.filter(c => c.show_in_projects_gallery !== false && c.is_published !== false);
+}
+
+export function getCategoryBySlug(categories: WebsiteCategory[], slug: string): WebsiteCategory | undefined {
+  if (!slug) return undefined;
+  const cleanSlug = slug.toLowerCase().trim();
+  return categories.find(c => 
+    c.slug.toLowerCase() === cleanSlug || 
+    c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === cleanSlug
+  );
+}
+
 export async function upsertWebsiteCategory(category: Partial<WebsiteCategory> & { organization_id: string; name: string }): Promise<WebsiteCategory> {
   if (!supabase) throw new Error("Supabase is not initialized");
 

@@ -1,15 +1,26 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "@/lib/navigation-compat";
 import { MapPin, Phone, Mail, ArrowRight } from "lucide-react";
-import { fetchWebsiteSettings, DEFAULT_WEBSITE_SETTINGS, WebsiteSettings } from "@/lib/website-cms";
+import { 
+  fetchWebsiteSettings, 
+  DEFAULT_WEBSITE_SETTINGS, 
+  WebsiteSettings,
+  fetchPublicWebsiteCategories,
+  getServicesMenuCategories,
+  WebsiteCategory
+} from "@/lib/website-cms";
 import { DEFAULT_ORG_ID } from "@/context/UserContext";
 
 const Footer = () => {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<WebsiteSettings>(DEFAULT_WEBSITE_SETTINGS);
+  const [footerCategories, setFooterCategories] = useState<WebsiteCategory[]>([]);
 
   useEffect(() => {
     fetchWebsiteSettings(DEFAULT_ORG_ID).then(setSettings).catch(() => {});
+    fetchPublicWebsiteCategories(DEFAULT_ORG_ID).then(cats => {
+      setFooterCategories(getServicesMenuCategories(cats));
+    }).catch(() => {});
   }, []);
 
   return (
@@ -110,12 +121,11 @@ const Footer = () => {
             Our Services
           </h4>
           <ul className="space-y-2.5 text-xs text-slate-300 font-semibold">
-            <li><Link to="/services/remodeling" className="hover:text-white transition-colors">Remodeling</Link></li>
-            <li><Link to="/services/kitchens" className="hover:text-white transition-colors">Kitchens &amp; Bathrooms</Link></li>
-            <li><Link to="/services/decks" className="hover:text-white transition-colors">Decks &amp; Additions</Link></li>
-            <li><Link to="/services/roofing" className="hover:text-white transition-colors">Roofing &amp; Siding</Link></li>
-            <li><Link to="/services/flooring" className="hover:text-white transition-colors">Flooring &amp; Drywall</Link></li>
-            <li><Link to="/services/finish-carpentry" className="hover:text-white transition-colors">Finish Carpentry</Link></li>
+            {footerCategories.slice(0, 8).map(s => (
+              <li key={s.id || s.slug}>
+                <Link to={`/services/${s.slug}`} className="hover:text-white transition-colors">{s.name}</Link>
+              </li>
+            ))}
           </ul>
         </div>
 

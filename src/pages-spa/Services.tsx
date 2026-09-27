@@ -1,72 +1,143 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, ChevronRight, Home, ArrowRight } from "lucide-react";
 import Layout from "@/components/Layout";
-import { allServices } from "@/data/services";
 import { motion } from "framer-motion";
-import { useLanguage } from "@/context/LanguageContext";
+import { fetchPublicWebsiteCategories, WebsiteCategory } from "@/lib/website-cms";
+
+const CategoryCoverPlaceholder = ({ name }: { name: string }) => (
+  <div className="w-full h-full bg-gradient-to-br from-[#0b2a4a] via-[#103b66] to-slate-900 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+    <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-2 shadow-md">
+      <Home className="w-5 h-5 text-amber-400" />
+    </div>
+    <h4 className="text-sm font-bold text-white tracking-tight leading-snug">{name}</h4>
+  </div>
+);
 
 const Services = () => {
-  const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [categories, setCategories] = useState<WebsiteCategory[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = allServices.filter((s) =>
-    s.name.toLowerCase().includes(query.toLowerCase())
+  useEffect(() => {
+    let isMounted = true;
+    fetchPublicWebsiteCategories().then((cats) => {
+      if (isMounted) {
+        setCategories(cats || []);
+        setLoading(false);
+      }
+    }).catch(() => {
+      if (isMounted) setLoading(false);
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  const filtered = categories.filter((s) =>
+    s.name.toLowerCase().includes(query.toLowerCase()) ||
+    (s.description || "").toLowerCase().includes(query.toLowerCase())
   );
-
-  const grouped = {
-    top: filtered.filter((s) => s.category === "top"),
-    core: filtered.filter((s) => s.category === "core"),
-    extended: filtered.filter((s) => s.category === "extended"),
-  };
-
-  const renderGroup = (title: string, items: typeof filtered) =>
-    items.length > 0 ? (
-      <div className="mb-12">
-        <h2 className="text-lg font-bold mb-5 tracking-tight">{title}</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {items.map((s, i) => {
-            const Icon = s.icon;
-            return (
-              <motion.div
-                key={s.slug}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: i * 0.02 }}
-              >
-                <Link
-                  to={`/quote/${s.slug}`}
-                  className="flex items-center gap-3 p-4 bg-card rounded-2xl border border-border/60 premium-shadow hover:premium-shadow-lg hover:-translate-y-0.5 hover:border-primary/30 transition-all duration-200"
-                >
-                  <Icon className="h-5 w-5 text-primary/70 shrink-0" strokeWidth={1.5} />
-                  <span className="text-sm font-medium">{t(`service.${s.slug}`)}</span>
-                </Link>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-    ) : null;
 
   return (
     <Layout>
       <div className="max-w-6xl mx-auto px-6 py-12">
-        <h1 className="text-4xl font-bold mb-8 tracking-tight">{t("nav.find_pro")}</h1>
+        <div className="mb-10">
+          <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-2">
+            H &amp; A Construction Services
+          </span>
+          <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tight mb-4">
+            Residential Construction &amp; Remodeling Services
+          </h1>
+          <p className="text-slate-600 text-lg max-w-2xl">
+            Browse all service categories managed directly through our CMS portal. Serving Southern Maine with quality craftsmanship.
+          </p>
+        </div>
+
+        {/* Search Input */}
         <div className="relative mb-10 max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
-            className="w-full h-12 pl-11 pr-4 bg-card border border-border/60 rounded-2xl text-sm premium-shadow focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300"
-            placeholder={t("hero.search_placeholder")}
+            className="w-full h-12 pl-11 pr-4 bg-white border border-slate-200 rounded-xl text-sm shadow-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            placeholder="Search construction services (e.g. Drywall, Roofing, Framing)..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        {renderGroup("Top Projects", grouped.top)}
-        {renderGroup("Core Services", grouped.core)}
-        {renderGroup("More Services", grouped.extended)}
-        {filtered.length === 0 && (
-          <p className="text-muted-foreground text-center py-16">No services found matching "{query}"</p>
+
+        {loading ? (
+          <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 py-8">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-64 rounded-2xl bg-slate-100 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {filtered.map((s, i) => (
+                <motion.div
+                  key={s.id || s.slug}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.02 }}
+                >
+                  <Link
+                    to={`/services/${s.slug}`}
+                    className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full"
+                  >
+                    <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
+                      {s.cover_image_url ? (
+                        <img
+                          src={s.cover_image_url}
+                          alt={s.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <CategoryCoverPlaceholder name={s.name} />
+                      )}
+                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="bg-white/20 backdrop-blur-md p-1.5 rounded-full text-white">
+                          <ChevronRight className="h-4 w-4" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-lg mb-1.5 group-hover:text-primary transition-colors">
+                          {s.name}
+                        </h3>
+                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                          {s.description || `Quality ${s.name.toLowerCase()} services in Southern Maine.`}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-primary">
+                        <span>View Details</span>
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+
+            {filtered.length === 0 && (
+              <div className="text-center py-16 bg-slate-50 rounded-2xl border border-slate-200">
+                <p className="text-slate-600 font-medium">No service categories found matching "{query}"</p>
+                <button
+                  onClick={() => setQuery("")}
+                  className="mt-3 text-xs font-bold text-primary hover:underline"
+                >
+                  Clear search filter
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </Layout>
