@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       );
     }
 
+<<<<<<< HEAD
     // 0. Handle Institutional Public Portfolio Showcase query (No estimate token required)
     if (type === "portfolio") {
       let mediaList: any[] = [];
@@ -170,7 +171,7 @@ export async function POST(request: Request) {
     let orgId: string | null = null;
     let jobId: string | null = null;
 
-    // First attempt: Direct query via supabaseAdmin
+    // 1. Validate estimate via public_token exclusively
     const { data: est, error: estErr } = await supabaseAdmin
       .from("estimates")
       .select("id, organization_id, public_token")
@@ -203,6 +204,7 @@ export async function POST(request: Request) {
           }
         }
       }
+    }
     }
 
     if (!estId || !orgId) {
@@ -368,9 +370,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Storage path not set for this record", noFile: true }, { status: 404, headers: NO_CACHE_HEADERS });
     }
 
+<<<<<<< HEAD
     // Explicit Legacy / Fallback Data URI File Handling:
     if (storagePath.startsWith("data:")) {
       return NextResponse.json({ signedUrl: storagePath }, { status: 200, headers: NO_CACHE_HEADERS });
+=======
+    // Explicit Legacy File Handling:
+    // If storagePath is Base64 data URI, reject direct return and mark as unavailable for admin migration.
+    if (storagePath.startsWith("data:")) {
+      return NextResponse.json(
+        { error: "File unavailable: Legacy inline file requires admin migration to Storage", unavailable: true },
+        { status: 422, headers: NO_CACHE_HEADERS }
+      );
+>>>>>>> 43267de707bf36b7e5790a936dff3b029dd75a7f
     }
 
     let targetBucket = defaultBucket;
@@ -417,6 +429,7 @@ export async function POST(request: Request) {
       .createSignedUrl(cleanPath, 300);
 
     if (signErr || !signedData?.signedUrl) {
+<<<<<<< HEAD
       // Try fallback bucket 'images' or 'documents' if default bucket failed
       if (targetBucket !== "images") {
         const { data: fbData } = await supabaseAdmin.storage.from("images").createSignedUrl(cleanPath, 300);
@@ -432,6 +445,9 @@ export async function POST(request: Request) {
       }
 
       console.error("[SignedURL API Error] Failed to generate signed URL for ID:", id, signErr?.message);
+=======
+      console.error("[SignedURL API Error] Failed to generate signed URL for ID:", id);
+>>>>>>> 43267de707bf36b7e5790a936dff3b029dd75a7f
       return NextResponse.json(
         { error: "File unavailable: Object not found in storage bucket", unavailable: true },
         { status: 404, headers: NO_CACHE_HEADERS }
