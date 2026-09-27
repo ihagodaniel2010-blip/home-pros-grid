@@ -119,15 +119,34 @@ export async function POST(request: Request) {
             }
           }
 
-          // Category classification
-          const text = `${m.caption || ''} ${m.file_name || ''}`.toLowerCase();
+          // Category classification: check database media_category_relations first
           let category = "Recent Projects";
-          if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(text)) category = "Framing & Structure";
-          else if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(text)) category = "Roofing & Gutters";
-          else if (/drywall|gesso|sheetrock|wall|parede|teto/i.test(text)) category = "Drywall & Painting";
-          else if (/siding|revestimento|facade|exterior|cladding/i.test(text)) category = "Siding & Exterior";
-          else if (/deck|porch|patio|varanda|decking|rail/i.test(text)) category = "Decks & Patios";
-          else if (/remodel|reforma|kitchen|bath|cozinha|banheiro|tile|flooring/i.test(text)) category = "Remodeling";
+          let dbCategories: string[] = [];
+          try {
+            const { data: catRels } = await supabaseAdmin
+              .from("media_category_relations")
+              .select("category_id, website_categories(name)")
+              .eq("media_id", m.id);
+
+            if (catRels && catRels.length > 0) {
+              dbCategories = catRels
+                .map((r: any) => r.website_categories?.name)
+                .filter(Boolean);
+              if (dbCategories.length > 0) {
+                category = dbCategories[0];
+              }
+            }
+          } catch (e) {}
+
+          if (dbCategories.length === 0) {
+            const text = `${m.caption || ''} ${m.file_name || ''}`.toLowerCase();
+            if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(text)) category = "Framing";
+            else if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(text)) category = "Roofing";
+            else if (/drywall|gesso|sheetrock|wall|parede|teto/i.test(text)) category = "Drywall";
+            else if (/siding|revestimento|facade|exterior|cladding/i.test(text)) category = "Siding";
+            else if (/deck|porch|patio|varanda|decking|rail/i.test(text)) category = "Decks";
+            else if (/remodel|reforma|kitchen|bath|cozinha|banheiro|tile|flooring/i.test(text)) category = "Remodeling";
+          }
 
           return {
             id: m.id,
@@ -136,6 +155,7 @@ export async function POST(request: Request) {
             caption: m.caption,
             signedUrl: signedUrl || "",
             category,
+            categories: dbCategories,
             created_at: m.created_at
           };
         })
