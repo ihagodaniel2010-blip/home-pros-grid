@@ -45,6 +45,8 @@ const EstimateEditor = () => {
     const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
+    const [isSendingSMS, setIsSendingSMS] = useState(false);
+    const [leadContactPrefs, setLeadContactPrefs] = useState<string[]>([]);
 
     const handleSendEstimateEmail = async () => {
         if (userRole === 'worker') {
@@ -58,6 +60,9 @@ const EstimateEditor = () => {
             return;
         }
 
+        const estToken = formData.public_token || (id ? id : null);
+        const estUrl = estToken ? `${window.location.origin}/estimate/${estToken}` : "https://www.h-a-construction.com/";
+
         setIsSendingEmail(true);
         try {
             const res = await fetch("/api/admin/send-test-email", {
@@ -70,16 +75,19 @@ const EstimateEditor = () => {
                         customer_name: formData.client_name || "Valued Client",
                         project_type: formData.project_type || "Residential Construction Project",
                         total_amount: `$${(formData.total_amount || 0).toLocaleString()}`,
-                        estimate_link: formData.public_token
-                            ? `${window.location.origin}/estimate/${formData.public_token}`
-                            : "https://www.h-a-construction.com/"
+                        estimate_link: estUrl
                     }
                 })
             });
 
             const data = await res.json();
             if (data.success) {
-                toast.success(`Estimate email sent successfully! (${data.messageId || "Dispatched"})`);
+                const nowIso = new Date().toISOString();
+                if (id) {
+                    await updateEstimate(id, { status: 'Sent', sent_at: nowIso });
+                }
+                setFormData(prev => ({ ...prev, status: 'Sent', sent_at: nowIso }));
+                toast.success(`Estimate email sent successfully! Status updated to Sent. (${data.messageId || "Dispatched"})`);
             } else {
                 toast.error(`Email dispatch failed: ${data.message || "Provider unconfigured"}`);
             }
@@ -88,6 +96,52 @@ const EstimateEditor = () => {
             toast.error("Error sending estimate email. Please check server logs.");
         } finally {
             setIsSendingEmail(false);
+        }
+    };
+
+    const handleSendEstimateSMS = async () => {
+        if (userRole === 'worker') {
+            toast.error("Workers are restricted from sending SMS.");
+            return;
+        }
+
+        const phone = formData.client_phone || "";
+        if (!phone || phone.trim().length < 7) {
+            toast.error("Please provide a valid customer phone number in the estimate details.");
+            return;
+        }
+
+        const estToken = formData.public_token || (id ? id : null);
+        const estUrl = estToken ? `${window.location.origin}/estimate/${estToken}` : "https://www.h-a-construction.com/";
+        const messageText = `H&A Construction LLC: Your estimate for ${formData.project_type || 'your project'} is ready to review ($${(formData.total_amount || 0).toLocaleString()}). Please open this link: ${estUrl} . Reply or call us if you have questions.`;
+
+        setIsSendingSMS(true);
+        try {
+            const res = await fetch("/api/admin/send-sms", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    toPhone: phone.trim(),
+                    message: messageText
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                const nowIso = new Date().toISOString();
+                if (id) {
+                    await updateEstimate(id, { status: 'Sent', sent_at: nowIso });
+                }
+                setFormData(prev => ({ ...prev, status: 'Sent', sent_at: nowIso }));
+                toast.success(`Estimate SMS sent successfully! Status updated to Sent.`);
+            } else {
+                toast.error(`SMS dispatch notice: ${data.message || "Twilio unconfigured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER."}`);
+            }
+        } catch (err: any) {
+            console.error("Estimate SMS dispatch error:", err);
+            toast.error("Error sending estimate SMS. Please check server logs.");
+        } finally {
+            setIsSendingSMS(false);
         }
     };
 
@@ -113,6 +167,14 @@ const EstimateEditor = () => {
                     setItems(estimate.items || []);
                     const job = await getServiceJobByEstimateId(id);
                     if (job) setServiceJob(job);
+                    if (estimate.lead_id) {
+                        getLeads().then(leads => {
+                            const l = leads.find(item => item.id === estimate.lead_id);
+                            if (l && l.preferred_contact_methods) {
+                                setLeadContactPrefs(l.preferred_contact_methods);
+                            }
+                        }).catch(() => {});
+                    }
                 }
             } else if (draftId) {
                 const draft = await getAssistantDraftById(draftId);
@@ -139,9 +201,6 @@ const EstimateEditor = () => {
                         }))
                     ];
                     
-                    // Re-add profit and overhead as generic line items if we want to show it, or we can just leave it to be adjusted. 
-                    // Actually, the user asked not to show margin/profit. We just add one line item for overhead/profit or bake it into unit prices.
-                    // To keep it simple, we add a "Project Management & Setup" item for the remaining balance.
                     const extra = draft.output.totals.overheadAmount + draft.output.totals.profitAmount - draft.output.totals.discountAmount;
                     if (extra > 0) {
                         newItems.push({
@@ -155,16 +214,20 @@ const EstimateEditor = () => {
                     setItems(newItems);
                     calculateTotals(newItems, formData.tax_rate || 0, formData.discount_amount || 0);
                     
-                    // If the draft is linked to a lead, try to fetch the client name
                     if (draft.lead_id) {
                         const leads = await getLeads();
                         const lead = leads.find(l => l.id === draft.lead_id);
                         if (lead) {
+                            if (lead.preferred_contact_methods) setLeadContactPrefs(lead.preferred_contact_methods);
                             setFormData(prev => ({
                                 ...prev,
                                 client_name: lead.fullName,
                                 client_email: lead.email,
-                                client_phone: lead.phone
+                                client_phone: lead.phone,
+                                client_address: lead.street_address || lead.address || prev.client_address,
+                                client_city: lead.city || prev.client_city,
+                                client_state: lead.state || prev.client_state,
+                                client_zip: lead.zip || prev.client_zip
                             }));
                         }
                     }
@@ -173,11 +236,13 @@ const EstimateEditor = () => {
                 const leads = await getLeads();
                 const lead = leads.find(l => l.id === leadId);
                 if (lead) {
+                    if (lead.preferred_contact_methods) {
+                        setLeadContactPrefs(lead.preferred_contact_methods);
+                    }
                     const serviceInfo = lead.subtype
                         ? `${lead.selectedServiceOption} (${lead.subtype})`
                         : lead.selectedServiceOption;
 
-                    // Derive project type from serviceSlug or option
                     let derivedProjectType = "";
                     if (lead.serviceSlug) {
                         const slugMap: Record<string, string> = {
@@ -192,16 +257,35 @@ const EstimateEditor = () => {
                         derivedProjectType = slugMap[lead.serviceSlug.toLowerCase()] || "";
                     }
 
+                    // Properly format structured address fields
+                    let street = lead.street_address || "";
+                    if (lead.unit && street && !street.toLowerCase().includes(lead.unit.toLowerCase())) {
+                        street = `${street}, ${lead.unit}`;
+                    } else if (!street && lead.unit) {
+                        street = lead.unit;
+                    }
+
+                    if (!street && lead.address) {
+                        const parts = String(lead.address).split(",").map(s => s.trim());
+                        if (parts.length >= 3) {
+                            street = parts[0];
+                        } else {
+                            street = lead.address;
+                        }
+                    }
+
                     setFormData(prev => ({
                         ...prev,
                         client_name: lead.fullName,
                         client_email: lead.email,
                         client_phone: lead.phone,
-                        client_address: lead.address || prev.client_address,
+                        client_address: street || prev.client_address,
+                        client_city: lead.city || prev.client_city,
+                        client_state: lead.state || prev.client_state,
                         client_zip: lead.zip || prev.client_zip,
                         lead_id: lead.id,
                         project_type: derivedProjectType || prev.project_type || "General Repair",
-                        notes: `${t("estimate.converted_from")} [${serviceInfo}]: ${lead.details || 'No details provided.'}`
+                        notes: lead.details || lead.description || `${t("estimate.converted_from")} [${serviceInfo}]`
                     }));
                 }
             }
@@ -617,6 +701,16 @@ const EstimateEditor = () => {
                             </Button>
                             <Button
                                 variant="outline"
+                                className="h-10 gap-2 border-emerald-200 text-emerald-800 hover:bg-emerald-50 font-semibold"
+                                onClick={handleSendEstimateSMS}
+                                disabled={isSendingSMS || userRole === 'worker'}
+                                title={userRole === 'worker' ? "Worker role restricted" : "Send Estimate SMS"}
+                            >
+                                {isSendingSMS ? <Loader2 className="h-4 w-4 animate-spin text-emerald-600" /> : <Phone className="h-4 w-4 text-emerald-600" />}
+                                Send Estimate SMS
+                            </Button>
+                            <Button
+                                variant="outline"
                                 className="h-10 gap-2 border-gray-200"
                                 onClick={() => setIsPaymentModalOpen(true)}
                             >
@@ -644,6 +738,24 @@ const EstimateEditor = () => {
                     )}
                 </div>
             </div>
+
+            {/* Preferred Contact Methods Banner */}
+            {leadContactPrefs.length > 0 && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3 mb-6 flex items-center justify-between gap-3 text-amber-900 shadow-sm text-xs">
+                    <div className="flex items-center gap-2">
+                        <span className="font-extrabold uppercase tracking-wider text-amber-950">
+                            Client Preferred Contact Methods:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                            {leadContactPrefs.map(method => (
+                                <Badge key={method} variant="secondary" className="bg-amber-200/60 text-amber-900 border-amber-300 font-bold px-2.5 py-0.5 rounded-lg text-xs">
+                                    ✓ {method}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Contextual Status Banners */}
             {formData.status === 'Sent' && (

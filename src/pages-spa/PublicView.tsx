@@ -193,6 +193,10 @@ const PublicView = () => {
                 setIsApproved(true);
             } else if (data.status === 'Rejected') {
                 setIsDeclined(true);
+            } else if (data.status === 'Sent' || data.status === 'Draft') {
+                updateEstimate(data.id, { status: 'Viewed' }).then(() => {
+                    setEstimate(prev => prev ? { ...prev, status: 'Viewed' } : null);
+                }).catch(err => console.warn("Auto-update to Viewed error:", err));
             }
 
             try {

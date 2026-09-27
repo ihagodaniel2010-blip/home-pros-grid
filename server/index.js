@@ -438,6 +438,96 @@ app.post("/api/admin/send-test-email", async (req, res) => {
 });
 
 // =============================
+// TWILIO SMS DISPATCH (FASE 10)
+// =============================
+app.get("/api/admin/sms-provider-status", (req, res) => {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+  const isConfigured = Boolean(accountSid && accountSid.trim() && authToken && authToken.trim() && fromNumber && fromNumber.trim());
+
+  res.json({
+    configured: isConfigured,
+    provider: "Twilio",
+    fromNumber: fromNumber || null
+  });
+});
+
+app.post("/api/admin/send-sms", async (req, res) => {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+  const { toPhone, message } = req.body || {};
+
+  if (!accountSid || !authToken || !fromNumber || !accountSid.trim() || !authToken.trim() || !fromNumber.trim()) {
+    return res.json({
+      success: false,
+      configured: false,
+      message: "Twilio provider is not configured. Please set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in environment variables."
+    });
+  }
+
+  if (!toPhone || String(toPhone).trim().length < 7) {
+    return res.status(400).json({
+      success: false,
+      configured: true,
+      message: "Invalid recipient phone number format."
+    });
+  }
+
+  if (!message || typeof message !== "string") {
+    return res.status(400).json({
+      success: false,
+      configured: true,
+      message: "Message payload parameter is required."
+    });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append("To", String(toPhone).trim());
+    params.append("From", String(fromNumber).trim());
+    params.append("Body", String(message).trim());
+
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid.trim()}/Messages.json`;
+    const authHeader = "Basic " + Buffer.from(`${accountSid.trim()}:${authToken.trim()}`).toString("base64");
+
+    const response = await fetch(twilioUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": authHeader,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: params.toString()
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("Twilio API Dispatch Error:", data);
+      return res.status(400).json({
+        success: false,
+        configured: true,
+        message: data.message || data.more_info || "Failed to dispatch SMS via Twilio API."
+      });
+    }
+
+    return res.json({
+      success: true,
+      configured: true,
+      sid: data.sid,
+      message: "SMS sent successfully."
+    });
+  } catch (err) {
+    console.error("SMS dispatch server error:", err);
+    return res.status(500).json({
+      success: false,
+      configured: true,
+      message: err.message || "Failed to dispatch SMS message."
+    });
+  }
+});
+
+// =============================
 // STRIPE CREDIT TOP-UP ENDPOINTS (FASE 9.3)
 // =============================
 const ALLOWED_CREDIT_PACKAGES = {

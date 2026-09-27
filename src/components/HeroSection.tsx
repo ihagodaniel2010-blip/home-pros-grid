@@ -267,7 +267,7 @@ const HeroSection = () => {
 
           {/* Right Lead Capture Form Card (Canonical Refactored Homepage Form) */}
           <div className="lg:col-span-6" id="hero-estimate-form">
-            <div className="bg-white text-slate-900 rounded-2xl p-6 sm:p-7 shadow-2xl border border-slate-100">
+            <div className="bg-white/94 backdrop-blur-sm text-slate-900 rounded-2xl p-6 sm:p-7 shadow-2xl border border-white/50">
               <div className="mb-4 border-b border-slate-100 pb-3">
                 <h2 className="text-2xl font-black tracking-tight text-[#0b2a4a]">
                   Get a Free Estimate
