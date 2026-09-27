@@ -175,9 +175,9 @@ export async function createTemporarySignedUrl(bucket: string, storagePath: stri
 export async function resolveSignedMediaUrl(storagePath: string): Promise<string | null> {
     if (!storagePath) return null;
     
-    // STRICT SECURITY RULE: Never return Base64 inline URIs directly
+    // If inline Base64 Data URI, return directly so fallback uploads display properly
     if (storagePath.startsWith('data:')) {
-        return null;
+        return storagePath;
     }
 
     let targetBucket = 'images';

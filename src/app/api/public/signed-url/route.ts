@@ -211,12 +211,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Storage path not set for this record", noFile: true }, { status: 404, headers: NO_CACHE_HEADERS });
     }
 
-    // Explicit Legacy File Handling:
+    // Explicit Legacy / Fallback Data URI File Handling:
     if (storagePath.startsWith("data:")) {
-      return NextResponse.json(
-        { error: "File unavailable: Legacy inline file requires admin migration to Storage", unavailable: true },
-        { status: 422, headers: NO_CACHE_HEADERS }
-      );
+      return NextResponse.json({ signedUrl: storagePath }, { status: 200, headers: NO_CACHE_HEADERS });
     }
 
     let targetBucket = defaultBucket;
