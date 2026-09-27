@@ -466,3 +466,110 @@ export async function getExtraMediaRecords(serviceExtraId: string): Promise<Serv
     return (data || []) as ServiceExtraMediaRecord[];
 }
 
+/**
+ * Checks if an extra media storage path is currently published as client-visible in service_job_media.
+ */
+export async function isExtraMediaPublishedToGallery(
+    serviceJobId: string,
+    storagePath: string
+): Promise<boolean> {
+    if (!supabase || !serviceJobId || !storagePath) return false;
+    try {
+        const { data, error } = await supabase
+            .from('service_job_media')
+            .select('id, visible_to_client')
+            .eq('service_job_id', serviceJobId)
+            .eq('storage_path', storagePath)
+            .eq('visible_to_client', true);
+
+        if (error || !data) return false;
+        return data.length > 0;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * Toggles explicit publication of an Extra media item into the Client Project Gallery (service_job_media).
+ * - Publish: Creates or updates reference in service_job_media with visible_to_client = true without duplicating bytes.
+ * - Unpublish: Removes or sets visible_to_client = false in service_job_media, preserving service_extra_media.
+ */
+export async function toggleExtraMediaGalleryPublication(params: {
+    organizationId: string;
+    serviceJobId: string;
+    extraMedia: ServiceExtraMediaRecord;
+    publish: boolean;
+}): Promise<boolean> {
+    if (!supabase) return false;
+    const { organizationId, serviceJobId, extraMedia, publish } = params;
+
+    try {
+        const { data: existingRecords } = await supabase
+            .from('service_job_media')
+            .select('*')
+            .eq('service_job_id', serviceJobId)
+            .eq('storage_path', extraMedia.storage_path);
+
+        const existing = existingRecords && existingRecords.length > 0 ? existingRecords[0] : null;
+
+        if (publish) {
+            if (existing) {
+                const { error: updateErr } = await supabase
+                    .from('service_job_media')
+                    .update({
+                        visible_to_client: true,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', existing.id);
+
+                if (updateErr) {
+                    console.error("Error updating service_job_media visibility:", updateErr);
+                    return false;
+                }
+            } else {
+                const payload = {
+                    organization_id: organizationId,
+                    service_job_id: serviceJobId,
+                    media_type: extraMedia.media_type || 'image',
+                    storage_path: extraMedia.storage_path,
+                    file_name: extraMedia.file_name || 'extra_media.jpg',
+                    mime_type: extraMedia.mime_type || 'image/jpeg',
+                    file_size_bytes: extraMedia.file_size_bytes || 0,
+                    caption: extraMedia.caption || 'Change Order Photo',
+                    visible_to_client: true,
+                    visible_on_public_site: true,
+                    portfolio_approved: false,
+                    media_status: 'approved'
+                };
+
+                const { error: insertErr } = await supabase
+                    .from('service_job_media')
+                    .insert(payload);
+
+                if (insertErr) {
+                    console.error("Error inserting service_job_media reference:", insertErr);
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            if (existing) {
+                const { error: deleteErr } = await supabase
+                    .from('service_job_media')
+                    .delete()
+                    .eq('id', existing.id);
+
+                if (deleteErr) {
+                    console.error("Error deleting service_job_media reference:", deleteErr);
+                    return false;
+                }
+            }
+            return true;
+        }
+    } catch (err) {
+        console.error("Exception in toggleExtraMediaGalleryPublication:", err);
+        return false;
+    }
+}
+
+

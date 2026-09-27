@@ -16,7 +16,7 @@ import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { supabase } from "@/lib/supabase";
 import { getEstimateById, Estimate } from "@/lib/estimates";
 import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra, extractMediaFromText, respondPublicServiceExtra } from "@/lib/service-extras";
-import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, deleteJobMediaRecord, resolveSignedMediaUrl, uploadExtraMediaRecord, ServiceJobMediaRecord } from "@/lib/job-media";
+import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, deleteJobMediaRecord, resolveSignedMediaUrl, uploadExtraMediaRecord, ServiceJobMediaRecord, getExtraMediaRecords, isExtraMediaPublishedToGallery, toggleExtraMediaGalleryPublication, ServiceExtraMediaRecord } from "@/lib/job-media";
 import { getExpenses, createExpense, Expense, updateExpense, deleteExpense } from "@/lib/expenses";
 import { getClientPayments, createClientPayment, updateClientPayment, deleteClientPayment, ClientPayment } from "@/lib/client-payments";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
@@ -486,6 +486,7 @@ export default function JobWorkspace() {
     item: any;
     mediaUrl?: string | null;
     extraMediaUrls?: string[];
+    extraMediaItems?: { record: ServiceExtraMediaRecord; url: string; isPublished: boolean }[];
   }
 
   const [detailModalItem, setDetailModalItem] = useState<DetailItemModalState | null>(null);
@@ -493,17 +494,22 @@ export default function JobWorkspace() {
 
   const handleOpenItemDetail = async (item: any, type: 'client_material' | 'company_material' | 'partner_settlement' | 'extra') => {
     setIsLoadingDetailMedia(true);
-    setDetailModalItem({ type, item, mediaUrl: null, extraMediaUrls: [] });
+    setDetailModalItem({ type, item, mediaUrl: null, extraMediaUrls: [], extraMediaItems: [] });
 
     try {
       if (type === 'extra') {
         const records = await getExtraMediaRecords(item.id).catch(() => []);
         const urls: string[] = [];
+        const extraItems: { record: ServiceExtraMediaRecord; url: string; isPublished: boolean }[] = [];
         for (const r of records) {
           const u = await resolveSignedMediaUrl(r.storage_path);
-          if (u) urls.push(u);
+          if (u) {
+            urls.push(u);
+            const isPublished = job?.id ? await isExtraMediaPublishedToGallery(job.id, r.storage_path) : false;
+            extraItems.push({ record: r, url: u, isPublished });
+          }
         }
-        setDetailModalItem(prev => prev ? { ...prev, extraMediaUrls: urls } : null);
+        setDetailModalItem(prev => prev ? { ...prev, extraMediaUrls: urls, extraMediaItems: extraItems } : null);
       } else {
         let path = item.receipt_storage_path || item.storage_path;
         if (!path && item.receipt_files && item.receipt_files.length > 0) {
@@ -518,6 +524,34 @@ export default function JobWorkspace() {
       console.warn("Error resolving detail media:", err);
     } finally {
       setIsLoadingDetailMedia(false);
+    }
+  };
+
+  const handleToggleExtraGalleryPublication = async (extraRecord: ServiceExtraMediaRecord, publish: boolean) => {
+    if (!job) return;
+    const success = await toggleExtraMediaGalleryPublication({
+      organizationId: orgId,
+      serviceJobId: job.id,
+      extraMedia: extraRecord,
+      publish
+    });
+    if (success) {
+      toast.success(publish ? "Photo published to Client Project Gallery!" : "Photo removed from gallery (Extra attachment preserved)");
+      if (detailModalItem && detailModalItem.type === 'extra') {
+        setDetailModalItem(prev => {
+          if (!prev || !prev.extraMediaItems) return prev;
+          const updated = prev.extraMediaItems.map(item => {
+            if (item.record.id === extraRecord.id) {
+              return { ...item, isPublished: publish };
+            }
+            return item;
+          });
+          return { ...prev, extraMediaItems: updated };
+        });
+      }
+      loadJobWorkspace();
+    } else {
+      toast.error("Failed to update gallery publication.");
     }
   };
 
@@ -3747,6 +3781,50 @@ export default function JobWorkspace() {
                     >
                       🔍 Expandir Imagem
                     </button>
+                  </div>
+                ) : detailModalItem.extraMediaItems && detailModalItem.extraMediaItems.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {detailModalItem.extraMediaItems.map((item, idx) => (
+                      <div key={idx} className="border border-purple-200 rounded-2xl overflow-hidden bg-white shadow-xs flex flex-col">
+                        <div className="aspect-video relative overflow-hidden bg-slate-900 cursor-pointer" onClick={() => setSelectedMediaUrl(item.url)}>
+                          <img src={item.url} alt={`Anexo ${idx + 1}`} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                          <div className="absolute top-2 left-2 z-10">
+                            {item.isPublished ? (
+                              <Badge className="bg-emerald-500 text-white text-[9px] px-1.5 py-0.5 flex items-center gap-1">
+                                <Eye className="h-3 w-3" /> In Client Gallery
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-slate-700 text-white text-[9px] px-1.5 py-0.5 flex items-center gap-1">
+                                <EyeOff className="h-3 w-3" /> Change Order Only
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="p-2.5 bg-gray-50 flex items-center justify-between gap-2 border-t border-gray-100">
+                          <span className="text-[10px] text-gray-600 font-semibold truncate max-w-[130px]">
+                            {item.record.file_name || `Anexo #${idx + 1}`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleExtraGalleryPublication(item.record, !item.isPublished);
+                            }}
+                            className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 border ${
+                              item.isPublished
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                                : "bg-blue-600 text-white border-blue-700 hover:bg-blue-700 shadow-xs"
+                            }`}
+                          >
+                            {item.isPublished ? (
+                              <>✓ In Client Project Gallery</>
+                            ) : (
+                              <>📷 Show in Client Project Gallery</>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : detailModalItem.extraMediaUrls && detailModalItem.extraMediaUrls.length > 0 ? (
                   <div className="grid grid-cols-2 gap-2">
