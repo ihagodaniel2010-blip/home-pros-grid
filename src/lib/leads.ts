@@ -27,6 +27,12 @@ export interface Lead {
   // Novos campos profissionais
   description?: string;
   preferred_contact_method?: "email" | "phone" | "text";
+  preferred_contact_methods?: string[];
+  street_address?: string;
+  unit?: string;
+  city?: string;
+  state?: string;
+  lead_source?: string;
   spam_score?: number;
   is_spam?: boolean;
   media_urls?: string[];

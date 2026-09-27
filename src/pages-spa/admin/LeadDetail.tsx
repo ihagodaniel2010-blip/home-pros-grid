@@ -213,31 +213,56 @@ const LeadDetail = () => {
               </div>
             </div>
 
-            <div className="p-8 grid md:grid-cols-2 gap-x-12 gap-y-8">
-              {[
-                { label: "Phone Number", value: lead.phone, icon: Phone },
-                { label: "Email Address", value: lead.email, icon: Mail },
-                { label: "Address / Location", value: lead.address, icon: MapPin },
-                { label: "Budget Option", value: lead.selectedServiceOption, icon: CheckCircle2 },
-                { label: "Service Request", value: lead.serviceSlug.toUpperCase(), icon: FileText },
-                { label: "Location Type", value: lead.locationType, icon: MapPin },
-              ].map((item) => (
-                <div key={item.label} className="group">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5 group-hover:text-blue-500 transition-colors">
-                    {item.label}
-                  </span>
-                  <div className="flex items-start gap-2.5">
-                    <item.icon className="h-4 w-4 text-gray-300 mt-0.5" />
-                    <span className="text-gray-900 font-semibold">{item.value || "—"}</span>
+            <div className="p-8 space-y-6">
+              <div className="grid md:grid-cols-2 gap-x-12 gap-y-6">
+                {[
+                  { label: "Full Name", value: lead.fullName, icon: User },
+                  { label: "Phone Number", value: lead.phone, icon: Phone },
+                  { label: "Email Address", value: lead.email, icon: Mail },
+                  { label: "Service Category", value: lead.selectedServiceOption || lead.serviceSlug.toUpperCase(), icon: FileText },
+                  { label: "Full Address", value: lead.address, icon: MapPin },
+                  { label: "Lead Source", value: lead.lead_source || (lead.ownerNotes?.includes("Homepage") ? "Homepage — Hero Estimate Form" : "Public Website"), icon: CheckCircle2 },
+                ].map((item) => (
+                  <div key={item.label} className="group">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5 group-hover:text-blue-500 transition-colors">
+                      {item.label}
+                    </span>
+                    <div className="flex items-start gap-2.5">
+                      <item.icon className="h-4 w-4 text-gray-300 mt-0.5" />
+                      <span className="text-gray-900 font-semibold">{item.value || "—"}</span>
+                    </div>
                   </div>
+                ))}
+              </div>
+
+              {/* Preferred Contact Method Section */}
+              <div className="pt-4 border-t border-gray-100">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2.5">
+                  Preferred Contact Method
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {(lead.preferred_contact_methods && lead.preferred_contact_methods.length > 0) ? (
+                    lead.preferred_contact_methods.map((method) => (
+                      <Badge 
+                        key={method} 
+                        className="bg-amber-100 text-amber-900 border-amber-200 font-bold px-3 py-1 rounded-lg text-xs"
+                      >
+                        ✓ {method}
+                      </Badge>
+                    ))
+                  ) : (
+                    <Badge className="bg-blue-100 text-blue-900 border-blue-200 font-bold px-3 py-1 rounded-lg text-xs">
+                      ✓ {lead.preferred_contact_method ? lead.preferred_contact_method.toUpperCase() : "PHONE / EMAIL"}
+                    </Badge>
+                  )}
                 </div>
-              ))}
+              </div>
 
               {lead.details && (
-                <div className="md:col-span-2 pt-4 border-t border-gray-50 mt-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">Project Details & Requirements</span>
-                  <div className="bg-gray-50/80 rounded-xl p-6 text-gray-700 leading-relaxed italic border border-gray-100">
-                    "{lead.details}"
+                <div className="pt-4 border-t border-gray-100">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Project Description &amp; Details</span>
+                  <div className="bg-gray-50/90 rounded-xl p-5 text-gray-800 leading-relaxed font-normal whitespace-pre-wrap border border-gray-200/60 text-sm">
+                    {lead.details}
                   </div>
                 </div>
               )}

@@ -1,7 +1,6 @@
 import React from "react";
 import Layout from "@/components/Layout";
 import HeroSection from "@/components/HeroSection";
-import DirectEstimateForm from "@/components/DirectEstimateForm";
 import ArticlesSection from "@/components/ArticlesSection";
 import { siteConfig } from "@/config/site";
 
@@ -62,11 +61,8 @@ const Index = () => {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
       />
 
-      {/* Hero Section */}
+      {/* Hero Section with White Form */}
       <HeroSection />
-
-      {/* Direct Estimate Request Form */}
-      <DirectEstimateForm />
 
       {/* Main Content Showcase, Google Reviews & Service Areas */}
       <ArticlesSection />
