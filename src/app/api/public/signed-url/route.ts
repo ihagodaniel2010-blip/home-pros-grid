@@ -39,18 +39,28 @@ export async function POST(request: Request) {
       let mediaList: any[] = [];
       const { data: dbList, error: mErr } = await supabaseAdmin
         .from("service_job_media")
-        .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at, service_jobs(title, project_type)")
+        .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at")
         .eq("visible_on_public_site", true)
         .eq("portfolio_approved", true)
         .order("created_at", { ascending: false });
 
-      if (!mErr && dbList) {
+      if (!mErr && dbList && dbList.length > 0) {
         mediaList = dbList;
       } else {
-        // Fallback to RPC get_public_portfolio_media
-        const { data: rpcMedia } = await supabaseAdmin.rpc("get_public_portfolio_media");
-        if (Array.isArray(rpcMedia)) {
-          mediaList = rpcMedia;
+        // Fallback to RPC get_public_portfolio_media and enrich with full records if RPC omitted storage_path
+        const { data: rpcMedia, error: rpcErr } = await supabaseAdmin.rpc("get_public_portfolio_media");
+        if (!rpcErr && Array.isArray(rpcMedia) && rpcMedia.length > 0) {
+          const ids = rpcMedia.map((r: any) => r.id);
+          const { data: fullRecords } = await supabaseAdmin
+            .from("service_job_media")
+            .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at")
+            .in("id", ids);
+
+          if (fullRecords && fullRecords.length > 0) {
+            mediaList = fullRecords;
+          } else {
+            mediaList = rpcMedia;
+          }
         }
       }
 
@@ -111,8 +121,7 @@ export async function POST(request: Request) {
           }
 
           // Category classification
-          const projectType = m.service_jobs?.project_type || m.service_jobs?.title || "";
-          const text = `${m.caption || ''} ${m.file_name || ''} ${projectType}`.toLowerCase();
+          const text = `${m.caption || ''} ${m.file_name || ''}`.toLowerCase();
           let category = "Recent Projects";
           if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(text)) category = "Framing & Structure";
           else if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(text)) category = "Roofing & Gutters";
