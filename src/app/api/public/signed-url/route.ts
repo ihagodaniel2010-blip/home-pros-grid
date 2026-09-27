@@ -40,14 +40,13 @@ export async function POST(request: Request) {
       const { data: dbList, error: mErr } = await supabaseAdmin
         .from("service_job_media")
         .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at")
-        .eq("visible_on_public_site", true)
-        .eq("portfolio_approved", true)
+        .or("visible_on_public_site.eq.true,portfolio_approved.eq.true")
         .order("created_at", { ascending: false });
 
       if (!mErr && dbList && dbList.length > 0) {
         mediaList = dbList;
       } else {
-        // Fallback to RPC get_public_portfolio_media and enrich with full records if RPC omitted storage_path
+        // Fallback to RPC get_public_portfolio_media or direct table select
         const { data: rpcMedia, error: rpcErr } = await supabaseAdmin.rpc("get_public_portfolio_media");
         if (!rpcErr && Array.isArray(rpcMedia) && rpcMedia.length > 0) {
           const ids = rpcMedia.map((r: any) => r.id);
