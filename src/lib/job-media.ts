@@ -288,6 +288,34 @@ export async function getPublicJobMediaByJobId(
     const cleanToken = (token && token !== 'null' && token !== 'undefined') ? token.trim() : null;
 
     if (cleanToken) {
+        // 1. Try server-side route POST /api/public/signed-url with type: "list_media"
+        try {
+            const res = await fetch('/api/public/signed-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: cleanToken, type: 'list_media', id: 'all' }),
+                cache: 'no-store'
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data.media)) {
+                    return (data.media as any[]).map(item => ({
+                        ...item,
+                        estimate_id: estimateId || null,
+                        visible_to_client: true,
+                        visible_on_public_site: true,
+                        portfolio_approved: false,
+                        media_status: 'approved',
+                        sort_order: 0,
+                        updated_at: item.created_at || new Date().toISOString()
+                    })) as ServiceJobMediaRecord[];
+                }
+            }
+        } catch (apiErr) {
+            console.warn("API /api/public/signed-url list_media attempt fallback:", apiErr);
+        }
+
+        // 2. Fallback to RPC get_public_job_media
         try {
             const { data, error } = await supabase.rpc('get_public_job_media', { p_token: cleanToken });
             if (!error && Array.isArray(data)) {

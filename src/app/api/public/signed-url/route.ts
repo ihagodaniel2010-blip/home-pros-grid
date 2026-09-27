@@ -86,6 +86,26 @@ export async function POST(request: Request) {
     let storagePath: string | null = null;
     let defaultBucket = "images";
 
+    if (type === "list_media") {
+      if (!jobId) {
+        return NextResponse.json({ media: [] }, { status: 200, headers: NO_CACHE_HEADERS });
+      }
+      const { data: mediaList, error: mErr } = await supabaseAdmin
+        .from("service_job_media")
+        .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, file_size_bytes, caption, visible_to_client, created_at")
+        .eq("organization_id", orgId)
+        .eq("service_job_id", jobId)
+        .eq("visible_to_client", true)
+        .order("created_at", { ascending: false });
+
+      if (mErr) {
+        console.error("[SignedURL API Error] list_media query error:", mErr.message);
+        return NextResponse.json({ media: [] }, { status: 200, headers: NO_CACHE_HEADERS });
+      }
+
+      return NextResponse.json({ media: mediaList || [] }, { status: 200, headers: NO_CACHE_HEADERS });
+    }
+
     if (type === "media") {
       // 3a. Validate media record ownership and client visibility
       let media: any = null;
