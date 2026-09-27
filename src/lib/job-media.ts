@@ -236,8 +236,14 @@ export async function getJobMediaRecords(serviceJobId: string): Promise<ServiceJ
 /**
  * Fetches public client-visible job media records for a given service job ID.
  */
-export async function getPublicSignedMediaUrl(token: string, mediaId: string): Promise<string | null> {
-    if (!token || !mediaId) return null;
+export interface PublicSignedMediaUrlResult {
+    signedUrl: string | null;
+    status: 'success' | 'no_file' | 'legacy_unavailable' | 'unauthorized' | 'storage_error' | 'error';
+    errorMessage?: string;
+}
+
+export async function fetchPublicSignedMediaUrl(token: string, mediaId: string): Promise<PublicSignedMediaUrlResult> {
+    if (!token || !mediaId) return { signedUrl: null, status: 'error', errorMessage: 'Invalid parameters' };
     try {
         const res = await fetch('/api/public/signed-url', {
             method: 'POST',
@@ -245,14 +251,29 @@ export async function getPublicSignedMediaUrl(token: string, mediaId: string): P
             body: JSON.stringify({ token, type: 'media', id: mediaId }),
             cache: 'no-store'
         });
-        if (res.ok) {
-            const data = await res.json();
-            return data.signedUrl || null;
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.signedUrl) {
+            return { signedUrl: data.signedUrl, status: 'success' };
         }
-    } catch (e) {
-        console.warn("getPublicSignedMediaUrl error:", e);
+        if (res.status === 422 || data.unavailable) {
+            return { signedUrl: null, status: 'legacy_unavailable', errorMessage: data.error };
+        }
+        if (res.status === 403) {
+            return { signedUrl: null, status: 'unauthorized', errorMessage: data.error };
+        }
+        if (res.status === 404) {
+            return { signedUrl: null, status: 'storage_error', errorMessage: data.error };
+        }
+        return { signedUrl: null, status: 'error', errorMessage: data.error || 'Server error' };
+    } catch (e: any) {
+        console.warn("fetchPublicSignedMediaUrl error:", e);
+        return { signedUrl: null, status: 'error', errorMessage: e.message };
     }
-    return null;
+}
+
+export async function getPublicSignedMediaUrl(token: string, mediaId: string): Promise<string | null> {
+    const res = await fetchPublicSignedMediaUrl(token, mediaId);
+    return res.signedUrl;
 }
 
 export const getPublicMediaUrl = getPublicSignedMediaUrl;
@@ -296,43 +317,20 @@ export async function getPublicJobMediaByJobId(
         } catch (e) {}
     }
 
+    if (!targetJobId) return [];
+
     try {
-        let rawList: any[] = [];
-        let query = supabase.from('service_job_media').select('*');
-
-        if (targetJobId && cleanEstId) {
-            query = query.or(`service_job_id.eq.${targetJobId},estimate_id.eq.${cleanEstId}`);
-        } else if (targetJobId) {
-            query = query.eq('service_job_id', targetJobId);
-        } else if (cleanEstId) {
-            query = query.eq('estimate_id', cleanEstId);
-        } else {
-            return [];
-        }
-
-        const { data, error } = await query.order('created_at', { ascending: false });
+        const { data, error } = await supabase
+            .from('service_job_media')
+            .select('*')
+            .eq('service_job_id', targetJobId)
+            .eq('visible_to_client', true)
+            .order('created_at', { ascending: false });
 
         if (!error && data) {
-            rawList = data;
-        } else {
-            if (targetJobId) {
-                const { data: jData } = await supabase.from('service_job_media').select('*').eq('service_job_id', targetJobId).order('created_at', { ascending: false });
-                if (jData) rawList.push(...jData);
-            }
-            if (cleanEstId) {
-                const { data: eData } = await supabase.from('service_job_media').select('*').eq('estimate_id', cleanEstId).order('created_at', { ascending: false });
-                if (eData) {
-                    eData.forEach(item => {
-                        if (!rawList.some(r => r.id === item.id)) rawList.push(item);
-                    });
-                }
-            }
+            return data as ServiceJobMediaRecord[];
         }
-
-        // STRICT SECURITY RULE: Filter ONLY client-visible media (never admin-only)
-        return (rawList as ServiceJobMediaRecord[]).filter(
-            m => m.visible_to_client === true || m.visible_on_public_site === true
-        );
+        return [];
     } catch (err) {
         console.error("Exception in getPublicJobMediaByJobId:", err);
         return [];

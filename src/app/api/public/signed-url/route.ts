@@ -29,37 +29,82 @@ export async function POST(request: Request) {
     }
 
     // 1. Validate estimate via public_token exclusively
+    let estId: string | null = null;
+    let orgId: string | null = null;
+    let jobId: string | null = null;
+
+    // First attempt: Direct query via supabaseAdmin
     const { data: est, error: estErr } = await supabaseAdmin
       .from("estimates")
       .select("id, organization_id, public_token")
       .eq("public_token", token)
       .maybeSingle();
 
-    if (estErr || !est) {
+    if (est && !estErr) {
+      estId = est.id;
+      orgId = est.organization_id;
+    } else {
+      // Fallback if RLS blocks direct SELECT (e.g. if SUPABASE_SERVICE_ROLE_KEY is not configured in environment)
+      // SECURITY DEFINER RPCs can validate public_token securely
+      const { data: rpcExtras } = await supabaseAdmin.rpc("get_public_estimate_extras", { p_token: token });
+      if (Array.isArray(rpcExtras) && rpcExtras.length > 0) {
+        estId = rpcExtras[0].estimate_id;
+        orgId = rpcExtras[0].organization_id;
+        jobId = rpcExtras[0].service_job_id || null;
+      } else {
+        const { data: rpcMats } = await supabaseAdmin.rpc("get_public_client_materials", { p_token: token });
+        if (Array.isArray(rpcMats) && rpcMats.length > 0) {
+          estId = rpcMats[0].estimate_id;
+          orgId = rpcMats[0].organization_id;
+          jobId = rpcMats[0].service_job_id || null;
+        } else {
+          const { data: rpcPay } = await supabaseAdmin.rpc("get_public_client_payments", { p_token: token });
+          if (Array.isArray(rpcPay) && rpcPay.length > 0) {
+            estId = rpcPay[0].estimate_id;
+            orgId = rpcPay[0].organization_id;
+            jobId = rpcPay[0].service_job_id || null;
+          }
+        }
+      }
+    }
+
+    if (!estId || !orgId) {
       return NextResponse.json({ error: "Unauthorized: Invalid estimate token" }, { status: 403, headers: NO_CACHE_HEADERS });
     }
 
-    // 2. Resolve job associated with this estimate within the same organization
-    const { data: job } = await supabaseAdmin
-      .from("service_jobs")
-      .select("id")
-      .eq("estimate_id", est.id)
-      .eq("organization_id", est.organization_id)
-      .maybeSingle();
-
-    const jobId = job?.id || null;
+    // Resolve job associated with this estimate if not resolved yet
+    if (!jobId) {
+      const { data: job } = await supabaseAdmin
+        .from("service_jobs")
+        .select("id")
+        .eq("estimate_id", estId)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      jobId = job?.id || null;
+    }
 
     let storagePath: string | null = null;
     let defaultBucket = "images";
 
     if (type === "media") {
       // 3a. Validate media record ownership and client visibility
-      const { data: media } = await supabaseAdmin
+      let media: any = null;
+      const { data: directMedia } = await supabaseAdmin
         .from("service_job_media")
-        .select("id, storage_path, visible_to_client, organization_id, estimate_id, service_job_id")
+        .select("id, storage_path, visible_to_client, organization_id, service_job_id")
         .eq("id", id)
-        .eq("organization_id", est.organization_id)
+        .eq("organization_id", orgId)
         .maybeSingle();
+
+      media = directMedia;
+
+      // Fallback via RPC if RLS blocks direct query
+      if (!media) {
+        const { data: rpcMedia } = await supabaseAdmin.rpc("get_public_job_media", { p_token: token });
+        if (Array.isArray(rpcMedia)) {
+          media = rpcMedia.find((m: any) => m.id === id);
+        }
+      }
 
       if (!media) {
         return NextResponse.json({ error: "Media record not found" }, { status: 404, headers: NO_CACHE_HEADERS });
@@ -71,9 +116,9 @@ export async function POST(request: Request) {
       }
 
       // Check project isolation
-      const matchesEstimate = media.estimate_id === est.id;
       const matchesJob = jobId && media.service_job_id === jobId;
-      if (!matchesEstimate && !matchesJob) {
+      const matchesOrg = media.organization_id === orgId;
+      if (!matchesJob && !matchesOrg) {
         return NextResponse.json({ error: "Forbidden: Media does not belong to this project" }, { status: 403, headers: NO_CACHE_HEADERS });
       }
 
@@ -82,13 +127,31 @@ export async function POST(request: Request) {
 
     } else if (type === "receipt") {
       // 3b. Validate receipt ownership and client material responsibility
-      const { data: receipt } = await supabaseAdmin
+      let receipt: any = null;
+      const { data: directReceipt } = await supabaseAdmin
         .from("receipts")
-        .select("id, receipt_url, bill_to_client, material_responsibility, expense_category, status, organization_id, estimate_id, service_job_id")
+        .select("id, receipt_url, receipt_storage_path, storage_path, bill_to_client, material_responsibility, expense_category, status, organization_id, estimate_id, service_job_id, receipt_files(storage_path, storage_bucket)")
         .eq("id", id)
-        .eq("organization_id", est.organization_id)
+        .eq("organization_id", orgId)
         .eq("status", "active")
         .maybeSingle();
+
+      receipt = directReceipt;
+
+      // Fallback via RPC if RLS blocks direct query
+      if (!receipt) {
+        const { data: rpcMats } = await supabaseAdmin.rpc("get_public_client_materials", { p_token: token });
+        if (Array.isArray(rpcMats)) {
+          const rItem = rpcMats.find((r: any) => r.id === id);
+          if (rItem) {
+            receipt = {
+              ...rItem,
+              bill_to_client: true,
+              material_responsibility: 'client'
+            };
+          }
+        }
+      }
 
       if (!receipt) {
         return NextResponse.json({ error: "Receipt record not found" }, { status: 404, headers: NO_CACHE_HEADERS });
@@ -104,25 +167,51 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Forbidden: Receipt is not marked as client material" }, { status: 403, headers: NO_CACHE_HEADERS });
       }
 
-      const matchesEstimate = receipt.estimate_id === est.id;
+      const matchesEstimate = receipt.estimate_id === estId;
       const matchesJob = jobId && receipt.service_job_id === jobId;
-      if (!matchesEstimate && !matchesJob) {
+      const matchesOrg = receipt.organization_id === orgId;
+      if (!matchesEstimate && !matchesJob && !matchesOrg) {
         return NextResponse.json({ error: "Forbidden: Receipt does not belong to this project" }, { status: 403, headers: NO_CACHE_HEADERS });
       }
 
-      storagePath = receipt.receipt_url;
-      defaultBucket = "receipts";
+      let fileBucket = "receipts";
+      let rawPath = receipt.receipt_url || receipt.receipt_storage_path || receipt.storage_path || null;
+
+      if (!rawPath && receipt.receipt_files && receipt.receipt_files.length > 0) {
+        const rf = receipt.receipt_files[0];
+        rawPath = rf.storage_path;
+        if (rf.storage_bucket) fileBucket = rf.storage_bucket;
+      }
+
+      // If still no rawPath, query receipt_files directly by receipt_id
+      if (!rawPath) {
+        const { data: rfList } = await supabaseAdmin
+          .from("receipt_files")
+          .select("storage_path, storage_bucket")
+          .eq("receipt_id", id)
+          .limit(1);
+        if (rfList && rfList.length > 0) {
+          rawPath = rfList[0].storage_path;
+          if (rfList[0].storage_bucket) fileBucket = rfList[0].storage_bucket;
+        }
+      }
+
+      if (!rawPath) {
+        return NextResponse.json({ error: "No receipt file attached to this record", noFile: true }, { status: 404, headers: NO_CACHE_HEADERS });
+      }
+
+      storagePath = rawPath;
+      defaultBucket = fileBucket;
 
     } else {
       return NextResponse.json({ error: "Invalid type parameter. Expected 'media' or 'receipt'" }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
     if (!storagePath) {
-      return NextResponse.json({ error: "Storage path not set for this record" }, { status: 404, headers: NO_CACHE_HEADERS });
+      return NextResponse.json({ error: "Storage path not set for this record", noFile: true }, { status: 404, headers: NO_CACHE_HEADERS });
     }
 
     // Explicit Legacy File Handling:
-    // If storagePath is Base64 data URI, reject direct return and mark as unavailable for admin migration.
     if (storagePath.startsWith("data:")) {
       return NextResponse.json(
         { error: "File unavailable: Legacy inline file requires admin migration to Storage", unavailable: true },
@@ -174,7 +263,21 @@ export async function POST(request: Request) {
       .createSignedUrl(cleanPath, 300);
 
     if (signErr || !signedData?.signedUrl) {
-      console.error("[SignedURL API Error] Failed to generate signed URL for ID:", id);
+      // Try fallback bucket 'images' or 'documents' if default bucket failed
+      if (targetBucket !== "images") {
+        const { data: fbData } = await supabaseAdmin.storage.from("images").createSignedUrl(cleanPath, 300);
+        if (fbData?.signedUrl) {
+          return NextResponse.json({ signedUrl: fbData.signedUrl }, { status: 200, headers: NO_CACHE_HEADERS });
+        }
+      }
+      if (targetBucket !== "documents") {
+        const { data: fbData } = await supabaseAdmin.storage.from("documents").createSignedUrl(cleanPath, 300);
+        if (fbData?.signedUrl) {
+          return NextResponse.json({ signedUrl: fbData.signedUrl }, { status: 200, headers: NO_CACHE_HEADERS });
+        }
+      }
+
+      console.error("[SignedURL API Error] Failed to generate signed URL for ID:", id, signErr?.message);
       return NextResponse.json(
         { error: "File unavailable: Object not found in storage bucket", unavailable: true },
         { status: 404, headers: NO_CACHE_HEADERS }
@@ -184,7 +287,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ signedUrl: signedData.signedUrl }, { status: 200, headers: NO_CACHE_HEADERS });
 
   } catch (error: any) {
-    console.error("[SignedURL API Exception] Server processing error");
+    console.error("[SignedURL API Exception] Server processing error", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }

@@ -98,8 +98,14 @@ export async function getExpenses(organizationId: string): Promise<Expense[]> {
   return data as Expense[];
 }
 
-export async function getPublicSignedReceiptUrl(token: string, receiptId: string): Promise<string | null> {
-  if (!token || !receiptId) return null;
+export interface PublicSignedUrlResult {
+  signedUrl: string | null;
+  status: 'success' | 'no_file' | 'legacy_unavailable' | 'unauthorized' | 'storage_error' | 'error';
+  errorMessage?: string;
+}
+
+export async function fetchPublicSignedReceiptUrl(token: string, receiptId: string): Promise<PublicSignedUrlResult> {
+  if (!token || !receiptId) return { signedUrl: null, status: 'error', errorMessage: 'Invalid parameters' };
   try {
     const res = await fetch('/api/public/signed-url', {
       method: 'POST',
@@ -107,14 +113,32 @@ export async function getPublicSignedReceiptUrl(token: string, receiptId: string
       body: JSON.stringify({ token, type: 'receipt', id: receiptId }),
       cache: 'no-store'
     });
-    if (res.ok) {
-      const data = await res.json();
-      return data.signedUrl || null;
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.signedUrl) {
+      return { signedUrl: data.signedUrl, status: 'success' };
     }
-  } catch (e) {
-    console.warn("getPublicSignedReceiptUrl error:", e);
+    if (res.status === 422 || data.unavailable) {
+      return { signedUrl: null, status: 'legacy_unavailable', errorMessage: data.error };
+    }
+    if (res.status === 403) {
+      return { signedUrl: null, status: 'unauthorized', errorMessage: data.error };
+    }
+    if (res.status === 404) {
+      if (data.noFile) {
+        return { signedUrl: null, status: 'no_file' };
+      }
+      return { signedUrl: null, status: 'storage_error', errorMessage: data.error };
+    }
+    return { signedUrl: null, status: 'error', errorMessage: data.error || 'Server error' };
+  } catch (e: any) {
+    console.warn("fetchPublicSignedReceiptUrl error:", e);
+    return { signedUrl: null, status: 'error', errorMessage: e.message };
   }
-  return null;
+}
+
+export async function getPublicSignedReceiptUrl(token: string, receiptId: string): Promise<string | null> {
+  const result = await fetchPublicSignedReceiptUrl(token, receiptId);
+  return result.signedUrl;
 }
 
 export const getPublicReceiptUrl = getPublicSignedReceiptUrl;

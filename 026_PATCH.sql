@@ -199,7 +199,7 @@ BEGIN
         m.id,
         m.organization_id,
         m.service_job_id,
-        m.estimate_id,
+        v_estimate_id AS estimate_id,
         m.media_type,
         m.file_name,
         m.mime_type,
@@ -209,7 +209,7 @@ BEGIN
         m.created_at
     FROM public.service_job_media m
     WHERE m.organization_id = v_org_id
-      AND (m.estimate_id = v_estimate_id OR (v_job_id IS NOT NULL AND m.service_job_id = v_job_id))
+      AND (v_job_id IS NOT NULL AND m.service_job_id = v_job_id)
       AND m.visible_to_client = true
     ORDER BY m.created_at DESC;
 END;

@@ -3,9 +3,9 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { getEstimateByToken, approveEstimate, rejectEstimate, updateEstimate, Estimate } from "@/lib/estimates";
 import { getServiceJobByEstimateId } from "@/lib/service-jobs";
 import { getServiceExtrasByJobId, getServiceExtrasByJobOrEstimateId, respondPublicServiceExtra, ServiceExtra, cleanReasonForDisplay } from "@/lib/service-extras";
-import { getExpenses, getPublicClientMaterials, getPublicSignedReceiptUrl, Expense } from "@/lib/expenses";
+import { getExpenses, getPublicClientMaterials, getPublicSignedReceiptUrl, fetchPublicSignedReceiptUrl, PublicSignedUrlResult, Expense } from "@/lib/expenses";
 import { getClientPayments, getPublicClientPayments, ClientPayment, createClientPayment } from "@/lib/client-payments";
-import { getJobMediaRecords, getPublicJobMediaByJobId, getPublicSignedMediaUrl, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
+import { getJobMediaRecords, getPublicJobMediaByJobId, getPublicSignedMediaUrl, fetchPublicSignedMediaUrl, PublicSignedMediaUrlResult, getExtraMediaRecords, resolveSignedMediaUrl, ServiceJobMediaRecord, ServiceExtraMediaRecord } from "@/lib/job-media";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { 
@@ -34,6 +34,8 @@ const PublicView = () => {
     const [clientMedia, setClientMedia] = useState<ServiceJobMediaRecord[]>([]);
     const [clientMediaUrls, setClientMediaUrls] = useState<Record<string, string>>({});
     const [materialReceiptUrls, setMaterialReceiptUrls] = useState<Record<string, string>>({});
+    const [receiptStatusMap, setReceiptStatusMap] = useState<Record<string, PublicSignedUrlResult>>({});
+    const [mediaStatusMap, setMediaStatusMap] = useState<Record<string, PublicSignedMediaUrlResult>>({});
     const [payments, setPayments] = useState<ClientPayment[]>([]);
     const [company, setCompany] = useState<CompanySettings | null>(null);
 
@@ -239,23 +241,21 @@ const PublicView = () => {
                 setClientMaterials(fetchedClientMats || []);
                 setPayments(fetchedPayments || []);
 
-                // Pre-resolve signed URLs for material receipts using public token + receipt_id
+                // Pre-resolve signed URLs for material receipts using public token + receipt_id via POST /api/public/signed-url
                 const receiptUrlMap: Record<string, string> = {};
+                const rStatusMap: Record<string, PublicSignedUrlResult> = {};
                 await Promise.all((fetchedClientMats || []).map(async (mat) => {
-                    let resolved = await getPublicSignedReceiptUrl(tk, mat.id);
-                    if (!resolved) {
-                        let path = mat.receipt_url || (mat as any).receipt_storage_path || (mat as any).storage_path;
-                        if (!path && mat.receipt_files && mat.receipt_files.length > 0) {
-                            path = mat.receipt_files[0].storage_path;
-                        }
-                        if (path) resolved = await resolveSignedMediaUrl(path);
+                    const meta = await fetchPublicSignedReceiptUrl(tk, mat.id);
+                    rStatusMap[mat.id] = meta;
+                    if (meta.signedUrl) {
+                        receiptUrlMap[mat.id] = meta.signedUrl;
                     }
-                    if (resolved) receiptUrlMap[mat.id] = resolved;
                 }));
                 setMaterialReceiptUrls(receiptUrlMap);
+                setReceiptStatusMap(rStatusMap);
 
                 // Filter ONLY Client-Visible Job Media (never admin-only media)
-                const visibleMedia = (mediaList || []).filter(m => m.visible_to_client || m.visible_on_public_site);
+                const visibleMedia = (mediaList || []).filter(m => m.visible_to_client === true);
                 setClientMedia(visibleMedia);
 
                 // Filter Client Payments for this project
@@ -263,16 +263,18 @@ const PublicView = () => {
                     (job && p.service_job_id === job.id) || (data.id && p.estimate_id === data.id) || (data.lead_id && (p as any).lead_id === data.lead_id)
                 ));
 
-                // Resolve signed URLs for visible client job media using public token + media_id
+                // Resolve signed URLs for visible client job media using public token + media_id via POST /api/public/signed-url
                 const jobMediaUrlMap: Record<string, string> = {};
+                const mStatusMap: Record<string, PublicSignedMediaUrlResult> = {};
                 await Promise.all(visibleMedia.map(async (m) => {
-                    let resolved = await getPublicSignedMediaUrl(tk, m.id);
-                    if (!resolved && m.storage_path) {
-                        resolved = await resolveSignedMediaUrl(m.storage_path);
+                    const meta = await fetchPublicSignedMediaUrl(tk, m.id);
+                    mStatusMap[m.id] = meta;
+                    if (meta.signedUrl) {
+                        jobMediaUrlMap[m.id] = meta.signedUrl;
                     }
-                    if (resolved) jobMediaUrlMap[m.id] = resolved;
                 }));
                 setClientMediaUrls(jobMediaUrlMap);
+                setMediaStatusMap(mStatusMap);
 
                 // Resolve extra media records
                 if (extrasList && extrasList.length > 0) {
@@ -1088,17 +1090,33 @@ const PublicView = () => {
                             ) : (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {filteredMedia.map((m) => {
+                                        const meta = mediaStatusMap[m.id];
                                         const url = clientMediaUrls[m.id];
-                                        const isVideo = m.storage_path.endsWith('.mp4') || m.storage_path.endsWith('.mov');
+                                        const isVideo = m.media_type === 'video' || m.file_name?.endsWith('.mp4') || m.file_name?.endsWith('.mov') || m.storage_path?.endsWith('.mp4') || m.storage_path?.endsWith('.mov');
+
+                                        if (!url || meta?.status !== 'success') {
+                                            return (
+                                                <div key={m.id} className="relative aspect-square rounded-2xl overflow-hidden border border-gray-200 bg-gray-50 p-3 flex flex-col items-center justify-center text-center">
+                                                    <AlertCircle className="h-6 w-6 text-amber-500 mb-1" />
+                                                    <p className="text-[11px] font-bold text-gray-700 line-clamp-1">{m.file_name || "Mídia do Job"}</p>
+                                                    <p className="text-[10px] font-medium text-amber-800 mt-0.5">
+                                                        {meta?.status === 'legacy_unavailable' ? 'Legado Indisponível' :
+                                                         meta?.status === 'unauthorized' ? 'Não Autorizado' :
+                                                         meta?.status === 'storage_error' ? 'Arquivo Não Encontrado' : 'Carregando...'}
+                                                    </p>
+                                                </div>
+                                            );
+                                        }
+
                                         return (
-                                            <div key={m.id} className="group relative aspect-square rounded-2xl overflow-hidden border border-gray-200 bg-gray-100 shadow-sm cursor-pointer" onClick={() => url && setSelectedMediaUrl(url)}>
+                                            <div key={m.id} className="group relative aspect-square rounded-2xl overflow-hidden border border-gray-200 bg-gray-100 shadow-sm cursor-pointer" onClick={() => setSelectedMediaUrl(url)}>
                                                 {isVideo ? (
                                                     <video src={url} className="w-full h-full object-cover" />
                                                 ) : (
-                                                    <img src={url} alt={m.caption || "Job documentation"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                    <img src={url} alt={m.caption || m.file_name || "Job documentation"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                                 )}
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end text-white">
-                                                    <p className="text-xs font-bold line-clamp-1">{m.caption || "Job Documentation"}</p>
+                                                    <p className="text-xs font-bold line-clamp-1">{m.caption || m.file_name || "Job Documentation"}</p>
                                                     <p className="text-[10px] text-gray-300">{new Date(m.created_at).toLocaleDateString()}</p>
                                                 </div>
                                             </div>
@@ -1159,14 +1177,10 @@ const PublicView = () => {
                                             </thead>
                                             <tbody className="divide-y divide-gray-50 font-medium">
                                                 {clientMaterials.map((mat) => {
-                                                    const receiptUrl = materialReceiptUrls[mat.id] || mat.receipt_url;
-                                                    const hasReceipt = Boolean(
-                                                        receiptUrl || 
-                                                        (mat as any).receipt_storage_path || 
-                                                        (mat as any).storage_path || 
-                                                        (mat.receipt_files && mat.receipt_files.length > 0)
-                                                    );
-                                                    
+                                                    const receiptMeta = receiptStatusMap[mat.id];
+                                                    const status = receiptMeta?.status;
+                                                    const signedUrl = receiptMeta?.signedUrl || materialReceiptUrls[mat.id];
+
                                                     return (
                                                         <tr key={mat.id} className="hover:bg-gray-50/50">
                                                             <td className="py-3.5 font-bold text-gray-900">{mat.vendor_name || mat.vendor || "Supplier"}</td>
@@ -1174,20 +1188,24 @@ const PublicView = () => {
                                                             <td className="py-3.5 text-gray-400">{new Date(mat.expense_date || mat.receipt_date || mat.created_at).toLocaleDateString()}</td>
                                                             <td className="py-3.5 text-right font-bold text-gray-900">${mat.amount.toFixed(2)}</td>
                                                             <td className="py-3.5 text-center">
-                                                                {hasReceipt ? (
-                                                                    <button onClick={async () => {
-                                                                        let url = materialReceiptUrls[mat.id] || mat.receipt_url;
-                                                                        if (!url && (mat as any).receipt_storage_path) {
-                                                                            url = await resolveSignedMediaUrl((mat as any).receipt_storage_path);
-                                                                        } else if (!url && (mat as any).storage_path) {
-                                                                            url = await resolveSignedMediaUrl((mat as any).storage_path);
-                                                                        } else if (!url && mat.receipt_files && mat.receipt_files.length > 0) {
-                                                                            url = await resolveSignedMediaUrl(mat.receipt_files[0].storage_path);
-                                                                        }
-                                                                        if (url) setSelectedReceiptUrl(url);
-                                                                    }} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-200 transition-colors mx-auto text-[11px]">
+                                                                {status === 'success' && signedUrl ? (
+                                                                    <button onClick={() => setSelectedReceiptUrl(signedUrl)} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-200 transition-colors mx-auto text-[11px]">
                                                                         <Receipt className="h-3.5 w-3.5 text-amber-600" /> Ver Comprovante
                                                                     </button>
+                                                                ) : status === 'no_file' ? (
+                                                                    <span className="text-gray-400 italic text-[11px]">Sem foto</span>
+                                                                ) : status === 'legacy_unavailable' ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100/80 text-amber-900 font-bold rounded-lg border border-amber-300 text-[10px]" title="Arquivo legado pendente de migração no Storage">
+                                                                        <AlertCircle className="h-3.5 w-3.5 text-amber-600" /> Legado Indisponível
+                                                                    </span>
+                                                                ) : status === 'unauthorized' ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100/80 text-red-900 font-bold rounded-lg border border-red-300 text-[10px]">
+                                                                        <Lock className="h-3.5 w-3.5 text-red-600" /> Não Autorizado
+                                                                    </span>
+                                                                ) : status === 'storage_error' ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-800 font-bold rounded-lg border border-red-200 text-[10px]" title="Arquivo não encontrado no Storage">
+                                                                        <AlertCircle className="h-3.5 w-3.5 text-red-500" /> Erro no Storage
+                                                                    </span>
                                                                 ) : (
                                                                     <span className="text-gray-400 italic text-[11px]">Sem foto</span>
                                                                 )}
