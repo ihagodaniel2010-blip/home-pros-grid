@@ -145,7 +145,15 @@ const EstimateEditor = () => {
         }
     };
 
-    const todayIsoDate = new Date().toISOString().split('T')[0];
+    const getLocalTodayIsoDate = (): string => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const todayIsoDate = getLocalTodayIsoDate();
 
     const [formData, setFormData] = useState<Partial<Estimate>>({
         status: 'Draft',
@@ -275,7 +283,7 @@ const EstimateEditor = () => {
                         client_zip: parsedAddr.zip || prev.client_zip,
                         lead_id: lead.id,
                         project_type: derivedProjectType || lead.selectedServiceOption || prev.project_type || "General Repair",
-                        valid_until: prev.valid_until || todayIsoDate,
+                        valid_until: getLocalTodayIsoDate(),
                         notes: cleanedNotes || `${t("estimate.converted_from")} [${serviceInfo}]`
                     }));
                 }
