@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "@/lib/navigation-compat";
-import { Menu, X, ChevronDown, LogIn, User, LogOut, LayoutDashboard, Check, ArrowRight, Phone } from "lucide-react";
+import { Menu, X, ChevronDown, LogIn, User, LogOut, LayoutDashboard, Check, ArrowRight, Phone, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { SocialMediaBadges } from "@/components/SocialMediaBadges";
 import { 
   fetchWebsiteSettings, 
   DEFAULT_WEBSITE_SETTINGS, 
@@ -171,52 +172,19 @@ const Header = () => {
 
         {/* Social Icons & Prominent Orange CTA Button */}
         <div className="hidden lg:flex items-center gap-4">
-          {/* Social Icons (Reference Image Style) */}
+          {/* Social Icons (Bank-Grade Badges) */}
           <div className="flex items-center gap-2 mr-1 border-r border-slate-200 pr-4">
-            {settings.facebook_enabled && (
-              <a
-                href={settings.facebook_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 rounded-md bg-blue-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
-                title="Facebook"
-              >
-                f
-              </a>
-            )}
-            {settings.instagram_enabled && (
-              <a
-                href={settings.instagram_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 rounded-md bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
-                title="Instagram"
-              >
-                📷
-              </a>
-            )}
-            {settings.tiktok_enabled && (
-              <a
-                href={settings.tiktok_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 rounded-md bg-black text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
-                title="TikTok"
-              >
-                ♪
-              </a>
-            )}
-            {settings.youtube_enabled && (
-              <a
-                href={settings.youtube_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-8 h-8 rounded-md bg-red-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
-                title="YouTube"
-              >
-                ▶
-              </a>
-            )}
+            <SocialMediaBadges
+              facebookUrl={settings.facebook_url}
+              instagramUrl={settings.instagram_url}
+              tiktokUrl={settings.tiktok_url}
+              youtubeUrl={settings.youtube_url}
+              facebookEnabled={settings.facebook_enabled !== false}
+              instagramEnabled={settings.instagram_enabled !== false}
+              tiktokEnabled={settings.tiktok_enabled !== false}
+              youtubeEnabled={settings.youtube_enabled !== false}
+              size="sm"
+            />
           </div>
 
           {/* User Account / Portal dropdown */}
@@ -275,14 +243,27 @@ const Header = () => {
           </Button>
         </div>
 
-        {/* Mobile Menu Toggle Button */}
-        <button
-          className="lg:hidden p-2.5 rounded-xl text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Toggle Navigation"
-        >
-          {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        {/* Mobile Buttons Area */}
+        <div className="flex items-center gap-2 lg:hidden">
+          {/* Quick Access Portal Button for Smartphone */}
+          <button
+            onClick={() => navigate(user ? "/admin" : "/admin/login")}
+            className="p-2.5 rounded-xl text-[#0b2a4a] bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-200/80 flex items-center gap-1.5 font-bold text-xs"
+            title="Portal Admin"
+          >
+            <Shield className="h-4 w-4 text-blue-700" />
+            <span className="hidden sm:inline">Portal Admin</span>
+          </button>
+
+          {/* Mobile Menu Toggle Button */}
+          <button
+            className="p-2.5 rounded-xl text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label="Toggle Navigation"
+          >
+            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Drawer Menu */}
@@ -292,7 +273,7 @@ const Header = () => {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden bg-[#0b2a4a] text-white border-t border-slate-800 p-6 space-y-4 shadow-2xl"
+            className="lg:hidden bg-[#0b2a4a] text-white border-t border-slate-800 p-6 space-y-5 shadow-2xl"
           >
             <nav className="flex flex-col space-y-3 font-bold text-base">
               <Link to="/" onClick={() => setMobileOpen(false)} className="hover:text-amber-400">Home</Link>
@@ -303,11 +284,55 @@ const Header = () => {
               <Link to="/contact" onClick={() => setMobileOpen(false)} className="hover:text-amber-400">Contact</Link>
             </nav>
 
-            <div className="pt-4 border-t border-slate-700 flex items-center gap-3">
-              {settings.facebook_enabled && <a href={settings.facebook_url} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-md bg-blue-600 flex items-center justify-center font-bold text-sm">f</a>}
-              {settings.instagram_enabled && <a href={settings.instagram_url} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-md bg-pink-600 flex items-center justify-center font-bold text-sm">📷</a>}
-              {settings.tiktok_enabled && <a href={settings.tiktok_url} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-md bg-black border border-slate-700 flex items-center justify-center font-bold text-sm">♪</a>}
-              {settings.youtube_enabled && <a href={settings.youtube_url} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-md bg-red-600 flex items-center justify-center font-bold text-sm">▶</a>}
+            {/* Dedicated Mobile Admin & Client Portal Access Section */}
+            <div className="pt-4 border-t border-slate-700/80 space-y-2.5">
+              <p className="text-[11px] font-extrabold uppercase tracking-wider text-amber-400">Portal &amp; Admin Access</p>
+              {user ? (
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => { setMobileOpen(false); navigate("/admin"); }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm h-11 rounded-xl flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <LayoutDashboard className="w-4 h-4" /> Open Admin Portal
+                  </button>
+                  <button
+                    onClick={() => { logout(); setMobileOpen(false); }}
+                    className="w-full bg-red-950/40 text-red-300 hover:text-white font-bold text-xs h-9 rounded-xl flex items-center justify-center gap-2 border border-red-900/40"
+                  >
+                    <LogOut className="w-3.5 h-3.5" /> Sign Out ({user.email || user.name})
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => { setMobileOpen(false); navigate("/admin/login"); }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-11 rounded-xl flex items-center justify-center gap-1.5 shadow-md"
+                  >
+                    <Shield className="w-4 h-4" /> Portal Admin Login
+                  </button>
+                  <button
+                    onClick={() => { setMobileOpen(false); navigate("/login"); }}
+                    className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs h-11 rounded-xl flex items-center justify-center gap-1.5 border border-white/15"
+                  >
+                    <User className="w-4 h-4" /> Client Portal
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-700 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300">Social Media</span>
+              <SocialMediaBadges
+                facebookUrl={settings.facebook_url}
+                instagramUrl={settings.instagram_url}
+                tiktokUrl={settings.tiktok_url}
+                youtubeUrl={settings.youtube_url}
+                facebookEnabled={settings.facebook_enabled !== false}
+                instagramEnabled={settings.instagram_enabled !== false}
+                tiktokEnabled={settings.tiktok_enabled !== false}
+                youtubeEnabled={settings.youtube_enabled !== false}
+                size="sm"
+              />
             </div>
 
             <Button

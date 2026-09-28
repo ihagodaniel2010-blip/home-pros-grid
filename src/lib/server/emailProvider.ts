@@ -64,18 +64,6 @@ export const BRAND_EMAIL_FOOTER_HTML = `
               </table>
             </a>
           </td>
-          <!-- LinkedIn -->
-          <td style="padding: 0 6px;">
-            <a href="https://www.linkedin.com/" target="_blank" style="text-decoration: none;">
-              <table border="0" cellpadding="0" cellspacing="0" width="36" height="36" style="border-radius: 50%; background-color: #0A66C2; width: 36px; height: 36px;">
-                <tr>
-                  <td align="center" valign="middle">
-                    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/linkedin-2.png" width="18" height="18" alt="LinkedIn" style="display: block; border: 0; margin: 0 auto;" />
-                  </td>
-                </tr>
-              </table>
-            </a>
-          </td>
           <!-- Website -->
           <td style="padding: 0 6px;">
             <a href="https://h-a-construction.com" target="_blank" style="text-decoration: none;">

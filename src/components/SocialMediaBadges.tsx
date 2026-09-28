@@ -5,8 +5,6 @@ export interface SocialMediaBadgesProps {
   instagramUrl?: string | null;
   tiktokUrl?: string | null;
   youtubeUrl?: string | null;
-  linkedinUrl?: string | null;
-  xUrl?: string | null;
   facebookEnabled?: boolean;
   instagramEnabled?: boolean;
   tiktokEnabled?: boolean;
@@ -20,8 +18,6 @@ export const SocialMediaBadges: React.FC<SocialMediaBadgesProps> = ({
   instagramUrl = "https://www.instagram.com/h.a_construction/",
   tiktokUrl = "https://www.tiktok.com/",
   youtubeUrl = "https://www.youtube.com/",
-  linkedinUrl = "https://www.linkedin.com/",
-  xUrl = "https://x.com/",
   facebookEnabled = true,
   instagramEnabled = true,
   tiktokEnabled = true,
@@ -59,20 +55,6 @@ export const SocialMediaBadges: React.FC<SocialMediaBadgesProps> = ({
         </a>
       )}
 
-      {/* X / Twitter */}
-      <a
-        href={xUrl || "https://x.com/"}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`${sizeClasses} rounded-full bg-[#000000] text-white flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-md hover:shadow-lg hover:bg-slate-900 border border-slate-700/80 ring-2 ring-white/10`}
-        title="Follow us on X"
-        aria-label="X (Twitter)"
-      >
-        <svg className={`${iconSizes} fill-current`} viewBox="0 0 24 24">
-          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-        </svg>
-      </a>
-
       {/* Facebook */}
       {facebookEnabled && (
         <a
@@ -88,20 +70,6 @@ export const SocialMediaBadges: React.FC<SocialMediaBadgesProps> = ({
           </svg>
         </a>
       )}
-
-      {/* LinkedIn */}
-      <a
-        href={linkedinUrl || "https://www.linkedin.com/"}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`${sizeClasses} rounded-full bg-[#0A66C2] text-white flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-md hover:shadow-lg hover:bg-[#08529c] ring-2 ring-white/10`}
-        title="Connect on LinkedIn"
-        aria-label="LinkedIn"
-      >
-        <svg className={`${iconSizes} fill-current`} viewBox="0 0 24 24">
-          <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.25V10.9H6.46M7.86 6.75a1.47 1.47 0 1 0 0 2.94 1.47 1.47 0 0 0 0-2.94z"/>
-        </svg>
-      </a>
 
       {/* YouTube */}
       {youtubeEnabled && (
