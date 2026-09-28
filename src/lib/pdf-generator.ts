@@ -102,8 +102,8 @@ export const generateProfessionalPDF = async (
         doc.text(phoneEmailParts, textStartX, companyLineY);
         companyLineY += 4;
     }
-    if (company?.license_number) {
-        doc.text(`License #: ${company.license_number}`, textStartX, companyLineY);
+    if (company?.license_number && company.license_number.trim() !== '') {
+        doc.text(`License #: ${company.license_number.trim()}`, textStartX, companyLineY);
     }
 
     // Document Title & Metadata (Right side)
@@ -124,11 +124,11 @@ export const generateProfessionalPDF = async (
     if (isApproved) {
         badgeBg = [220, 252, 231];   // Emerald light
         badgeText = [21, 128, 61];   // Emerald dark
-        badgeLabel = "✔ APPROVED & DIGITALLY SIGNED";
+        badgeLabel = "APPROVED & DIGITALLY SIGNED";
     } else if (isRejected) {
         badgeBg = [254, 226, 226];   // Red light
         badgeText = [185, 28, 28];   // Red dark
-        badgeLabel = "✖ PROPOSAL REJECTED";
+        badgeLabel = "PROPOSAL REJECTED";
     }
 
     doc.setFillColor(badgeBg[0], badgeBg[1], badgeBg[2]);
@@ -142,7 +142,8 @@ export const generateProfessionalPDF = async (
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-    const estNum = `EST-${(estimate.id || "DRAFT").split('-')[0].toUpperCase()}`;
+    const rawEstNum = estimate.number || estimate.id || "DRAFT";
+    const estNum = rawEstNum.toUpperCase().startsWith("EST-") ? rawEstNum.toUpperCase() : `EST-${rawEstNum.toUpperCase()}`;
     const dateStr = estimate.created_at ? new Date(estimate.created_at).toLocaleDateString() : new Date().toLocaleDateString();
     const validUntilStr = estimate.valid_until ? new Date(estimate.valid_until).toLocaleDateString() : "30 Days from Issue";
 
@@ -290,9 +291,23 @@ export const generateProfessionalPDF = async (
     const taxRate = estimate.tax_rate || 0;
     const taxAmount = estimate.tax_amount || 0;
     const discountAmount = estimate.discount_amount || 0;
-    const totalAmount = estimate.total_amount || 0;
+    
+    // Correct total resolution: check estimate.total, estimate.total_amount, or calculate from subtotal + tax - discount
+    const rawTotal = estimate.total ?? estimate.total_amount;
+    const calculatedTotal = subtotal + taxAmount - discountAmount;
+    const totalAmount = (rawTotal !== undefined && rawTotal > 0) ? rawTotal : calculatedTotal;
+
+    if (subtotal > 0 && totalAmount <= 0) {
+        throw new Error(`[PDF Generator Error] Invalid calculated total ($${totalAmount}) for commercial estimate with subtotal $${subtotal}. Generation halted.`);
+    }
+
     const amountPaid = estimate.amount_paid || 0;
     const balanceDue = estimate.balance_due ?? (totalAmount - amountPaid);
+
+    // Correct tax percentage presentation: convert decimal (0.055) to 5.5%
+    const displayTaxPercent = taxRate > 0 
+        ? (taxRate <= 1 ? (taxRate * 100).toFixed(1) : taxRate.toFixed(1))
+        : (subtotal > 0 && taxAmount > 0 ? ((taxAmount / subtotal) * 100).toFixed(1) : "0");
 
     const sumW = 85;
     const sumX = pageWidth - 14 - sumW;
@@ -308,7 +323,7 @@ export const generateProfessionalPDF = async (
 
     // Tax row (ONLY if tax_amount > 0 or tax_rate > 0)
     if (taxAmount > 0 || taxRate > 0) {
-        doc.text(`Tax (${taxRate}%):`, sumX + 4, rY);
+        doc.text(`Tax (${displayTaxPercent}%):`, sumX + 4, rY);
         doc.text(`$${taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, rightX - 4, rY, { align: "right" });
         rY += 5;
     }
@@ -431,7 +446,7 @@ export const generateProfessionalPDF = async (
         doc.setFont("helvetica", "bold");
         doc.setFontSize(5.5);
         doc.setTextColor(21, 128, 61);
-        doc.text("✔ ELECTRONICALLY SIGNED", 81, sigBoxY + 33, { align: "center" });
+        doc.text("ELECTRONICALLY SIGNED", 81, sigBoxY + 33, { align: "center" });
         doc.text("AUDIT LOG ENCRYPTED", 81, sigBoxY + 35.5, { align: "center" });
     } else {
         doc.setFont("helvetica", "normal");
@@ -577,7 +592,7 @@ export const generateProfessionalPDF = async (
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8.5);
         doc.setTextColor(22, 101, 52);
-        doc.text("✔ AUDIT TRAIL RECORDED & DOCUMENT LOCKED", 18, secY + 6);
+        doc.text("AUDIT TRAIL RECORDED & DOCUMENT LOCKED", 18, secY + 6);
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7.5);
