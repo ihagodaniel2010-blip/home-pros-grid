@@ -35,28 +35,59 @@ export async function POST(request: Request) {
       );
     }
 
-    // Authenticate requesting Staff user from Authorization bearer token if present
+    // --------------------------------------------------------------------------
+    // PASSO 1: Validação do JWT do Usuário Autenticado (Staff)
+    // --------------------------------------------------------------------------
     let staffUserId: string | null = null;
     const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
+    
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.substring(7).trim();
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
       const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
       if (supabaseUrl && supabaseAnonKey && token) {
         const authClient = createClient(supabaseUrl, supabaseAnonKey);
-        const { data: { user } } = await authClient.auth.getUser(token);
-        if (user) {
+        const { data: { user }, error: authErr } = await authClient.auth.getUser(token);
+        if (user && !authErr) {
           staffUserId = user.id;
         }
       }
     }
 
-    // Execute service_role deletion RPC requiring valid verification_token or authenticated staff_user_id
+    // --------------------------------------------------------------------------
+    // PASSO 2: Conferência de Associação Ativa em organization_users
+    // --------------------------------------------------------------------------
+    let isStaffMember = false;
+    if (staffUserId) {
+      const { data: staffOrgRecord } = await supabaseAdmin
+        .from("organization_users")
+        .select("status")
+        .eq("user_id", staffUserId)
+        .eq("organization_id", organizationId)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (staffOrgRecord && staffOrgRecord.status === "active") {
+        isStaffMember = true;
+      }
+    }
+
+    // Se o solicitante não for um Staff autenticado E não possuir token de verificação do cliente (OTP)
+    if (!isStaffMember && !verificationToken) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized: Active Staff session or valid OTP deletion token required." },
+        { status: 401, headers: NO_CACHE_HEADERS }
+      );
+    }
+
+    // --------------------------------------------------------------------------
+    // PASSO 3: Invocação da RPC Privilegiada com service_role
+    // --------------------------------------------------------------------------
     const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc("delete_client_saved_signature", {
       p_organization_id: organizationId,
       p_client_email: clientEmail,
       p_verification_token: verificationToken || null,
-      p_staff_user_id: staffUserId || null
+      p_staff_user_id: isStaffMember ? staffUserId : null
     });
 
     if (rpcErr || !rpcRes) {
