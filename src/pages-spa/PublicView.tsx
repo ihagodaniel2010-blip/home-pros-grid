@@ -113,6 +113,7 @@ const PublicView = () => {
     const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
     const [otpMessage, setOtpMessage] = useState<string | null>(null);
     const [otpError, setOtpError] = useState<string | null>(null);
+    const [verifiedToken, setVerifiedToken] = useState<string | null>(null);
     const [isDeletingSavedSig, setIsDeletingSavedSig] = useState(false);
 
     useEffect(() => {
@@ -124,6 +125,7 @@ const PublicView = () => {
         } else {
             setHasSavedSignature(false);
             setSavedSignature(null);
+            setVerifiedToken(null);
         }
     }, [estimate?.organization_id, signerEmail]);
 
@@ -136,7 +138,7 @@ const PublicView = () => {
             const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
             const res = await requestClientSignatureOtp(orgId, estimate.id, signerEmail);
             if (res.success) {
-                setOtpMessage(res.message + (res.otp_code ? ` (Demo Code: ${res.otp_code})` : ''));
+                setOtpMessage(res.message);
                 toast.success(res.message);
             } else {
                 setOtpError(res.message);
@@ -157,6 +159,7 @@ const PublicView = () => {
             const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
             const res = await verifyClientSignatureOtp(orgId, estimate.id, signerEmail, otpCodeInput);
             if (res.success && res.signature_data_url) {
+                setVerifiedToken(res.verification_token || null);
                 setSavedSignature({
                     id: 'verified',
                     organization_id: orgId,
@@ -186,10 +189,11 @@ const PublicView = () => {
         setIsDeletingSavedSig(true);
         try {
             const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
-            const res = await deleteSavedClientSignature(orgId, signerEmail);
+            const res = await deleteSavedClientSignature(orgId, signerEmail, verifiedToken || undefined);
             if (res.success) {
                 setSavedSignature(null);
                 setHasSavedSignature(false);
+                setVerifiedToken(null);
                 if (sigTab === 'saved') setSigTab('draw');
                 toast.success("Saved signature deleted from vault. Historic documents remain intact.");
             } else {

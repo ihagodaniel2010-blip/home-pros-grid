@@ -303,14 +303,15 @@ export interface ClientSavedSignature {
     client_email: string;
     client_name: string;
     client_phone?: string;
-    signature_data_url: string;
+    signature_storage_path?: string;
+    signature_data_url?: string;
     signature_type: 'drawn' | 'typed';
     created_at: string;
     updated_at: string;
 }
 
 /**
- * Saves or updates a client's reusable signature in the database vault.
+ * Saves or updates a client's reusable signature in private storage & database vault.
  */
 export async function saveClientSignature(
     organizationId: string,
@@ -323,11 +324,26 @@ export async function saveClientSignature(
     if (!cleanEmail || !signatureDataUrl) return null;
 
     try {
+        const emailHash = await computeSha256Hex(cleanEmail);
+        const storagePath = `${organizationId}/saved-signatures/${emailHash}/signature.png`;
+
+        // Upload asset to private storage bucket 'signatures'
+        try {
+            const res = await fetch(signatureDataUrl);
+            const blob = await res.blob();
+            await supabase.storage.from('signatures').upload(storagePath, blob, {
+                contentType: 'image/png',
+                upsert: true
+            });
+        } catch (uErr) {
+            console.warn("Storage upload notice for saved signature:", uErr);
+        }
+
         const payload = {
             organization_id: organizationId,
             client_email: cleanEmail,
             client_name: clientName.trim(),
-            signature_data_url: signatureDataUrl,
+            signature_storage_path: storagePath,
             signature_type: signatureType,
             updated_at: new Date().toISOString()
         };
@@ -339,13 +355,13 @@ export async function saveClientSignature(
             .maybeSingle();
 
         if (error) {
-            console.warn("Notice saving client signature (falling back to secure localStorage vault):", error.message);
+            console.warn("Database notice saving client signature vault:", error.message);
             const localKey = `saved_sig_${organizationId}_${cleanEmail}`;
-            localStorage.setItem(localKey, JSON.stringify(payload));
-            return { id: `local-${Date.now()}`, ...payload, created_at: new Date().toISOString() } as ClientSavedSignature;
+            localStorage.setItem(localKey, JSON.stringify({ ...payload, signature_data_url: signatureDataUrl }));
+            return { id: `local-${Date.now()}`, ...payload, signature_data_url: signatureDataUrl, created_at: new Date().toISOString() } as ClientSavedSignature;
         }
 
-        return data as ClientSavedSignature;
+        return { ...data, signature_data_url: signatureDataUrl } as ClientSavedSignature;
     } catch (e) {
         console.warn("Exception in saveClientSignature:", e);
         return null;
@@ -353,44 +369,40 @@ export async function saveClientSignature(
 }
 
 /**
- * Requests a 6-digit Email OTP for retrieving a saved client signature.
+ * Requests a 6-digit Email OTP for retrieving a saved client signature via server API endpoint.
+ * Zero OTP exposure to browser JSON response!
  */
 export async function requestClientSignatureOtp(
     organizationId: string,
     estimateId: string,
     clientEmail: string
-): Promise<{ success: boolean; message: string; expires_at?: string; otp_code?: string }> {
+): Promise<{ success: boolean; message: string }> {
     try {
-        const { data, error } = await supabase.rpc('request_client_signature_otp', {
-            p_organization_id: organizationId,
-            p_estimate_id: estimateId,
-            p_client_email: clientEmail
+        const res = await fetch("/api/public/send-otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ organizationId, estimateId, clientEmail })
         });
 
-        if (error) {
-            console.warn("RPC request_client_signature_otp warning/fallback:", error.message);
-            // Fallback for environment before RPC migration execution
-            return {
-                success: true,
-                message: 'Verification code generated (Demo OTP: 123456)',
-                otp_code: '123456'
-            };
+        const data = await res.json();
+        if (!res.ok) {
+            return { success: false, message: data.message || "Failed to request verification code." };
         }
-        return data;
+        return { success: true, message: data.message || "Verification code sent to email." };
     } catch (e) {
-        return { success: false, message: 'Server connection error during OTP request' };
+        return { success: false, message: "Server connection error requesting verification code." };
     }
 }
 
 /**
- * Verifies a 6-digit Email OTP code and returns the saved signature upon verification.
+ * Verifies a 6-digit Email OTP code and returns verified token and signature asset.
  */
 export async function verifyClientSignatureOtp(
     organizationId: string,
     estimateId: string,
     clientEmail: string,
     otpCode: string
-): Promise<{ success: boolean; message?: string; signature_data_url?: string; signature_type?: 'drawn' | 'typed'; signer_name?: string }> {
+): Promise<{ success: boolean; message?: string; signature_data_url?: string; verification_token?: string; signature_type?: 'drawn' | 'typed'; signer_name?: string }> {
     try {
         const { data, error } = await supabase.rpc('verify_client_signature_otp', {
             p_organization_id: organizationId,
@@ -399,42 +411,49 @@ export async function verifyClientSignatureOtp(
             p_otp_code: otpCode
         });
 
-        if (error) {
-            console.warn("RPC verify_client_signature_otp warning/fallback:", error.message);
-            // Local fallback check for offline / pre-migration testing
-            if (otpCode.trim() === '123456') {
-                const localKey = `saved_sig_${organizationId}_${clientEmail.trim().toLowerCase()}`;
-                const raw = localStorage.getItem(localKey);
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    return {
-                        success: true,
-                        signature_data_url: parsed.signature_data_url,
-                        signature_type: parsed.signature_type || 'drawn',
-                        signer_name: parsed.client_name
-                    };
-                }
-            }
-            return { success: false, message: 'Invalid verification code or server error.' };
+        if (error || !data || !data.success) {
+            console.warn("RPC verify_client_signature_otp warning:", error?.message || data?.message);
+            return { success: false, message: data?.message || error?.message || 'Invalid verification code.' };
         }
-        return data;
+
+        // If storage path returned, create temporary signed URL or fetch image
+        let sigDataUrl = "";
+        if (data.signature_storage_path) {
+            try {
+                const { data: sUrl } = await supabase.storage.from('signatures').createSignedUrl(data.signature_storage_path, 300);
+                if (sUrl?.signedUrl) {
+                    sigDataUrl = sUrl.signedUrl;
+                }
+            } catch (sErr) {}
+        }
+
+        return {
+            success: true,
+            verification_token: data.verification_token,
+            signature_data_url: sigDataUrl || data.signature_data_url,
+            signature_type: data.signature_type || 'drawn',
+            signer_name: data.signer_name,
+            signer_email: data.signer_email
+        };
     } catch (e) {
         return { success: false, message: 'Server error validating OTP code.' };
     }
 }
 
 /**
- * Deletes a client's saved signature without altering historic signed documents.
+ * Deletes a client's saved signature vault entry with authenticated staff session or verification token.
  */
 export async function deleteSavedClientSignature(
     organizationId: string,
-    clientEmail: string
+    clientEmail: string,
+    verificationToken?: string
 ): Promise<{ success: boolean; message: string }> {
     const cleanEmail = clientEmail.trim().toLowerCase();
     try {
         const { data, error } = await supabase.rpc('delete_client_saved_signature', {
             p_organization_id: organizationId,
-            p_client_email: cleanEmail
+            p_client_email: cleanEmail,
+            p_verification_token: verificationToken || null
         });
 
         if (!error && data) {
