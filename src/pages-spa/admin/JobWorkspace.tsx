@@ -5,7 +5,7 @@ import {
   MoreHorizontal, Images, Wrench, UserCheck, DollarSign, Plus, Download, Copy,
   Printer, ShieldCheck, PenTool, Calendar, AlertCircle, Sparkles, ExternalLink,
   ChevronRight, Eye, EyeOff, Globe, Tag, CreditCard, Receipt, FileCheck, Building2,
-  Pencil, Trash2, Info, X
+  Pencil, Trash2, Info, X, Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
