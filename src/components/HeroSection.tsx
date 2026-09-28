@@ -279,29 +279,29 @@ const HeroSection = () => {
 
           {/* Right Lead Capture Form Card (Canonical Refactored Homepage Form) */}
           <div className="lg:col-span-6" id="hero-estimate-form">
-            <div className="bg-white/91 backdrop-blur-sm text-slate-900 rounded-2xl p-6 sm:p-7 shadow-2xl border border-white/70">
-              <div className="mb-4 border-b border-slate-200/60 pb-3">
-                <h2 className="text-2xl font-black tracking-tight text-[#0b2a4a]">
+            <div className="bg-slate-950/45 backdrop-blur-md text-white rounded-3xl p-6 sm:p-7 shadow-2xl border border-white/20">
+              <div className="mb-4 border-b border-white/10 pb-3">
+                <h2 className="text-2xl font-black tracking-tight text-white">
                   Get a Free Estimate
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-slate-300 mt-0.5">
                   Tell us about your project and we'll get back to you quickly.
                 </p>
               </div>
 
               {submittedSuccess ? (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center space-y-3">
+                <div className="bg-emerald-950/80 border border-emerald-500/40 rounded-2xl p-6 text-center space-y-3 backdrop-blur-md">
                   <div className="w-12 h-12 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-md">
                     <CheckCircle2 className="w-7 h-7" />
                   </div>
-                  <h3 className="font-bold text-emerald-950 text-lg">Request Received!</h3>
-                  <p className="text-xs text-emerald-800 leading-relaxed">
+                  <h3 className="font-bold text-white text-lg">Request Received!</h3>
+                  <p className="text-xs text-emerald-200 leading-relaxed">
                     Thank you! An H &amp; A Construction project manager will review your project details and contact you according to your preferred contact methods.
                   </p>
                   <Button
                     onClick={() => setSubmittedSuccess(false)}
                     variant="outline"
-                    className="text-xs font-bold border-emerald-300 text-emerald-900 hover:bg-emerald-100 h-10 mt-2"
+                    className="text-xs font-bold border-emerald-400 text-emerald-100 bg-emerald-900/50 hover:bg-emerald-800 h-10 mt-2 rounded-xl"
                   >
                     Send Another Request
                   </Button>
@@ -321,7 +321,7 @@ const HeroSection = () => {
 
                   {/* Section 1: Personal Info */}
                   <div className="space-y-2">
-                    <span className="text-[11px] font-extrabold text-[#0b2a4a] uppercase tracking-wider block">
+                    <span className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider block">
                       1. Personal Information
                     </span>
                     <div>
@@ -330,7 +330,7 @@ const HeroSection = () => {
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                         required
-                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
+                        className="h-10 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs font-semibold focus:bg-white rounded-xl shadow-sm"
                       />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -339,7 +339,7 @@ const HeroSection = () => {
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         required
-                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
+                        className="h-10 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs font-semibold focus:bg-white rounded-xl shadow-sm"
                       />
                       <Input
                         type="email"
@@ -347,14 +347,14 @@ const HeroSection = () => {
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         required
-                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
+                        className="h-10 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs font-semibold focus:bg-white rounded-xl shadow-sm"
                       />
                     </div>
                   </div>
 
                   {/* Section 2: Full Project Address */}
-                  <div className="space-y-2 pt-1 border-t border-slate-200/60">
-                    <span className="text-[11px] font-extrabold text-[#0b2a4a] uppercase tracking-wider block">
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <span className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider block">
                       2. Project Address
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -364,7 +364,7 @@ const HeroSection = () => {
                           value={formData.streetAddress}
                           onChange={(e) => setFormData({ ...formData, streetAddress: e.target.value })}
                           required
-                          className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
+                          className="h-10 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs font-semibold focus:bg-white rounded-xl shadow-sm"
                         />
                       </div>
                       <div>
@@ -372,7 +372,7 @@ const HeroSection = () => {
                           placeholder="Apt/Unit (Opt)"
                           value={formData.unit}
                           onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                          className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
+                          className="h-10 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs font-semibold focus:bg-white rounded-xl shadow-sm"
                         />
                       </div>
                     </div>
@@ -383,12 +383,12 @@ const HeroSection = () => {
                         value={formData.city}
                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                         required
-                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
+                        className="h-10 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs font-semibold focus:bg-white rounded-xl shadow-sm"
                       />
                       <select
                         value={formData.state}
                         onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                        className="h-10 bg-white border border-slate-200 rounded-md px-2 text-xs font-medium text-slate-700 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0b2a4a] shadow-xs"
+                        className="h-10 bg-white border border-slate-200 rounded-xl px-2 text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
                       >
                         <option value="Maine (ME)">Maine (ME)</option>
                         <option value="New Hampshire (NH)">New Hampshire (NH)</option>
@@ -399,21 +399,21 @@ const HeroSection = () => {
                         value={formData.zip}
                         onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
                         required
-                        className="h-10 bg-white border-slate-200 text-xs font-medium focus:bg-white shadow-xs"
+                        className="h-10 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs font-semibold focus:bg-white rounded-xl shadow-sm"
                       />
                     </div>
                   </div>
 
                   {/* Section 3: Service Information */}
-                  <div className="space-y-2 pt-1 border-t border-slate-200/60">
-                    <span className="text-[11px] font-extrabold text-[#0b2a4a] uppercase tracking-wider block">
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <span className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider block">
                       3. Service &amp; Project Info
                     </span>
                     <div>
                       <select
                         value={formData.projectType}
                         onChange={(e) => setFormData({ ...formData, projectType: e.target.value })}
-                        className="w-full h-10 bg-white border border-slate-200 rounded-md px-3 text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0b2a4a] shadow-xs"
+                        className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
                       >
                         {categories.length > 0 ? (
                           categories.map((c) => (
@@ -442,20 +442,20 @@ const HeroSection = () => {
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         rows={2}
                         required
-                        className="bg-white border-slate-200 text-xs font-medium focus:bg-white resize-none shadow-xs"
+                        className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs font-semibold focus:bg-white resize-none rounded-xl shadow-sm"
                       />
                     </div>
                   </div>
 
                   {/* Section 4: Contact Preference Selection */}
-                  <div className="pt-2 border-t border-slate-100">
-                    <span className="text-[11px] font-extrabold text-[#0b2a4a] uppercase tracking-wider block mb-1.5">
+                  <div className="pt-2 border-t border-white/10">
+                    <span className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider block mb-1.5">
                       How would you prefer to be contacted? *
                     </span>
-                    <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-700">
+                    <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-900">
                       <label 
                         onClick={() => handlePrefToggle('phone')}
-                        className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
+                        className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
                       >
                         {contactPrefs.phone ? <CheckSquare className="w-4 h-4 text-[#ea580c] shrink-0" /> : <Square className="w-4 h-4 text-slate-300 shrink-0" />}
                         <span className="truncate">Phone Call</span>
@@ -463,7 +463,7 @@ const HeroSection = () => {
 
                       <label 
                         onClick={() => handlePrefToggle('sms')}
-                        className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
+                        className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
                       >
                         {contactPrefs.sms ? <CheckSquare className="w-4 h-4 text-[#ea580c] shrink-0" /> : <Square className="w-4 h-4 text-slate-300 shrink-0" />}
                         <span className="truncate">SMS / Text</span>
@@ -471,7 +471,7 @@ const HeroSection = () => {
 
                       <label 
                         onClick={() => handlePrefToggle('email')}
-                        className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
+                        className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
                       >
                         {contactPrefs.email ? <CheckSquare className="w-4 h-4 text-[#ea580c] shrink-0" /> : <Square className="w-4 h-4 text-slate-300 shrink-0" />}
                         <span className="truncate">Email</span>
@@ -479,7 +479,7 @@ const HeroSection = () => {
 
                       <label 
                         onClick={() => handlePrefToggle('any')}
-                        className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
+                        className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors shadow-xs"
                       >
                         {contactPrefs.any ? <CheckSquare className="w-4 h-4 text-[#ea580c] shrink-0" /> : <Square className="w-4 h-4 text-slate-300 shrink-0" />}
                         <span className="truncate">Any Method</span>
@@ -490,7 +490,7 @@ const HeroSection = () => {
                   <Button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full bg-[#ea580c] hover:bg-[#c2410c] text-white font-black text-sm h-11 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 mt-3"
+                    className="w-full bg-[#ea580c] hover:bg-[#c2410c] text-white font-black text-sm h-11 rounded-xl shadow-lg shadow-orange-950/40 transition-all flex items-center justify-center gap-2 mt-3"
                   >
                     {isSubmitting ? (
                       <>
@@ -503,8 +503,8 @@ const HeroSection = () => {
                     )}
                   </Button>
 
-                  <p className="text-[10px] text-slate-400 text-center flex items-center justify-center gap-1 pt-0.5">
-                    <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                  <p className="text-[11px] text-slate-300 text-center flex items-center justify-center gap-1 pt-0.5">
+                    <Lock className="w-3 h-3 text-amber-400 shrink-0" />
                     Your information is secure &amp; never shared. Fast response guarantee.
                   </p>
                 </form>
