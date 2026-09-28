@@ -14,6 +14,7 @@ export interface PdfGenerationOptions {
         userAgent?: string;
         documentHash?: string;
         consentVersion?: string;
+        authMethod?: string;
     };
     returnBlob?: boolean;
 }
@@ -132,7 +133,7 @@ export const generateProfessionalPDF = async (
     if (isApproved) {
         badgeBg = [220, 252, 231];   // Emerald light
         badgeText = [21, 128, 61];   // Emerald dark
-        badgeLabel = "APPROVED & DIGITALLY SIGNED";
+        badgeLabel = "APPROVED & ELECTRONICALLY SIGNED";
     } else if (isRejected) {
         badgeBg = [254, 226, 226];   // Red light
         badgeText = [185, 28, 28];   // Red dark
@@ -204,11 +205,20 @@ export const generateProfessionalPDF = async (
     doc.text("PROJECT LOCATION", 111, boxY + 5.5);
 
     const streetAddr = (estimate.project_address || estimate.client_address || "").trim();
-    const cszParts: string[] = [];
-    if (estimate.client_city) cszParts.push(estimate.client_city.trim());
-    if (estimate.client_state) cszParts.push(estimate.client_state.trim());
-    if (estimate.client_zip) cszParts.push(estimate.client_zip.trim());
-    const cityStateZip = cszParts.join(", ");
+    const city = (estimate.client_city || "").trim();
+    const state = (estimate.client_state || "").trim();
+    const zip = (estimate.client_zip || "").trim();
+
+    let cityStateZip = "";
+    if (city && state) {
+        cityStateZip = `${city}, ${state}${zip ? ` ${zip}` : ""}`;
+    } else if (city) {
+        cityStateZip = `${city}${zip ? ` ${zip}` : ""}`;
+    } else if (state) {
+        cityStateZip = `${state}${zip ? ` ${zip}` : ""}`;
+    } else {
+        cityStateZip = zip;
+    }
 
     const displayAddressLine1 = streetAddr || (cityStateZip ? cityStateZip : "Project Site Address on File");
     doc.setFontSize(8);
@@ -434,7 +444,7 @@ export const generateProfessionalPDF = async (
                 doc.setFont("helvetica", "italic");
                 doc.setFontSize(8);
                 doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-                doc.text(`[Digitally Signed by ${clientName}]`, 18, sigBoxY + 18);
+                doc.text(`[Electronically Signed by ${clientName}]`, 18, sigBoxY + 18);
             }
         } else {
             doc.setFont("helvetica", "italic");
@@ -457,7 +467,7 @@ export const generateProfessionalPDF = async (
         doc.setFontSize(5.5);
         doc.setTextColor(21, 128, 61);
         doc.text("ELECTRONICALLY SIGNED", 81, sigBoxY + 33, { align: "center" });
-        doc.text("AUDIT LOG ENCRYPTED", 81, sigBoxY + 35.5, { align: "center" });
+        doc.text("AUDIT TRAIL RECORDED", 81, sigBoxY + 35.5, { align: "center" });
     } else {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7.5);
@@ -478,7 +488,7 @@ export const generateProfessionalPDF = async (
 
     const shouldApplyContractorSig = options.contractorSignatureUrl || (company as any)?.auto_apply_contractor_signature;
     const contractorSigUrl = shouldApplyContractorSig ? (options.contractorSignatureUrl || (company as any)?.contractor_signature_url) : null;
-    const contractorRepName = options.contractorName || (company as any)?.contractor_printed_name || company?.company_name || "Authorized Representative";
+    const contractorRepName = (options.contractorName || company?.contractor_printed_name || "").trim();
 
     if (contractorSigUrl && contractorSigUrl.startsWith("data:image")) {
         try {
@@ -538,16 +548,19 @@ export const generateProfessionalPDF = async (
         doc.setFont("helvetica", "bold");
         doc.setTextColor(textDark[0], textDark[1], textDark[2]);
 
-        const auditIp = options.auditDetails?.ipAddress || "Verified Client Web Portal Session";
+        const auditIp = options.auditDetails?.ipAddress || "Verified Client Session";
         const auditUa = options.auditDetails?.userAgent || "Standard Browser Client";
         const docHashStr = options.auditDetails?.documentHash || `SHA256-${(estimate.id || '').replace(/-/g, '').slice(0, 32)}`;
+        const authMethodStr = options.auditDetails?.authMethod 
+            || (estimate as any)?.auth_method 
+            || ((estimate as any)?.otp_verified ? `Email OTP Verification (${clientEmail}) & Electronic Consent` : "Electronic Signature & Consent Confirmation");
 
         const auditRows = [
             ["Document Reference:", `${estNum} (${estimate.project_type || estimate.title || 'Commercial Estimate'})`],
             ["Document Snapshot Hash:", docHashStr],
             ["Signer Legal Name:", clientName],
             ["Signer Email Address:", clientEmail],
-            ["Authentication Method:", "Web Portal Session & Electronic Consent Confirmation"],
+            ["Authentication Method:", authMethodStr],
             ["Signer Device context:", auditUa.length > 45 ? auditUa.slice(0, 45) + "..." : auditUa],
             ["Client Consent Event:", "Accepted Estimate terms and submitted electronic signature"],
             ["Execution Timestamp:", signedAt]
@@ -992,7 +1005,7 @@ export const generateChangeOrderPDF = async (
             } catch (e) {
                 doc.setFont("helvetica", "italic");
                 doc.setFontSize(8);
-                doc.text(`[Digitally Signed by ${clientName}]`, 20, 192);
+                doc.text(`[Electronically Signed by ${clientName}]`, 20, 192);
             }
         } else {
             doc.setFont("helvetica", "italic");
