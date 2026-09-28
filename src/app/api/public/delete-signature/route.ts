@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/server/supabase-admin";
+import { createClient } from "@supabase/supabase-js";
 
 const NO_CACHE_HEADERS = {
   "Cache-Control": "no-store, private, no-cache, must-revalidate",
@@ -34,11 +35,28 @@ export async function POST(request: Request) {
       );
     }
 
-    // Execute service_role deletion RPC requiring valid verification_token or staff session
+    // Authenticate requesting Staff user from Authorization bearer token if present
+    let staffUserId: string | null = null;
+    const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.substring(7).trim();
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+      if (supabaseUrl && supabaseAnonKey && token) {
+        const authClient = createClient(supabaseUrl, supabaseAnonKey);
+        const { data: { user } } = await authClient.auth.getUser(token);
+        if (user) {
+          staffUserId = user.id;
+        }
+      }
+    }
+
+    // Execute service_role deletion RPC requiring valid verification_token or authenticated staff_user_id
     const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc("delete_client_saved_signature", {
       p_organization_id: organizationId,
       p_client_email: clientEmail,
-      p_verification_token: verificationToken || null
+      p_verification_token: verificationToken || null,
+      p_staff_user_id: staffUserId || null
     });
 
     if (rpcErr || !rpcRes) {

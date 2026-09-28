@@ -1,17 +1,18 @@
 -- ==============================================================================
--- MIGRATION 028: HARDENED ELECTRONIC SIGNATURE SECURITY, SALTED SHA-256 OTP, & IMMUTABLE STORAGE
+-- MIGRATION 028: HARDENED ELECTRONIC SIGNATURE SECURITY, SALTED SHA-256 OTP, & RLS-PROTECTED IMMUTABLE ARTIFACTS
 -- Project: H & A Construction LLC (ha-construction-app)
 -- 
--- CRITICAL SECURITY ENHANCEMENTS:
+-- CRITICAL SECURITY & IDEMPOTENCY ENHANCEMENTS:
 -- 1. Cryptographically secure 6-digit OTP generation via single 4-byte pgcrypto call.
 -- 2. Salted SHA-256 OTP storage (otp_salt + otp_code_hash) protecting against rainbow tables.
 -- 3. REVOKE EXECUTE on privileged RPCs from anon & authenticated; GRANT ONLY to service_role.
 -- 4. 60-second cooldown & 5 req/hr rate limiting per recipient.
 -- 5. Explicit Purpose-Bound Verification Token lifecycle (32 hex bytes, bound to org, estimate, email & purpose, single-use, 15-min expiry).
 -- 6. Audit Event Separation: OTP verification records EXCLUSIVELY 'email_verification_completed'. Contract consent & signing are logged only upon explicit user action.
--- 7. Private Storage Buckets with strict Organization-Isolated Staff RLS and zero direct public access.
--- 8. Authenticated signature deletion requiring active Org Staff session or purpose-bound 'delete_signature' verification token.
--- 9. Absolute Immutability: UPDATE and DELETE policies on signed_document_artifacts set to USING (false).
+-- 7. Private Storage Buckets with strict Organization-Isolated Staff RLS and legacy policy cleanup.
+-- 8. Authenticated signature deletion validating p_staff_user_id against active org staff or purpose-bound 'delete_signature' token.
+-- 9. RLS-Protected Application Immutability: UPDATE & DELETE policies on signed_document_artifacts set to USING (false) for standard application roles. (Note: PostgreSQL service_role/DB owner bypass RLS by engine design).
+-- 10. Strict Idempotency: All policies explicitly preceded by DROP POLICY IF EXISTS.
 --
 -- DO NOT EXECUTE AUTOMATICALLY. PREPARED FOR USER REVIEW AND APPROVAL.
 -- ==============================================================================
@@ -325,7 +326,7 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Saved signature record not found.');
     END IF;
 
-    -- STRICT RULE 1 FIX: Log EXCLUSIVELY 'email_verification_completed'. NO 'electronic_consent_accepted' HERE!
+    -- Log EXCLUSIVELY 'email_verification_completed'. NO 'electronic_consent_accepted' HERE!
     INSERT INTO public.document_signature_events (
         organization_id,
         document_type,
@@ -357,12 +358,13 @@ END;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 6. RPC FUNCTION: AUTHENTICATED DELETE SAVED SIGNATURE (STRICT PURPOSE CHECK)
+-- 6. RPC FUNCTION: AUTHENTICATED DELETE SAVED SIGNATURE (EXPLICIT STAFF USER ID OR TOKEN)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.delete_client_saved_signature(
     p_organization_id UUID,
     p_client_email TEXT,
-    p_verification_token TEXT DEFAULT NULL
+    p_verification_token TEXT DEFAULT NULL,
+    p_staff_user_id UUID DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -372,18 +374,30 @@ AS $$
 DECLARE
     v_clean_email TEXT;
     v_deleted_count INT;
-    v_is_staff BOOLEAN;
+    v_is_staff BOOLEAN := FALSE;
     v_token_record RECORD;
 BEGIN
     v_clean_email := LOWER(TRIM(p_client_email));
 
-    -- 1. Check if active user is staff member of organization
-    SELECT EXISTS (
-        SELECT 1 FROM public.organization_users
-        WHERE user_id = auth.uid() 
-          AND organization_id = p_organization_id 
-          AND status = 'active'
-    ) INTO v_is_staff;
+    -- 1. Validate staff user if explicit p_staff_user_id is passed from authenticated backend route
+    IF p_staff_user_id IS NOT NULL THEN
+        SELECT EXISTS (
+            SELECT 1 FROM public.organization_users
+            WHERE user_id = p_staff_user_id 
+              AND organization_id = p_organization_id 
+              AND status = 'active'
+        ) INTO v_is_staff;
+    END IF;
+
+    -- Fallback check for auth.uid() in case of direct authenticated database context
+    IF NOT v_is_staff AND auth.uid() IS NOT NULL THEN
+        SELECT EXISTS (
+            SELECT 1 FROM public.organization_users
+            WHERE user_id = auth.uid() 
+              AND organization_id = p_organization_id 
+              AND status = 'active'
+        ) INTO v_is_staff;
+    END IF;
 
     -- 2. STRICT PURPOSE CHECK: verification_token MUST have token_purpose = 'delete_signature'
     IF p_verification_token IS NOT NULL THEN
@@ -428,7 +442,7 @@ END;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 7. IMMUTABLE SIGNED DOCUMENT ARTIFACTS TABLE & STRICT RLS
+-- 7. RLS-PROTECTED IMMUTABLE APPLICATION ARTIFACTS & STRICT RLS
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.document_versions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -512,15 +526,19 @@ ALTER TABLE public.electronic_signatures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.document_signature_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.signed_document_artifacts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Staff read org document_versions" ON public.document_versions;
 CREATE POLICY "Staff read org document_versions" ON public.document_versions FOR SELECT TO authenticated
     USING (organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid() AND status = 'active'));
 
+DROP POLICY IF EXISTS "Staff read org electronic_signatures" ON public.electronic_signatures;
 CREATE POLICY "Staff read org electronic_signatures" ON public.electronic_signatures FOR SELECT TO authenticated
     USING (organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid() AND status = 'active'));
 
+DROP POLICY IF EXISTS "Staff read org document_signature_events" ON public.document_signature_events;
 CREATE POLICY "Staff read org document_signature_events" ON public.document_signature_events FOR SELECT TO authenticated
     USING (organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid() AND status = 'active'));
 
+DROP POLICY IF EXISTS "Staff read org signed_document_artifacts" ON public.signed_document_artifacts;
 CREATE POLICY "Staff read org signed_document_artifacts" ON public.signed_document_artifacts FOR SELECT TO authenticated
     USING (organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid() AND status = 'active'));
 
@@ -531,14 +549,26 @@ DROP POLICY IF EXISTS "No delete on signed artifacts" ON public.signed_document_
 CREATE POLICY "No delete on signed artifacts" ON public.signed_document_artifacts FOR DELETE TO PUBLIC USING (false);
 
 -- ------------------------------------------------------------------------------
--- 8. SUPABASE STORAGE BUCKETS & STRICT ORGANIZATION-ISOLATED RLS POLICIES
+-- 8. STORAGE AUDIT & ORGANIZATION-ISOLATED RLS POLICIES
 -- ------------------------------------------------------------------------------
+-- AUDIT NOTICE (STORAGE PERMISSIVE POLICIES):
+-- In PostgreSQL RLS, PERMISSIVE policies combine using OR. Adding 'USING (false)' for 'anon'
+-- restricts THAT specific policy, but DOES NOT automatically neutralize or override other pre-existing 
+-- PERMISSIVE policies on storage.objects.
+-- 
+-- BEFORE APPLYING STORAGE POLICIES, RUN THIS AUDIT QUERY IN SUPABASE SQL EDITOR TO LIST ALL EXISTING STORAGE POLICIES:
+-- 
+--   SELECT schemaname, tablename, policyname, roles, cmd, qual 
+--   FROM pg_policies 
+--   WHERE tablename = 'objects' AND schemaname = 'storage';
+-- 
+
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('signatures', 'signatures', false),
        ('documents', 'documents', false)
 ON CONFLICT (id) DO UPDATE SET public = false;
 
--- Clean up any legacy or broad permissive policies on storage.objects
+-- Clean up known legacy or broad permissive policies on storage.objects
 DROP POLICY IF EXISTS "Private signatures bucket read" ON storage.objects;
 DROP POLICY IF EXISTS "Private documents bucket read" ON storage.objects;
 DROP POLICY IF EXISTS "Allow public signatures select" ON storage.objects;
@@ -573,7 +603,7 @@ CREATE POLICY "Staff org documents storage read" ON storage.objects
         )
     );
 
--- Absolute block on direct public / anonymous storage access
+-- Absolute block on direct public / anonymous storage access for signatures & documents
 CREATE POLICY "No direct public access to signatures" ON storage.objects
     FOR ALL TO anon USING (false);
 
@@ -585,10 +615,10 @@ CREATE POLICY "No direct public access to documents" ON storage.objects
 -- ------------------------------------------------------------------------------
 REVOKE ALL ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT, UUID) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT, TEXT) TO service_role;
-GRANT EXECUTE ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT, UUID) TO service_role;
 
 COMMIT;
