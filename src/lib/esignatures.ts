@@ -395,7 +395,7 @@ export async function requestClientSignatureOtp(
 }
 
 /**
- * Verifies a 6-digit Email OTP code and returns verified token and signature asset.
+ * Verifies a 6-digit Email OTP code via server API endpoint and returns verified token + signature.
  */
 export async function verifyClientSignatureOtp(
     organizationId: string,
@@ -404,44 +404,32 @@ export async function verifyClientSignatureOtp(
     otpCode: string
 ): Promise<{ success: boolean; message?: string; signature_data_url?: string; verification_token?: string; signature_type?: 'drawn' | 'typed'; signer_name?: string }> {
     try {
-        const { data, error } = await supabase.rpc('verify_client_signature_otp', {
-            p_organization_id: organizationId,
-            p_estimate_id: estimateId,
-            p_client_email: clientEmail,
-            p_otp_code: otpCode
+        const res = await fetch("/api/public/verify-otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ organizationId, estimateId, clientEmail, otpCode })
         });
 
-        if (error || !data || !data.success) {
-            console.warn("RPC verify_client_signature_otp warning:", error?.message || data?.message);
-            return { success: false, message: data?.message || error?.message || 'Invalid verification code.' };
-        }
-
-        // If storage path returned, create temporary signed URL or fetch image
-        let sigDataUrl = "";
-        if (data.signature_storage_path) {
-            try {
-                const { data: sUrl } = await supabase.storage.from('signatures').createSignedUrl(data.signature_storage_path, 300);
-                if (sUrl?.signedUrl) {
-                    sigDataUrl = sUrl.signedUrl;
-                }
-            } catch (sErr) {}
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            return { success: false, message: data.message || "Failed to verify code." };
         }
 
         return {
             success: true,
-            verification_token: data.verification_token,
-            signature_data_url: sigDataUrl || data.signature_data_url,
-            signature_type: data.signature_type || 'drawn',
-            signer_name: data.signer_name,
-            signer_email: data.signer_email
+            verification_token: data.verificationToken,
+            signature_data_url: data.signatureDataUrl,
+            signature_type: data.signatureType || 'drawn',
+            signer_name: data.signerName,
+            signer_email: data.signerEmail
         };
     } catch (e) {
-        return { success: false, message: 'Server error validating OTP code.' };
+        return { success: false, message: "Server connection error validating OTP code." };
     }
 }
 
 /**
- * Deletes a client's saved signature vault entry with authenticated staff session or verification token.
+ * Deletes a client's saved signature vault entry with authenticated staff session or verification token via server API.
  */
 export async function deleteSavedClientSignature(
     organizationId: string,
@@ -450,20 +438,23 @@ export async function deleteSavedClientSignature(
 ): Promise<{ success: boolean; message: string }> {
     const cleanEmail = clientEmail.trim().toLowerCase();
     try {
-        const { data, error } = await supabase.rpc('delete_client_saved_signature', {
-            p_organization_id: organizationId,
-            p_client_email: cleanEmail,
-            p_verification_token: verificationToken || null
+        const res = await fetch("/api/public/delete-signature", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ organizationId, clientEmail: cleanEmail, verificationToken })
         });
 
-        if (!error && data) {
-            localStorage.removeItem(`saved_sig_${organizationId}_${cleanEmail}`);
-            return data;
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            return { success: false, message: data.message || "Failed to delete saved signature." };
         }
-    } catch (e) {}
 
-    localStorage.removeItem(`saved_sig_${organizationId}_${cleanEmail}`);
-    return { success: true, message: 'Saved signature deleted from vault.' };
+        localStorage.removeItem(`saved_sig_${organizationId}_${cleanEmail}`);
+        return { success: true, message: data.message };
+    } catch (e) {
+        localStorage.removeItem(`saved_sig_${organizationId}_${cleanEmail}`);
+        return { success: true, message: "Saved signature deleted from local vault." };
+    }
 }
 
 /**

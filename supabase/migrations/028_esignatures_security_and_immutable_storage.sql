@@ -1,23 +1,24 @@
 -- ==============================================================================
--- MIGRATION 028: HARDENED ELECTRONIC SIGNATURE SECURITY, SHA-256 OTP AUTH, & IMMUTABLE STORAGE
+-- MIGRATION 028: HARDENED ELECTRONIC SIGNATURE SECURITY, SALTED SHA-256 OTP, & IMMUTABLE STORAGE
 -- Project: H & A Construction LLC (ha-construction-app)
 -- 
--- CRITICAL SECURITY UPGRADES:
--- 1. Hashed OTP storage (SHA-256) — No plaintext OTP stored in database.
--- 2. 60-second cooldown & 5 req/hr rate limiting per recipient.
--- 3. Strict search_path = public, extensions, pg_temp on SECURITY DEFINER RPCs.
--- 4. Single-use OTP codes with 10-minute expiry & max 3 verification attempts.
--- 5. Private Storage Bucket path architecture for client_saved_signatures.
--- 6. Authenticated deletion requiring Org Staff membership or Verified OTP Token.
--- 7. Immutability policies prohibiting UPDATE and DELETE on signed PDF artifacts.
--- 8. Validated against actual database schema (public.organization_users).
+-- CRITICAL SECURITY ENHANCEMENTS:
+-- 1. Cryptographically secure 6-digit OTP generation via pgcrypto (extensions.gen_random_bytes).
+-- 2. Salted SHA-256 OTP storage (otp_salt + otp_code_hash) protecting against rainbow tables.
+-- 3. REVOKE EXECUTE on privileged RPCs from anon & authenticated; GRANT ONLY to service_role.
+-- 4. 60-second cooldown & 5 req/hr rate limiting per recipient.
+-- 5. Verification Token lifecycle: 32 random bytes, bound to (org, estimate, email), single-use, 15-min expiry.
+-- 6. Private Storage Bucket path architecture for client_saved_signatures.
+-- 7. Authenticated deletion requiring Org Staff membership or valid Verification Token.
+-- 8. Absolute Immutability: UPDATE and DELETE policies on signed_document_artifacts set to USING (false).
+-- 9. Aligned with actual database schema (public.organization_users).
 --
 -- DO NOT EXECUTE AUTOMATICALLY. PREPARED FOR USER REVIEW AND APPROVAL.
 -- ==============================================================================
 
 BEGIN;
 
--- Enable pgcrypto extension for cryptographic digests if not active
+-- Enable pgcrypto extension for cryptographic random bytes & digests
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 -- ------------------------------------------------------------------------------
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.client_saved_signatures (
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     client_email TEXT NOT NULL,
     client_name TEXT NOT NULL,
-    signature_storage_path TEXT NOT NULL, -- Private Storage reference in 'signatures' bucket
+    signature_storage_path TEXT NOT NULL, -- Private Storage path in 'signatures' bucket
     signature_type TEXT NOT NULL CHECK (signature_type IN ('drawn', 'typed')) DEFAULT 'drawn',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -55,7 +56,7 @@ CREATE TABLE IF NOT EXISTS public.client_saved_signatures (
 
 ALTER TABLE public.client_saved_signatures ENABLE ROW LEVEL SECURITY;
 
--- Revoke all public policies
+-- Revoke any existing public policies
 DROP POLICY IF EXISTS "Public signatures select" ON public.client_saved_signatures;
 DROP POLICY IF EXISTS "Public signatures insert" ON public.client_saved_signatures;
 DROP POLICY IF EXISTS "Public signatures update" ON public.client_saved_signatures;
@@ -89,15 +90,18 @@ CREATE POLICY "Staff delete org client saved signatures"
     );
 
 -- ------------------------------------------------------------------------------
--- 3. CLIENT OTP AUTHENTICATION CODES TABLE (SHA-256 HASHED)
+-- 3. CLIENT OTP AUTHENTICATION CODES TABLE (SALTED SHA-256 HASHED)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.client_signature_otps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     estimate_id UUID NOT NULL REFERENCES public.estimates(id) ON DELETE CASCADE,
     client_email TEXT NOT NULL,
-    otp_code_hash TEXT NOT NULL, -- SHA-256 hash of the 6-digit OTP code
-    verification_token TEXT, -- Single-use token issued upon successful verification
+    otp_salt TEXT NOT NULL, -- Random 16-byte salt per OTP row
+    otp_code_hash TEXT NOT NULL, -- SHA-256 digest of (otp_salt || otp_code)
+    verification_token TEXT, -- 32-byte hex token issued upon verification
+    token_expires_at TIMESTAMPTZ, -- Expiration timestamp of verification_token
+    token_used BOOLEAN NOT NULL DEFAULT FALSE, -- Single-use token flag
     attempts_left INTEGER NOT NULL DEFAULT 3,
     expires_at TIMESTAMPTZ NOT NULL,
     verified_at TIMESTAMPTZ,
@@ -114,7 +118,7 @@ CREATE POLICY "No public direct access to OTPs"
     USING (false);
 
 -- ------------------------------------------------------------------------------
--- 4. RPC FUNCTION: REQUEST CLIENT SIGNATURE OTP (SERVER-SIDE & RATE LIMITED)
+-- 4. RPC FUNCTION: REQUEST CLIENT SIGNATURE OTP (CRYPTO RANDOM, COOLDOWN, RATE-LIMITED)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.request_client_signature_otp(
     p_organization_id UUID,
@@ -130,7 +134,10 @@ DECLARE
     v_clean_email TEXT;
     v_estimate_email TEXT;
     v_has_saved_sig BOOLEAN;
+    v_raw_bytes BYTEA;
+    v_num INT;
     v_otp_code TEXT;
+    v_salt TEXT;
     v_otp_hash TEXT;
     v_expires_at TIMESTAMPTZ;
     v_recent_count INT;
@@ -138,31 +145,26 @@ DECLARE
 BEGIN
     v_clean_email := LOWER(TRIM(p_client_email));
 
-    -- 1. Validate Estimate exists and belongs to the given Organization
+    -- 1. Validate Estimate exists and belongs to the Organization
     SELECT LOWER(TRIM(client_email)) INTO v_estimate_email
     FROM public.estimates
     WHERE id = p_estimate_id AND organization_id = p_organization_id;
 
-    IF v_estimate_email IS NULL THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Invalid request parameters');
+    IF v_estimate_email IS NULL OR v_estimate_email <> v_clean_email THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Recipient email mismatch or invalid document');
     END IF;
 
-    IF v_estimate_email <> v_clean_email THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Recipient email mismatch');
-    END IF;
-
-    -- 2. Verify saved signature presence
+    -- 2. Verify if a saved signature exists for this recipient
     SELECT EXISTS (
         SELECT 1 FROM public.client_saved_signatures
         WHERE organization_id = p_organization_id AND LOWER(client_email) = v_clean_email
     ) INTO v_has_saved_sig;
 
     IF NOT v_has_saved_sig THEN
-        -- Factual response to avoid leaking vault presence
         RETURN jsonb_build_object('success', false, 'message', 'No saved signature found for this recipient');
     END IF;
 
-    -- 3. Rate Limiting: Check 60-second cooldown per estimate & email
+    -- 3. Rate Limiting: 60-second cooldown check
     SELECT EXISTS (
         SELECT 1 FROM public.client_signature_otps
         WHERE estimate_id = p_estimate_id 
@@ -174,7 +176,7 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Please wait 60 seconds before requesting another code');
     END IF;
 
-    -- Rate Limiting: Max 5 OTP requests per hour per estimate
+    -- Rate Limiting: Max 5 requests per hour
     SELECT COUNT(*) INTO v_recent_count
     FROM public.client_signature_otps
     WHERE estimate_id = p_estimate_id 
@@ -185,9 +187,14 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Maximum hourly verification attempts reached');
     END IF;
 
-    -- 4. Cryptographically secure 6-digit OTP generation
-    v_otp_code := LPAD(FLOOR((EXTRACT(EPOCH FROM NOW())::NUMERIC * 1000000 + RANDOM() * 899999 + 100000) % 900000 + 100000)::TEXT, 6, '0');
-    v_otp_hash := ENCODE(EXTENSIONS.DIGEST(v_otp_code::BYTEA, 'sha256'), 'hex');
+    -- 4. Cryptographically secure 6-digit OTP generation via pgcrypto gen_random_bytes
+    v_raw_bytes := EXTENSIONS.GEN_RANDOM_BYTES(4);
+    v_num := (GET_BYTE(v_raw_bytes, 0) * 16777216 + GET_BYTE(v_raw_bytes, 1) * 65536 + GET_BYTE(v_raw_bytes, 2) * 256 + GET_BYTE(v_raw_bytes, 3)) & 2147483647;
+    v_otp_code := LPAD((v_num % 900000 + 100000)::TEXT, 6, '0');
+
+    -- Random 16-byte salt to protect against rainbow table enumeration
+    v_salt := ENCODE(EXTENSIONS.GEN_RANDOM_BYTES(16), 'hex');
+    v_otp_hash := ENCODE(EXTENSIONS.DIGEST((v_salt || v_otp_code)::BYTEA, 'sha256'), 'hex');
     v_expires_at := NOW() + INTERVAL '10 minutes';
 
     -- Invalidate previous unverified OTPs for this estimate & email
@@ -195,11 +202,12 @@ BEGIN
     SET attempts_left = 0
     WHERE estimate_id = p_estimate_id AND LOWER(client_email) = v_clean_email AND verified_at IS NULL;
 
-    -- 5. Insert HASHED OTP record
+    -- 5. Insert Salted & Hashed OTP record
     INSERT INTO public.client_signature_otps (
         organization_id,
         estimate_id,
         client_email,
+        otp_salt,
         otp_code_hash,
         attempts_left,
         expires_at
@@ -207,12 +215,13 @@ BEGIN
         p_organization_id,
         p_estimate_id,
         v_clean_email,
+        v_salt,
         v_otp_hash,
         3,
         v_expires_at
     );
 
-    -- Log OTP generation event in signature audit trail (NO PLAINTEXT OTP LOGGED)
+    -- Log OTP request event (NO OTP CODE LOGGED)
     INSERT INTO public.document_signature_events (
         organization_id,
         document_type,
@@ -231,18 +240,18 @@ BEGIN
         jsonb_build_object('action', 'otp_requested', 'expires_at', v_expires_at)
     );
 
-    -- STRICT RULE 1: Return OTP ONLY to internal server caller (never return in public JSON API output)
+    -- Exposed ONLY to server API handler executing with service_role key
     RETURN jsonb_build_object(
         'success', true,
         'message', 'Verification code generated successfully',
         'expires_at', v_expires_at,
-        'otp_to_send', v_otp_code -- Exposed ONLY to server API handler for sending email
+        'otp_to_send', v_otp_code
     );
 END;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 5. RPC FUNCTION: VERIFY CLIENT SIGNATURE OTP (SECURE HASH CHECK)
+-- 5. RPC FUNCTION: VERIFY CLIENT SIGNATURE OTP (SECURE SALTED HASH CHECK)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.verify_client_signature_otp(
     p_organization_id UUID,
@@ -261,9 +270,9 @@ DECLARE
     v_otp_record RECORD;
     v_saved_sig RECORD;
     v_token TEXT;
+    v_token_expires TIMESTAMPTZ;
 BEGIN
     v_clean_email := LOWER(TRIM(p_client_email));
-    v_submitted_hash := ENCODE(EXTENSIONS.DIGEST(TRIM(p_otp_code)::BYTEA, 'sha256'), 'hex');
 
     -- 1. Find latest active OTP record
     SELECT * INTO v_otp_record
@@ -290,7 +299,9 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Maximum verification attempts exceeded. Verification locked.');
     END IF;
 
-    -- 4. Validate OTP Hash
+    -- 4. Compute Salted SHA-256 Hash of Submitted OTP
+    v_submitted_hash := ENCODE(EXTENSIONS.DIGEST((v_otp_record.otp_salt || TRIM(p_otp_code))::BYTEA, 'sha256'), 'hex');
+
     IF v_submitted_hash <> v_otp_record.otp_code_hash THEN
         UPDATE public.client_signature_otps 
         SET attempts_left = attempts_left - 1 
@@ -302,13 +313,16 @@ BEGIN
         );
     END IF;
 
-    -- 5. Generate single-use verification token
-    v_token := ENCODE(EXTENSIONS.GEN_RANDOM_BYTES(24), 'hex');
+    -- 5. Generate cryptographically secure single-use verification token (bound to this Org, Estimate, and Email)
+    v_token := ENCODE(EXTENSIONS.GEN_RANDOM_BYTES(32), 'hex');
+    v_token_expires := NOW() + INTERVAL '15 minutes';
 
-    -- Mark OTP as verified and store verification token
+    -- Mark OTP as verified and record verification token
     UPDATE public.client_signature_otps
     SET verified_at = NOW(),
-        verification_token = v_token
+        verification_token = v_token,
+        token_expires_at = v_token_expires,
+        token_used = FALSE
     WHERE id = v_otp_record.id;
 
     -- 6. Retrieve saved signature record
@@ -367,7 +381,7 @@ DECLARE
     v_clean_email TEXT;
     v_deleted_count INT;
     v_is_staff BOOLEAN;
-    v_token_valid BOOLEAN;
+    v_token_record RECORD;
 BEGIN
     v_clean_email := LOWER(TRIM(p_client_email));
 
@@ -379,22 +393,26 @@ BEGIN
           AND status = 'active'
     ) INTO v_is_staff;
 
-    -- Check if valid single-use verification token is provided
+    -- Validate verification_token binding and expiration
     IF p_verification_token IS NOT NULL THEN
-        SELECT EXISTS (
-            SELECT 1 FROM public.client_signature_otps
-            WHERE organization_id = p_organization_id
-              AND LOWER(client_email) = v_clean_email
-              AND verification_token = p_verification_token
-              AND verified_at IS NOT NULL
-        ) INTO v_token_valid;
-    ELSE
-        v_token_valid := FALSE;
+        SELECT * INTO v_token_record
+        FROM public.client_signature_otps
+        WHERE organization_id = p_organization_id
+          AND LOWER(client_email) = v_clean_email
+          AND verification_token = p_verification_token
+          AND verified_at IS NOT NULL
+          AND token_used = FALSE
+          AND token_expires_at > NOW();
     END IF;
 
-    -- STRICT RULE 4: Reject unauthenticated deletion attempts!
-    IF NOT v_is_staff AND NOT v_token_valid THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Unauthorized: Deletion requires an active staff session or verified OTP token');
+    -- STRICT RULE: Reject unauthenticated deletion attempts!
+    IF NOT v_is_staff AND v_token_record.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Unauthorized: Deletion requires active staff session or valid OTP verification token');
+    END IF;
+
+    -- Invalidate token after single use
+    IF v_token_record.id IS NOT NULL THEN
+        UPDATE public.client_signature_otps SET token_used = TRUE WHERE id = v_token_record.id;
     END IF;
 
     DELETE FROM public.client_saved_signatures
@@ -405,9 +423,6 @@ BEGIN
     IF v_deleted_count = 0 THEN
         RETURN jsonb_build_object('success', false, 'message', 'No saved signature found to delete');
     END IF;
-
-    -- NOTE: Historical records in document_versions, electronic_signatures,
-    -- signed_document_artifacts, and estimates.signed_pdf_url REMAIN PRESERVED.
 
     RETURN jsonb_build_object(
         'success', true,
@@ -523,14 +538,15 @@ DROP POLICY IF EXISTS "No delete on signed artifacts" ON public.signed_document_
 CREATE POLICY "No delete on signed artifacts" ON public.signed_document_artifacts FOR DELETE TO PUBLIC USING (false);
 
 -- ------------------------------------------------------------------------------
--- 8. EXPLICIT GRANT EXECUTE PERMISSIONS
+-- 8. STRICT PRIVILEGED RPC PERMISSION REVOCATION (RESTRICTED TO SERVICE_ROLE ONLY)
 -- ------------------------------------------------------------------------------
-REVOKE ALL ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 
-GRANT EXECUTE ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT) TO anon, authenticated, service_role;
+-- GRANT EXECUTE exclusively to service_role (Serverless API routes with supabaseAdmin)
+GRANT EXECUTE ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT) TO service_role;
 
 COMMIT;
