@@ -3,15 +3,15 @@
 -- Project: H & A Construction LLC (ha-construction-app)
 -- 
 -- CRITICAL SECURITY ENHANCEMENTS:
--- 1. Cryptographically secure 6-digit OTP generation via pgcrypto (extensions.gen_random_bytes).
+-- 1. Cryptographically secure 6-digit OTP generation via single 4-byte pgcrypto call.
 -- 2. Salted SHA-256 OTP storage (otp_salt + otp_code_hash) protecting against rainbow tables.
 -- 3. REVOKE EXECUTE on privileged RPCs from anon & authenticated; GRANT ONLY to service_role.
 -- 4. 60-second cooldown & 5 req/hr rate limiting per recipient.
--- 5. Verification Token lifecycle: 32 random bytes, bound to (org, estimate, email), single-use, 15-min expiry.
--- 6. Private Storage Bucket path architecture for client_saved_signatures.
--- 7. Authenticated deletion requiring Org Staff membership or valid Verification Token.
--- 8. Absolute Immutability: UPDATE and DELETE policies on signed_document_artifacts set to USING (false).
--- 9. Aligned with actual database schema (public.organization_users).
+-- 5. Explicit Purpose-Bound Verification Token lifecycle (32 hex bytes, bound to org, estimate, email & purpose, single-use, 15-min expiry).
+-- 6. Audit Event Separation: OTP verification records EXCLUSIVELY 'email_verification_completed'. Contract consent & signing are logged only upon explicit user action.
+-- 7. Private Storage Buckets with strict Organization-Isolated Staff RLS and zero direct public access.
+-- 8. Authenticated signature deletion requiring active Org Staff session or purpose-bound 'delete_signature' verification token.
+-- 9. Absolute Immutability: UPDATE and DELETE policies on signed_document_artifacts set to USING (false).
 --
 -- DO NOT EXECUTE AUTOMATICALLY. PREPARED FOR USER REVIEW AND APPROVAL.
 -- ==============================================================================
@@ -56,7 +56,6 @@ CREATE TABLE IF NOT EXISTS public.client_saved_signatures (
 
 ALTER TABLE public.client_saved_signatures ENABLE ROW LEVEL SECURITY;
 
--- Revoke any existing public policies
 DROP POLICY IF EXISTS "Public signatures select" ON public.client_saved_signatures;
 DROP POLICY IF EXISTS "Public signatures insert" ON public.client_saved_signatures;
 DROP POLICY IF EXISTS "Public signatures update" ON public.client_saved_signatures;
@@ -65,44 +64,28 @@ DROP POLICY IF EXISTS "Allow public access to client_saved_signatures" ON public
 DROP POLICY IF EXISTS "Staff read org client saved signatures" ON public.client_saved_signatures;
 DROP POLICY IF EXISTS "Staff delete org client saved signatures" ON public.client_saved_signatures;
 
--- Strict Policy 1: Authenticated organization staff can read signatures of their own org
 CREATE POLICY "Staff read org client saved signatures"
-    ON public.client_saved_signatures
-    FOR SELECT
-    TO authenticated
-    USING (
-        organization_id IN (
-            SELECT organization_id FROM public.organization_users 
-            WHERE user_id = auth.uid() AND status = 'active'
-        )
-    );
+    ON public.client_saved_signatures FOR SELECT TO authenticated
+    USING (organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid() AND status = 'active'));
 
--- Strict Policy 2: Authenticated organization staff can delete signatures of their own org
 CREATE POLICY "Staff delete org client saved signatures"
-    ON public.client_saved_signatures
-    FOR DELETE
-    TO authenticated
-    USING (
-        organization_id IN (
-            SELECT organization_id FROM public.organization_users 
-            WHERE user_id = auth.uid() AND status = 'active'
-        )
-    );
+    ON public.client_saved_signatures FOR DELETE TO authenticated
+    USING (organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid() AND status = 'active'));
 
 -- ------------------------------------------------------------------------------
--- 3. CLIENT OTP AUTHENTICATION CODES TABLE (SALTED SHA-256 HASHED)
+-- 3. CLIENT OTP AUTHENTICATION CODES TABLE (SALTED SHA-256 HASHED & PURPOSE BOUND)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.client_signature_otps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     estimate_id UUID NOT NULL REFERENCES public.estimates(id) ON DELETE CASCADE,
     client_email TEXT NOT NULL,
-    otp_salt TEXT NOT NULL, -- Random 16-byte salt per OTP row
-    otp_code_hash TEXT NOT NULL, -- SHA-256 digest of (otp_salt || otp_code)
-    verification_token TEXT, -- 32-byte hex token issued upon verification
-    token_purpose TEXT DEFAULT 'estimate_signature', -- Explicit single purpose binding
-    token_expires_at TIMESTAMPTZ, -- Expiration timestamp of verification_token
-    token_used BOOLEAN NOT NULL DEFAULT FALSE, -- Single-use token flag
+    otp_salt TEXT NOT NULL,
+    otp_code_hash TEXT NOT NULL,
+    verification_token TEXT,
+    token_purpose TEXT NOT NULL DEFAULT 'estimate_signature', -- Purpose binding: 'estimate_signature' | 'delete_signature'
+    token_expires_at TIMESTAMPTZ,
+    token_used BOOLEAN NOT NULL DEFAULT FALSE,
     attempts_left INTEGER NOT NULL DEFAULT 3,
     expires_at TIMESTAMPTZ NOT NULL,
     verified_at TIMESTAMPTZ,
@@ -113,10 +96,7 @@ ALTER TABLE public.client_signature_otps ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "No public direct access to OTPs" ON public.client_signature_otps;
 CREATE POLICY "No public direct access to OTPs"
-    ON public.client_signature_otps
-    FOR ALL
-    TO anon, authenticated
-    USING (false);
+    ON public.client_signature_otps FOR ALL TO anon, authenticated USING (false);
 
 -- ------------------------------------------------------------------------------
 -- 4. RPC FUNCTION: REQUEST CLIENT SIGNATURE OTP (CRYPTO RANDOM, COOLDOWN, RATE-LIMITED)
@@ -124,7 +104,8 @@ CREATE POLICY "No public direct access to OTPs"
 CREATE OR REPLACE FUNCTION public.request_client_signature_otp(
     p_organization_id UUID,
     p_estimate_id UUID,
-    p_client_email TEXT
+    p_client_email TEXT,
+    p_purpose TEXT DEFAULT 'estimate_signature'
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -143,8 +124,10 @@ DECLARE
     v_expires_at TIMESTAMPTZ;
     v_recent_count INT;
     v_cooldown_active BOOLEAN;
+    v_valid_purpose TEXT;
 BEGIN
     v_clean_email := LOWER(TRIM(p_client_email));
+    v_valid_purpose := CASE WHEN LOWER(TRIM(p_purpose)) = 'delete_signature' THEN 'delete_signature' ELSE 'estimate_signature' END;
 
     -- 1. Validate Estimate exists and belongs to the Organization
     SELECT LOWER(TRIM(client_email)) INTO v_estimate_email
@@ -206,13 +189,14 @@ BEGIN
     SET attempts_left = 0
     WHERE estimate_id = p_estimate_id AND LOWER(client_email) = v_clean_email AND verified_at IS NULL;
 
-    -- 5. Insert Salted & Hashed OTP record
+    -- 5. Insert Salted & Hashed OTP record with explicit token_purpose binding
     INSERT INTO public.client_signature_otps (
         organization_id,
         estimate_id,
         client_email,
         otp_salt,
         otp_code_hash,
+        token_purpose,
         attempts_left,
         expires_at
     ) VALUES (
@@ -221,6 +205,7 @@ BEGIN
         v_clean_email,
         v_salt,
         v_otp_hash,
+        v_valid_purpose,
         3,
         v_expires_at
     );
@@ -241,10 +226,9 @@ BEGIN
         'signature_started',
         'client',
         v_clean_email,
-        jsonb_build_object('action', 'otp_requested', 'expires_at', v_expires_at)
+        jsonb_build_object('action', 'otp_requested', 'purpose', v_valid_purpose, 'expires_at', v_expires_at)
     );
 
-    -- Exposed ONLY to server API handler executing with service_role key
     RETURN jsonb_build_object(
         'success', true,
         'message', 'Verification code generated successfully',
@@ -255,13 +239,14 @@ END;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 5. RPC FUNCTION: VERIFY CLIENT SIGNATURE OTP (SECURE SALTED HASH CHECK)
+-- 5. RPC FUNCTION: VERIFY CLIENT SIGNATURE OTP (EXCLUSIVELY LOGS email_verification_completed)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.verify_client_signature_otp(
     p_organization_id UUID,
     p_estimate_id UUID,
     p_client_email TEXT,
-    p_otp_code TEXT
+    p_otp_code TEXT,
+    p_purpose TEXT DEFAULT 'estimate_signature'
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -275,21 +260,24 @@ DECLARE
     v_saved_sig RECORD;
     v_token TEXT;
     v_token_expires TIMESTAMPTZ;
+    v_valid_purpose TEXT;
 BEGIN
     v_clean_email := LOWER(TRIM(p_client_email));
+    v_valid_purpose := CASE WHEN LOWER(TRIM(p_purpose)) = 'delete_signature' THEN 'delete_signature' ELSE 'estimate_signature' END;
 
-    -- 1. Find latest active OTP record
+    -- 1. Find latest active OTP record matching organization, estimate, email, and purpose
     SELECT * INTO v_otp_record
     FROM public.client_signature_otps
     WHERE organization_id = p_organization_id
       AND estimate_id = p_estimate_id
       AND LOWER(client_email) = v_clean_email
+      AND token_purpose = v_valid_purpose
       AND verified_at IS NULL
     ORDER BY created_at DESC
     LIMIT 1;
 
     IF v_otp_record IS NULL THEN
-        RETURN jsonb_build_object('success', false, 'message', 'No active verification code found. Please request a new code.');
+        RETURN jsonb_build_object('success', false, 'message', 'No active verification code found for this purpose. Please request a new code.');
     END IF;
 
     -- 2. Expiration Check
@@ -317,15 +305,13 @@ BEGIN
         );
     END IF;
 
-    -- 5. Generate cryptographically secure single-use verification token (bound to this Org, Estimate, and Email)
+    -- 5. Generate cryptographically secure single-use verification token bound strictly to purpose
     v_token := ENCODE(EXTENSIONS.GEN_RANDOM_BYTES(32), 'hex');
     v_token_expires := NOW() + INTERVAL '15 minutes';
 
-    -- Mark OTP as verified and record verification token
     UPDATE public.client_signature_otps
     SET verified_at = NOW(),
         verification_token = v_token,
-        token_purpose = 'estimate_signature',
         token_expires_at = v_token_expires,
         token_used = FALSE
     WHERE id = v_otp_record.id;
@@ -339,7 +325,7 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Saved signature record not found.');
     END IF;
 
-    -- Log verification event
+    -- STRICT RULE 1 FIX: Log EXCLUSIVELY 'email_verification_completed'. NO 'electronic_consent_accepted' HERE!
     INSERT INTO public.document_signature_events (
         organization_id,
         document_type,
@@ -352,15 +338,16 @@ BEGIN
         p_organization_id,
         'estimate',
         p_estimate_id::TEXT,
-        'electronic_consent_accepted',
+        'email_verification_completed',
         'client',
         v_clean_email,
-        jsonb_build_object('auth_method', '6_digit_email_otp', 'otp_id', v_otp_record.id)
+        jsonb_build_object('auth_method', '6_digit_email_otp', 'purpose', v_valid_purpose, 'otp_id', v_otp_record.id)
     );
 
     RETURN jsonb_build_object(
         'success', true,
         'verification_token', v_token,
+        'token_purpose', v_valid_purpose,
         'signature_storage_path', v_saved_sig.signature_storage_path,
         'signature_type', v_saved_sig.signature_type,
         'signer_name', v_saved_sig.client_name,
@@ -370,7 +357,7 @@ END;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 6. RPC FUNCTION: AUTHENTICATED DELETE SAVED SIGNATURE
+-- 6. RPC FUNCTION: AUTHENTICATED DELETE SAVED SIGNATURE (STRICT PURPOSE CHECK)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.delete_client_saved_signature(
     p_organization_id UUID,
@@ -390,7 +377,7 @@ DECLARE
 BEGIN
     v_clean_email := LOWER(TRIM(p_client_email));
 
-    -- Check if active user is staff member of organization
+    -- 1. Check if active user is staff member of organization
     SELECT EXISTS (
         SELECT 1 FROM public.organization_users
         WHERE user_id = auth.uid() 
@@ -398,21 +385,25 @@ BEGIN
           AND status = 'active'
     ) INTO v_is_staff;
 
-    -- Validate verification_token binding and expiration
+    -- 2. STRICT PURPOSE CHECK: verification_token MUST have token_purpose = 'delete_signature'
     IF p_verification_token IS NOT NULL THEN
         SELECT * INTO v_token_record
         FROM public.client_signature_otps
         WHERE organization_id = p_organization_id
           AND LOWER(client_email) = v_clean_email
           AND verification_token = p_verification_token
+          AND token_purpose = 'delete_signature' -- MUST MATCH EXPLICIT PURPOSE!
           AND verified_at IS NOT NULL
           AND token_used = FALSE
           AND token_expires_at > NOW();
     END IF;
 
-    -- STRICT RULE: Reject unauthenticated deletion attempts!
+    -- Reject unauthenticated deletion attempts or tokens issued for other purposes (e.g. estimate_signature)
     IF NOT v_is_staff AND v_token_record.id IS NULL THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Unauthorized: Deletion requires active staff session or valid OTP verification token');
+        RETURN jsonb_build_object(
+            'success', false, 
+            'message', 'Unauthorized: Deletion requires active staff session or a valid verification token issued specifically for deletion.'
+        );
     END IF;
 
     -- Invalidate token after single use
@@ -516,13 +507,11 @@ CREATE TABLE IF NOT EXISTS public.signed_document_artifacts (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Enable RLS
 ALTER TABLE public.document_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.electronic_signatures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.document_signature_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.signed_document_artifacts ENABLE ROW LEVEL SECURITY;
 
--- Staff Read Policies
 CREATE POLICY "Staff read org document_versions" ON public.document_versions FOR SELECT TO authenticated
     USING (organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid() AND status = 'active'));
 
@@ -535,35 +524,71 @@ CREATE POLICY "Staff read org document_signature_events" ON public.document_sign
 CREATE POLICY "Staff read org signed_document_artifacts" ON public.signed_document_artifacts FOR SELECT TO authenticated
     USING (organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid() AND status = 'active'));
 
+DROP POLICY IF EXISTS "No update on signed artifacts" ON public.signed_document_artifacts;
+CREATE POLICY "No update on signed artifacts" ON public.signed_document_artifacts FOR UPDATE TO PUBLIC USING (false);
+
+DROP POLICY IF EXISTS "No delete on signed artifacts" ON public.signed_document_artifacts;
+CREATE POLICY "No delete on signed artifacts" ON public.signed_document_artifacts FOR DELETE TO PUBLIC USING (false);
+
 -- ------------------------------------------------------------------------------
--- 8. SUPABASE STORAGE BUCKETS & STRICT RLS POLICIES
+-- 8. SUPABASE STORAGE BUCKETS & STRICT ORGANIZATION-ISOLATED RLS POLICIES
 -- ------------------------------------------------------------------------------
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('signatures', 'signatures', false),
        ('documents', 'documents', false)
 ON CONFLICT (id) DO UPDATE SET public = false;
 
--- Restrict direct unauthenticated reads/uploads via Storage REST API
+-- Clean up any legacy or broad permissive policies on storage.objects
 DROP POLICY IF EXISTS "Private signatures bucket read" ON storage.objects;
-CREATE POLICY "Private signatures bucket read" ON storage.objects
-    FOR SELECT TO authenticated
-    USING (bucket_id = 'signatures');
-
 DROP POLICY IF EXISTS "Private documents bucket read" ON storage.objects;
-CREATE POLICY "Private documents bucket read" ON storage.objects
+DROP POLICY IF EXISTS "Allow public signatures select" ON storage.objects;
+DROP POLICY IF EXISTS "Allow public signatures insert" ON storage.objects;
+DROP POLICY IF EXISTS "Staff org signatures storage read" ON storage.objects;
+DROP POLICY IF EXISTS "Staff org documents storage read" ON storage.objects;
+DROP POLICY IF EXISTS "No direct public access to signatures" ON storage.objects;
+DROP POLICY IF EXISTS "No direct public access to documents" ON storage.objects;
+
+-- Organization-Isolated Read Policy for Staff (Path structure: {org_id}/...)
+CREATE POLICY "Staff org signatures storage read" ON storage.objects
     FOR SELECT TO authenticated
-    USING (bucket_id = 'documents');
+    USING (
+        bucket_id = 'signatures' AND
+        EXISTS (
+            SELECT 1 FROM public.organization_users ou
+            WHERE ou.user_id = auth.uid() 
+              AND ou.status = 'active'
+              AND (storage.foldername(name))[1] = ou.organization_id::text
+        )
+    );
+
+CREATE POLICY "Staff org documents storage read" ON storage.objects
+    FOR SELECT TO authenticated
+    USING (
+        bucket_id = 'documents' AND
+        EXISTS (
+            SELECT 1 FROM public.organization_users ou
+            WHERE ou.user_id = auth.uid() 
+              AND ou.status = 'active'
+              AND (storage.foldername(name))[1] = ou.organization_id::text
+        )
+    );
+
+-- Absolute block on direct public / anonymous storage access
+CREATE POLICY "No direct public access to signatures" ON storage.objects
+    FOR ALL TO anon USING (false);
+
+CREATE POLICY "No direct public access to documents" ON storage.objects
+    FOR ALL TO anon USING (false);
 
 -- ------------------------------------------------------------------------------
--- 8. STRICT PRIVILEGED RPC PERMISSION REVOCATION (RESTRICTED TO SERVICE_ROLE ONLY)
+-- 9. STRICT PRIVILEGED RPC PERMISSION REVOCATION
 -- ------------------------------------------------------------------------------
-REVOKE ALL ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 
--- GRANT EXECUTE exclusively to service_role (Serverless API routes with supabaseAdmin)
-GRANT EXECUTE ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT) TO service_role;
-GRANT EXECUTE ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.request_client_signature_otp(UUID, UUID, TEXT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.verify_client_signature_otp(UUID, UUID, TEXT, TEXT, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.delete_client_saved_signature(UUID, TEXT, TEXT) TO service_role;
 
 COMMIT;
