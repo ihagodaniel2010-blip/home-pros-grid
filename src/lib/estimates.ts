@@ -174,11 +174,29 @@ export const createEstimate = async (
     const sanitizedHeader = sanitizeEstimatePayload(estimate as any);
 
     // 1. Insert Estimate Header
-    const { data: estimateData, error: estimateError } = await supabase
+    let { data: estimateData, error: estimateError } = await supabase
         .from('estimates')
         .insert([sanitizedHeader])
         .select()
         .single();
+
+    // Fallback if DB schema cache lacks client_address/city/state columns
+    if (estimateError && (estimateError.message?.includes('client_address') || estimateError.message?.includes('schema cache') || estimateError.code === 'PGRST204')) {
+        console.warn('DB schema missing client_address columns, retrying insert without address fields:', estimateError.message);
+        const fallbackHeader = { ...sanitizedHeader };
+        delete fallbackHeader.client_address;
+        delete fallbackHeader.client_city;
+        delete fallbackHeader.client_state;
+
+        const retry = await supabase
+            .from('estimates')
+            .insert([fallbackHeader])
+            .select()
+            .single();
+
+        estimateData = retry.data;
+        estimateError = retry.error;
+    }
 
     if (estimateError) {
         console.error('Error creating estimate header:', estimateError);
@@ -216,12 +234,31 @@ export const updateEstimate = async (
     const sanitizedUpdates = sanitizeEstimatePayload(updates as any);
 
     // 1. Update Header
-    const { data, error } = await supabase
+    let { data, error } = await supabase
         .from('estimates')
         .update({ ...sanitizedUpdates, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();
+
+    // Fallback if DB schema cache lacks client_address/city/state columns
+    if (error && (error.message?.includes('client_address') || error.message?.includes('schema cache') || error.code === 'PGRST204')) {
+        console.warn('DB schema missing client_address columns, retrying update without address fields:', error.message);
+        const fallbackUpdates = { ...sanitizedUpdates };
+        delete fallbackUpdates.client_address;
+        delete fallbackUpdates.client_city;
+        delete fallbackUpdates.client_state;
+
+        const retry = await supabase
+            .from('estimates')
+            .update({ ...fallbackUpdates, updated_at: new Date().toISOString() })
+            .eq('id', id)
+            .select()
+            .single();
+
+        data = retry.data;
+        error = retry.error;
+    }
 
     if (error) {
         console.error('Error updating estimate:', error);
