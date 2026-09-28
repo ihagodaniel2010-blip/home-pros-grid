@@ -179,6 +179,10 @@ export default function JobWorkspace() {
     if (!jobId || !supabase) return;
     setIsLoading(true);
 
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 6000);
+
     try {
       // 1. Fetch Main Service Job
       const { data: jobData, error: jobError } = await supabase
@@ -239,6 +243,7 @@ export default function JobWorkspace() {
       console.error("Critical error in JobWorkspace:", err);
       toast.error("Error loading project workspace data.");
     } finally {
+      clearTimeout(timer);
       setIsLoading(false);
     }
   }, [jobId, orgId]);

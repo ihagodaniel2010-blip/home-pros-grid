@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { getServiceJobs } from "@/lib/service-jobs";
 
 export default function Reimbursements() {
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const navigate = useNavigate();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
@@ -32,12 +32,18 @@ export default function Reimbursements() {
   const [jobFilter, setJobFilter] = useState("all");
 
   useEffect(() => {
+    if (isUserLoading) return;
     fetchData();
-  }, [user?.id, user?.organization?.id]);
+  }, [user?.id, user?.organization?.id, isUserLoading]);
 
   async function fetchData() {
     const orgId = user?.organization?.id || DEFAULT_ORG_ID;
     setIsLoading(true);
+
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 6000);
+
     try {
       const [fetchedExpenses, fetchedJobs] = await Promise.all([
         getExpenses(orgId).catch(() => []),
@@ -48,6 +54,7 @@ export default function Reimbursements() {
     } catch (error) {
       console.error("Failed to load reimbursements data:", error);
     } finally {
+      clearTimeout(timer);
       setIsLoading(false);
     }
   }

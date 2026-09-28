@@ -19,8 +19,14 @@ const EstimatesList = () => {
     const orgId = user?.organization?.id;
 
     useEffect(() => {
+        if (isUserLoading) return;
+
         let mounted = true;
         setIsLoading(true);
+
+        const timer = setTimeout(() => {
+            if (mounted) setIsLoading(false);
+        }, 6000);
 
         const targetOrgId = orgId || DEFAULT_ORG_ID;
 
@@ -42,11 +48,13 @@ const EstimatesList = () => {
             console.error("[EstimatesList] Error loading estimates:", err);
             if (mounted) toast.error(`Failed to load estimates: ${err?.message || 'Network / Database error'}`);
         }).finally(() => {
+            clearTimeout(timer);
             if (mounted) setIsLoading(false);
         });
 
         return () => {
             mounted = false;
+            clearTimeout(timer);
         };
     }, [orgId, isUserLoading]);
 

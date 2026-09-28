@@ -50,7 +50,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabase) return [];
 
     try {
-      const { data, error } = await supabase
+      const queryPromise = supabase
         .from('organization_users')
         .select(`
           role,
@@ -63,8 +63,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('user_id', userId)
         .eq('status', 'active');
 
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error("Org query timeout") }), 2500)
+      );
+
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+
       if (error || !data) {
-        console.error("Error fetching organizations:", error);
+        if (error?.message !== "Org query timeout") {
+          console.error("Error fetching organizations:", error);
+        }
         return [];
       }
 
@@ -99,11 +107,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Safety timeout: ensure loading state clears even if Supabase hangs
     const timeoutId = setTimeout(() => {
-      if (isLoading) {
-        console.warn("Auth initialization timed out. Proceeding as guest.");
-        setIsLoading(false);
-      }
-    }, 5000);
+      console.warn("Auth initialization safety timer expired. Forcing isLoading = false.");
+      setIsLoading(false);
+    }, 4000);
 
     if (isSupabaseConfigured && supabase) {
       let isMounted = true;
@@ -111,51 +117,59 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      } = supabase.auth.onAuthStateChange((_event, session) => {
         if (!isMounted) return;
         initialCheckDone = true;
-        try {
-          if (session?.user) {
-            const mappedUser = await mapSupabaseUser(session.user);
-            if (isMounted) setUser(mappedUser);
-            localStorage.removeItem(USER_STORAGE_KEY);
-          } else {
-            const stored = localStorage.getItem(USER_STORAGE_KEY);
-            if (stored && isMounted) {
-              setUser(JSON.parse(stored));
-            } else if (isMounted) {
-              setUser(null);
+
+        // Execute asynchronously outside the Supabase Auth lock stack
+        setTimeout(async () => {
+          if (!isMounted) return;
+          try {
+            if (session?.user) {
+              const mappedUser = await mapSupabaseUser(session.user);
+              if (isMounted) setUser(mappedUser);
+              localStorage.removeItem(USER_STORAGE_KEY);
+            } else {
+              const stored = localStorage.getItem(USER_STORAGE_KEY);
+              if (stored && isMounted) {
+                setUser(JSON.parse(stored));
+              } else if (isMounted) {
+                setUser(null);
+              }
+            }
+          } catch (error) {
+            console.error("Auth state change error:", error);
+            if (isMounted) setUser(null);
+          } finally {
+            if (isMounted) {
+              setIsLoading(false);
+              clearTimeout(timeoutId);
             }
           }
-        } catch (error) {
-          console.error("Auth state change error:", error);
-          if (isMounted) setUser(null);
-        } finally {
-          if (isMounted) {
-            setIsLoading(false);
-            clearTimeout(timeoutId);
-          }
-        }
+        }, 0);
       });
 
       // Fallback if onAuthStateChange hasn't fired in 1 second
       setTimeout(() => {
         if (isMounted && !initialCheckDone) {
-          supabase.auth.getSession().then(async ({ data }) => {
+          supabase.auth.getSession().then(({ data }) => {
             if (!isMounted || initialCheckDone) return;
-            try {
-              if (data.session?.user) {
-                const mappedUser = await mapSupabaseUser(data.session.user);
-                if (isMounted) setUser(mappedUser);
+            setTimeout(async () => {
+              if (!isMounted || initialCheckDone) return;
+              try {
+                if (data.session?.user) {
+                  const mappedUser = await mapSupabaseUser(data.session.user);
+                  if (isMounted) setUser(mappedUser);
+                }
+              } catch (err) {
+                console.error("Auth fallback check error:", err);
+              } finally {
+                if (isMounted) {
+                  setIsLoading(false);
+                  clearTimeout(timeoutId);
+                }
               }
-            } catch (err) {
-              console.error("Auth fallback check error:", err);
-            } finally {
-              if (isMounted) {
-                setIsLoading(false);
-                clearTimeout(timeoutId);
-              }
-            }
+            }, 0);
           });
         }
       }, 1000);

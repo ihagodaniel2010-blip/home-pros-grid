@@ -21,9 +21,12 @@ const AdminLayout = () => {
 
   const userRole = user?.organization?.role;
 
+  const orgId = user?.organization?.id;
+
   useEffect(() => {
+    if (userLoading) return;
     let mounted = true;
-    getLeads()
+    getLeads(orgId)
       .then(leads => {
         if (mounted) setNewLeads((leads || []).filter(l => l.status === "New").length);
       })
@@ -33,10 +36,6 @@ const AdminLayout = () => {
     return () => {
       mounted = false;
     };
-  }, [location.pathname]); // Update badge when path changes
-
-  const orgId = user?.organization?.id;
-
   useEffect(() => {
     if (isAuthed && orgId) {
       loadNotifications(orgId);

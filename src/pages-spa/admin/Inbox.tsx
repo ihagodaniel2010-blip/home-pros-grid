@@ -30,6 +30,8 @@ const AdminInbox = () => {
   }, [userRole, navigate]);
 
   useEffect(() => {
+    if (isUserLoading) return;
+
     if (userRole === "worker") {
       setIsLoading(false);
       return;
@@ -37,6 +39,10 @@ const AdminInbox = () => {
 
     let mounted = true;
     setIsLoading(true);
+
+    const timer = setTimeout(() => {
+      if (mounted) setIsLoading(false);
+    }, 6000);
 
     getLeads(orgId)
       .then(data => {
@@ -47,11 +53,13 @@ const AdminInbox = () => {
         if (mounted) toast.error(`Failed to load leads: ${err?.message || "Network error"}`);
       })
       .finally(() => {
+        clearTimeout(timer);
         if (mounted) setIsLoading(false);
       });
 
     return () => {
       mounted = false;
+      clearTimeout(timer);
     };
   }, [userRole, orgId, isUserLoading]);
 

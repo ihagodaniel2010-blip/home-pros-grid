@@ -40,8 +40,14 @@ export default function ProjectsList() {
   const orgId = user?.organization?.id || DEFAULT_ORG_ID;
 
   useEffect(() => {
+    if (isUserLoading) return;
+
     let mounted = true;
     setIsLoading(true);
+
+    const timer = setTimeout(() => {
+      if (mounted) setIsLoading(false);
+    }, 6000);
 
     async function loadProjectsData() {
       try {
@@ -131,16 +137,16 @@ export default function ProjectsList() {
         console.error("Error loading projects list:", err);
         if (mounted) toast.error("Failed to load projects list.");
       } finally {
+        clearTimeout(timer);
         if (mounted) setIsLoading(false);
       }
     }
 
-    if (!isUserLoading) {
-      loadProjectsData();
-    }
+    loadProjectsData();
 
     return () => {
       mounted = false;
+      clearTimeout(timer);
     };
   }, [orgId, isUserLoading]);
 

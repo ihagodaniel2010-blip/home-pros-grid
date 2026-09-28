@@ -16,7 +16,7 @@ import { getServiceJobs } from "@/lib/service-jobs";
 import { getEstimates } from "@/lib/estimates";
 
 export default function ClientReceipts() {
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const [payments, setPayments] = useState<ClientPayment[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [estimates, setEstimates] = useState<any[]>([]);
@@ -34,17 +34,23 @@ export default function ClientReceipts() {
   });
 
   useEffect(() => {
+    if (isUserLoading) return;
     fetchData();
-  }, [user?.id, user?.organization?.id]);
+  }, [user?.id, user?.organization?.id, isUserLoading]);
 
   async function fetchData() {
     const orgId = user?.organization?.id || DEFAULT_ORG_ID;
     setIsLoading(true);
+
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 6000);
+
     try {
       const [fetchedPayments, fetchedJobs, fetchedEstimates] = await Promise.all([
         getClientPayments(orgId).catch(() => []),
         getServiceJobs(orgId).catch(() => []),
-        getEstimates().catch(() => [])
+        getEstimates(orgId).catch(() => [])
       ]);
       setPayments(fetchedPayments || []);
       setJobs(fetchedJobs || []);
@@ -52,6 +58,7 @@ export default function ClientReceipts() {
     } catch (error) {
       console.error("Error loading client receipts:", error);
     } finally {
+      clearTimeout(timer);
       setIsLoading(false);
     }
   }

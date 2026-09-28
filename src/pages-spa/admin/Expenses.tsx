@@ -29,7 +29,7 @@ import { getServiceJobs } from "@/lib/service-jobs";
 import { getOrganizationPartners, OrganizationPartner } from "@/lib/partners";
 
 export default function Expenses() {
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [partners, setPartners] = useState<OrganizationPartner[]>([]);
@@ -66,12 +66,18 @@ export default function Expenses() {
   const [selectedFile, setSelectedFile] = useState<File | undefined>();
 
   useEffect(() => {
+    if (isUserLoading) return;
     fetchData();
-  }, [user?.id, user?.organization?.id]);
+  }, [user?.id, user?.organization?.id, isUserLoading]);
 
   async function fetchData() {
     const orgId = user?.organization?.id || DEFAULT_ORG_ID;
     setIsLoading(true);
+
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 6000);
+
     try {
       const [fetchedExpenses, fetchedJobs, fetchedPartners] = await Promise.all([
         getExpenses(orgId).catch(() => []),
@@ -84,6 +90,7 @@ export default function Expenses() {
     } catch (error) {
       console.error("Failed to load expenses data:", error);
     } finally {
+      clearTimeout(timer);
       setIsLoading(false);
     }
   }

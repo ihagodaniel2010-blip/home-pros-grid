@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 
 export default function TaxCenter() {
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [payments, setPayments] = useState<ClientPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,6 +19,13 @@ export default function TaxCenter() {
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
 
   useEffect(() => {
+    if (isUserLoading) return;
+
+    let mounted = true;
+    const timer = setTimeout(() => {
+      if (mounted) setIsLoading(false);
+    }, 6000);
+
     async function loadData() {
       const orgId = user?.organization?.id || DEFAULT_ORG_ID;
       setIsLoading(true);
@@ -27,16 +34,23 @@ export default function TaxCenter() {
           getExpenses(orgId).catch(() => []),
           getClientPayments(orgId).catch(() => [])
         ]);
+        if (!mounted) return;
         setExpenses(expData || []);
         setPayments(payData || []);
       } catch (err) {
         console.error("Error loading tax center data", err);
       } finally {
-        setIsLoading(false);
+        clearTimeout(timer);
+        if (mounted) setIsLoading(false);
       }
     }
     loadData();
-  }, [user?.id, user?.organization?.id]);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
+  }, [user?.id, user?.organization?.id, isUserLoading]);
 
   // Filters
   const yearExpenses = useMemo(() => {

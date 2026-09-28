@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PieChart, Download, Printer, Copy, CheckCircle2, TrendingUp, TrendingDown, DollarSign, Briefcase, FileText, AlertTriangle } from "lucide-react";
 
 export default function Reports() {
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const [isLoading, setIsLoading] = useState(true);
 
   // Data states
@@ -26,17 +26,25 @@ export default function Reports() {
   const [dateRange, setDateRange] = useState("this_year");
 
   useEffect(() => {
+    if (isUserLoading) return;
+
+    let mounted = true;
+    const timer = setTimeout(() => {
+      if (mounted) setIsLoading(false);
+    }, 6000);
+
     async function loadData() {
       const orgId = user?.organization?.id || DEFAULT_ORG_ID;
       setIsLoading(true);
       try {
         const [lData, eData, pData, expData, jData] = await Promise.all([
-          getLeads().catch(() => []),
-          getEstimates().catch(() => []),
+          getLeads(orgId).catch(() => []),
+          getEstimates(orgId).catch(() => []),
           getClientPayments(orgId).catch(() => []),
           getExpenses(orgId).catch(() => []),
           getServiceJobs(orgId).catch(() => [])
         ]);
+        if (!mounted) return;
         setLeads(lData || []);
         setEstimates(eData || []);
         setPayments(pData || []);
@@ -45,11 +53,17 @@ export default function Reports() {
       } catch (err) {
         console.error("Error loading reports data:", err);
       } finally {
-        setIsLoading(false);
+        clearTimeout(timer);
+        if (mounted) setIsLoading(false);
       }
     }
     loadData();
-  }, [user?.id, user?.organization?.id]);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
+  }, [user?.id, user?.organization?.id, isUserLoading]);
 
   // Date Filtering Logic
   const filterByDate = (dateString: string) => {
