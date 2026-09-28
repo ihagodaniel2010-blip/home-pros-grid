@@ -145,12 +145,15 @@ const EstimateEditor = () => {
         }
     };
 
+    const todayIsoDate = new Date().toISOString().split('T')[0];
+
     const [formData, setFormData] = useState<Partial<Estimate>>({
         status: 'Draft',
         subtotal: 0,
         tax_amount: 0,
         discount_amount: 0,
         total_amount: 0,
+        valid_until: todayIsoDate,
         terms: "Payment due upon receipt. Proposal valid for 30 days."
     });
 
@@ -272,6 +275,7 @@ const EstimateEditor = () => {
                         client_zip: parsedAddr.zip || prev.client_zip,
                         lead_id: lead.id,
                         project_type: derivedProjectType || lead.selectedServiceOption || prev.project_type || "General Repair",
+                        valid_until: prev.valid_until || todayIsoDate,
                         notes: cleanedNotes || `${t("estimate.converted_from")} [${serviceInfo}]`
                     }));
                 }
