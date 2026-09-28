@@ -61,7 +61,7 @@ const EstimateEditor = () => {
         }
 
         const estToken = formData.public_token || (id ? id : null);
-        const estUrl = estToken ? `${window.location.origin}/estimate/${estToken}` : "https://www.h-a-construction.com/";
+        const estUrl = estToken ? `${window.location.origin}/estimate/${estToken}#contract` : "https://www.h-a-construction.com/";
 
         setIsSendingEmail(true);
         try {
@@ -112,7 +112,7 @@ const EstimateEditor = () => {
         }
 
         const estToken = formData.public_token || (id ? id : null);
-        const estUrl = estToken ? `${window.location.origin}/estimate/${estToken}` : "https://www.h-a-construction.com/";
+        const estUrl = estToken ? `${window.location.origin}/estimate/${estToken}#contract` : "https://www.h-a-construction.com/";
         const messageText = `H&A Construction LLC: Your estimate for ${formData.project_type || 'your project'} is ready to review ($${(formData.total_amount || 0).toLocaleString()}). Please open this link: ${estUrl} . Reply or call us if you have questions.`;
 
         setIsSendingSMS(true);
@@ -348,7 +348,7 @@ const EstimateEditor = () => {
             return;
         }
         const slice = formData.public_token;
-        const shareUrl = `${window.location.host.includes('localhost') ? 'http' : 'https'}://${window.location.host}/estimate/${slice}`;
+        const shareUrl = `${window.location.host.includes('localhost') ? 'http' : 'https'}://${window.location.host}/estimate/${slice}#contract`;
         navigator.clipboard.writeText(shareUrl);
         toast.success("Share link copied to clipboard!");
     };

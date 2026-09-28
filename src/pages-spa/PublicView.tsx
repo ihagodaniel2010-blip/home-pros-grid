@@ -68,6 +68,34 @@ const PublicView = () => {
     const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
 
+    // Decline Estimate Modal UI State
+    const [isDeclineModalOpen, setIsDeclineModalOpen] = useState(false);
+    const [declineReason, setDeclineReason] = useState<string>("Preço acima do orçamento / Price higher than expected");
+    const [declineFeedback, setDeclineFeedback] = useState("");
+    const [isDeclining, setIsDeclining] = useState(false);
+
+    const handleDeclineEstimateSubmit = async () => {
+        if (!estimate) return;
+        setIsDeclining(true);
+        try {
+            const publicTk = token || (estimate as any).public_token || estimate.id;
+            const success = await rejectEstimate(estimate.id, publicTk, declineReason, declineFeedback.trim());
+            if (success) {
+                setIsDeclined(true);
+                setEstimate(prev => prev ? { ...prev, status: 'Rejected' } : null);
+                setIsDeclineModalOpen(false);
+                toast.success("Estimativa recusada. O empreiteiro foi notificado.");
+            } else {
+                toast.error("Não foi possível recusar a estimativa. Tente novamente.");
+            }
+        } catch (err: any) {
+            console.error("Decline estimate error:", err);
+            toast.error(err.message || "Erro ao recusar estimativa.");
+        } finally {
+            setIsDeclining(false);
+        }
+    };
+
     // Client Report Payment Modal State
     const [isReportPaymentOpen, setIsReportPaymentOpen] = useState(false);
     const [reportPaymentType, setReportPaymentType] = useState<'contract' | 'material'>('contract');
@@ -197,6 +225,11 @@ const PublicView = () => {
                 updateEstimate(data.id, { status: 'Viewed' }).then(() => {
                     setEstimate(prev => prev ? { ...prev, status: 'Viewed' } : null);
                 }).catch(err => console.warn("Auto-update to Viewed error:", err));
+            }
+
+            const currentHash = window.location.hash.replace('#', '').toLowerCase();
+            if (currentHash === 'contract' || (!currentHash && ['Sent', 'Viewed', 'Draft', 'Pending'].includes(data.status))) {
+                setActiveTab('contract');
             }
 
             try {
@@ -493,7 +526,8 @@ const PublicView = () => {
                 }
             }
 
-            const success = await approveEstimate(estimate.id, signerName.trim(), signerEmail.trim(), signatureDataUrl);
+            const publicTk = token || (estimate as any).public_token || estimate.id;
+            const success = await approveEstimate(estimate.id, publicTk, signerName.trim(), signerEmail.trim(), signatureDataUrl);
             if (success) {
                 setIsApproved(true);
                 setEstimate(prev => prev ? { ...prev, status: 'Approved', approved_at: new Date().toISOString() } : null);
@@ -925,7 +959,21 @@ const PublicView = () => {
                         </div>
 
                         {/* E-Signature Form or Signed Proof */}
-                        {!isApproved ? (
+                        {isDeclined || estimate.status === 'Rejected' ? (
+                            <div className="p-6 bg-red-50 rounded-3xl border border-red-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="h-12 w-12 rounded-full bg-red-500 flex items-center justify-center text-white shrink-0 shadow-md">
+                                        <X className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-900 font-bold text-base">Estimativa Recusada / Proposal Declined</p>
+                                        <p className="text-red-800/80 text-xs mt-0.5">
+                                            Esta estimativa foi sinalizada como recusada. Caso queira solicitar alterações no escopo ou conversar sobre o projeto, entre em contato com nossa equipe.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : !isApproved ? (
                             <div className="p-6 sm:p-8 bg-blue-50/60 rounded-3xl border border-blue-100 space-y-6">
                                 <div className="border-b border-blue-100 pb-3">
                                     <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -968,10 +1016,17 @@ const PublicView = () => {
                                     <SignaturePad onSignatureChange={dataUrl => setSignatureDataUrl(dataUrl)} />
                                 </div>
 
-                                <Button onClick={handleApproveContract} disabled={isApproving} className="w-full bg-[#0b2a4a] hover:bg-[#081e35] text-white h-12 rounded-xl font-bold shadow-lg shadow-blue-900/10 flex items-center justify-center gap-2">
-                                    {isApproving ? <Loader2 className="h-5 w-5 animate-spin" /> : <PenTool className="h-4 w-4 text-blue-300" />}
-                                    Sign &amp; Approve Commercial Contract (${estimate.total_amount.toLocaleString()})
-                                </Button>
+                                <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                                    <Button onClick={handleApproveContract} disabled={isApproving || isDeclining} className="flex-1 w-full bg-[#0b2a4a] hover:bg-[#081e35] text-white h-12 rounded-xl font-bold shadow-lg shadow-blue-900/10 flex items-center justify-center gap-2">
+                                        {isApproving ? <Loader2 className="h-5 w-5 animate-spin" /> : <PenTool className="h-4 w-4 text-blue-300" />}
+                                        Sign &amp; Approve Commercial Contract (${estimate.total_amount.toLocaleString()})
+                                    </Button>
+
+                                    <Button type="button" variant="outline" onClick={() => setIsDeclineModalOpen(true)} disabled={isApproving || isDeclining} className="w-full sm:w-auto bg-white border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 h-12 px-6 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm shrink-0">
+                                        <X className="h-4 w-4 text-red-500" />
+                                        Decline / Rejeitar
+                                    </Button>
+                                </div>
                             </div>
                         ) : (
                             <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1656,6 +1711,74 @@ const PublicView = () => {
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
                             >
                                 {isSubmittingReportPayment ? "Enviando..." : "Confirmar Envio"}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* DECLINE ESTIMATE MODAL */}
+            {isDeclineModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                    <AlertCircle className="h-5 w-5 text-red-500" /> Recusar Estimativa / Decline Estimate
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Por favor, selecione o motivo da rejeição para podermos melhorar nossas propostas.
+                                </p>
+                            </div>
+                            <button onClick={() => setIsDeclineModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">Motivo Principal / Primary Reason *</label>
+                            {[
+                                "Preço acima do orçamento / Price higher than expected",
+                                "Escolhi outro empreiteiro / Selected another contractor",
+                                "Projeto adiado ou cancelado / Project postponed or cancelled",
+                                "Escopo precisa de revisões / Scope needs adjustments or changes",
+                                "Outro motivo / Other reason"
+                            ].map((reasonOption) => (
+                                <label key={reasonOption} className="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 cursor-pointer transition-colors text-xs font-medium text-gray-800">
+                                    <input
+                                        type="radio"
+                                        name="declineReason"
+                                        checked={declineReason === reasonOption}
+                                        onChange={() => setDeclineReason(reasonOption)}
+                                        className="h-4 w-4 text-red-600 focus:ring-red-500"
+                                    />
+                                    <span>{reasonOption}</span>
+                                </label>
+                            ))}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">Detalhes Adicionais (opcional)</label>
+                            <textarea
+                                rows={3}
+                                value={declineFeedback}
+                                onChange={e => setDeclineFeedback(e.target.value)}
+                                placeholder="Explique com mais detalhes se desejar..."
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                            <Button variant="outline" size="sm" onClick={() => setIsDeclineModalOpen(false)} disabled={isDeclining}>
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={handleDeclineEstimateSubmit}
+                                disabled={isDeclining}
+                                className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-5 h-10 rounded-xl shadow-md shadow-red-900/10 flex items-center gap-2"
+                            >
+                                {isDeclining ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                                Confirmar Rejeição
                             </Button>
                         </div>
                     </div>

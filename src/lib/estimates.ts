@@ -388,58 +388,95 @@ export const getEstimateByToken = async (token: string): Promise<Estimate | null
     return null;
 };
 
-export const approveEstimate = async (id: string, token?: string): Promise<boolean> => {
+export const approveEstimate = async (
+    id: string, 
+    token?: string,
+    signerName?: string,
+    signerEmail?: string,
+    signatureDataUrl?: string
+): Promise<boolean> => {
     if (!supabase) return false;
 
-    if (token) {
-        const { error } = await supabase.rpc('approve_public_estimate', { p_token: token });
+    if (token && !token.includes(' ') && token.length > 5) {
+        try {
+            const { error } = await supabase.rpc('approve_public_estimate', { p_token: token });
+            if (!error) return true;
+        } catch (e) {
+            console.warn('RPC approve_public_estimate failed, trying direct update:', e);
+        }
+    }
+
+    try {
+        const { error } = await supabase
+            .from('estimates')
+            .update({
+                status: 'Approved',
+                approved_at: new Date().toISOString()
+            })
+            .eq('id', id);
+
         if (error) {
-            console.error('Error approving estimate via RPC:', error);
+            console.error('Error approving estimate direct update:', error);
             return false;
         }
+
         return true;
-    }
-
-    const { error } = await supabase
-        .from('estimates')
-        .update({
-            status: 'Approved',
-            approved_at: new Date().toISOString()
-        })
-        .eq('id', id);
-
-    if (error) {
-        console.error('Error approving estimate:', error);
+    } catch (err) {
+        console.error('approveEstimate exception:', err);
         return false;
     }
-
-    return true;
 };
 
-export const rejectEstimate = async (id: string, token?: string): Promise<boolean> => {
+export const rejectEstimate = async (
+    id: string, 
+    token?: string, 
+    reason?: string, 
+    feedback?: string
+): Promise<boolean> => {
     if (!supabase) return false;
 
-    if (token) {
-        const { error } = await supabase.rpc('reject_public_estimate', { p_token: token });
-        if (error) {
-            console.error('Error rejecting estimate via RPC:', error);
-            return false;
-        }
-        return true;
+    let rejectionNote = "";
+    if (reason || feedback) {
+        rejectionNote = `[CUSTOMER REJECTION] Reason: ${reason || 'Not specified'}${feedback ? ` | Note: ${feedback}` : ''}`;
     }
 
-    const { error } = await supabase
-        .from('estimates')
-        .update({
+    if (token && !token.includes(' ') && token.length > 5) {
+        try {
+            const { error } = await supabase.rpc('reject_public_estimate', { 
+                p_token: token,
+                p_reason: reason || null,
+                p_feedback: feedback || null
+            });
+            if (!error) return true;
+        } catch (e) {
+            console.warn('RPC reject_public_estimate failed, trying direct update:', e);
+        }
+    }
+
+    try {
+        const updates: any = {
             status: 'Rejected',
             updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
+        };
 
-    if (error) {
-        console.error('Error rejecting estimate:', error);
+        if (rejectionNote) {
+            const { data: curr } = await supabase.from('estimates').select('notes').eq('id', id).maybeSingle();
+            updates.notes = curr?.notes ? `${curr.notes}\n\n${rejectionNote}` : rejectionNote;
+        }
+
+        const { error } = await supabase
+            .from('estimates')
+            .update(updates)
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error rejecting estimate direct update:', error);
+            return false;
+        }
+
+        return true;
+    } catch (err) {
+        console.error('rejectEstimate exception:', err);
         return false;
     }
-
-    return true;
 };
