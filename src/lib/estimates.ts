@@ -165,6 +165,46 @@ export function sanitizeEstimateItemPayload(raw: Record<string, any>): Record<st
     return cleanPayload;
 }
 
+async function executeEstimateOperationWithFallback<T>(
+    payload: Record<string, any>,
+    operation: (cleanPayload: Record<string, any>) => Promise<{ data: T | null; error: any }>
+): Promise<{ data: T | null; error: any }> {
+    let currentPayload = { ...payload };
+    let attempts = 0;
+    const maxAttempts = 6;
+
+    while (attempts < maxAttempts) {
+        attempts++;
+        const result = await operation(currentPayload);
+        if (!result.error) {
+            return result;
+        }
+
+        const errMsg = result.error.message || '';
+        const isSchemaCacheErr = errMsg.includes('schema cache') || errMsg.includes('Could not find the') || result.error.code === 'PGRST204';
+
+        if (!isSchemaCacheErr) {
+            return result;
+        }
+
+        // Extract missing column name from error message (e.g., "Could not find the 'client_zip' column of 'estimates' in the schema cache")
+        const match = errMsg.match(/Could not find the '([^']+)' column/i);
+        if (match && match[1]) {
+            const missingCol = match[1];
+            console.warn(`[estimates DB fallback] Column '${missingCol}' missing from estimates table schema, stripping and retrying (attempt ${attempts})...`);
+            delete currentPayload[missingCol];
+        } else {
+            console.warn(`[estimates DB fallback] Schema cache error (${errMsg}), stripping address fields and retrying...`);
+            delete currentPayload.client_address;
+            delete currentPayload.client_city;
+            delete currentPayload.client_state;
+            delete currentPayload.client_zip;
+        }
+    }
+
+    return await operation(currentPayload);
+}
+
 export const createEstimate = async (
     estimate: Omit<Estimate, 'id' | 'created_at' | 'updated_at'>,
     items: Omit<EstimateLineItem, 'id' | 'estimate_id' | 'created_at'>[]
@@ -173,34 +213,15 @@ export const createEstimate = async (
 
     const sanitizedHeader = sanitizeEstimatePayload(estimate as any);
 
-    // 1. Insert Estimate Header
-    let { data: estimateData, error: estimateError } = await supabase
-        .from('estimates')
-        .insert([sanitizedHeader])
-        .select()
-        .single();
+    // 1. Insert Estimate Header with schema fallback
+    const { data: estimateData, error: estimateError } = await executeEstimateOperationWithFallback<any>(
+        sanitizedHeader,
+        (payload) => supabase!.from('estimates').insert([payload]).select().single()
+    );
 
-    // Fallback if DB schema cache lacks client_address/city/state columns
-    if (estimateError && (estimateError.message?.includes('client_address') || estimateError.message?.includes('schema cache') || estimateError.code === 'PGRST204')) {
-        console.warn('DB schema missing client_address columns, retrying insert without address fields:', estimateError.message);
-        const fallbackHeader = { ...sanitizedHeader };
-        delete fallbackHeader.client_address;
-        delete fallbackHeader.client_city;
-        delete fallbackHeader.client_state;
-
-        const retry = await supabase
-            .from('estimates')
-            .insert([fallbackHeader])
-            .select()
-            .single();
-
-        estimateData = retry.data;
-        estimateError = retry.error;
-    }
-
-    if (estimateError) {
+    if (estimateError || !estimateData) {
         console.error('Error creating estimate header:', estimateError);
-        throw estimateError;
+        throw estimateError || new Error('Failed to insert estimate header');
     }
 
     // 2. Insert Items Linked to the Estimate
@@ -233,36 +254,15 @@ export const updateEstimate = async (
 
     const sanitizedUpdates = sanitizeEstimatePayload(updates as any);
 
-    // 1. Update Header
-    let { data, error } = await supabase
-        .from('estimates')
-        .update({ ...sanitizedUpdates, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single();
+    // 1. Update Header with schema fallback
+    const { data, error } = await executeEstimateOperationWithFallback<any>(
+        { ...sanitizedUpdates, updated_at: new Date().toISOString() },
+        (payload) => supabase!.from('estimates').update(payload).eq('id', id).select().single()
+    );
 
-    // Fallback if DB schema cache lacks client_address/city/state columns
-    if (error && (error.message?.includes('client_address') || error.message?.includes('schema cache') || error.code === 'PGRST204')) {
-        console.warn('DB schema missing client_address columns, retrying update without address fields:', error.message);
-        const fallbackUpdates = { ...sanitizedUpdates };
-        delete fallbackUpdates.client_address;
-        delete fallbackUpdates.client_city;
-        delete fallbackUpdates.client_state;
-
-        const retry = await supabase
-            .from('estimates')
-            .update({ ...fallbackUpdates, updated_at: new Date().toISOString() })
-            .eq('id', id)
-            .select()
-            .single();
-
-        data = retry.data;
-        error = retry.error;
-    }
-
-    if (error) {
+    if (error || !data) {
         console.error('Error updating estimate:', error);
-        throw error;
+        throw error || new Error('Failed to update estimate header');
     }
 
     // 2. Update Items if provided (Delete and Re-insert)
