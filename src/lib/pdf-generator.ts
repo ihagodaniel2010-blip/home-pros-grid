@@ -18,6 +18,14 @@ export interface PdfGenerationOptions {
     returnBlob?: boolean;
 }
 
+export const formatEstimateNumber = (rawNum: string | null | undefined): string => {
+    if (!rawNum) return "EST-DRAFT";
+    const clean = rawNum.trim().toUpperCase();
+    if (clean.startsWith("EST-")) return clean;
+    if (clean.startsWith("EST")) return `EST-${clean.slice(3)}`;
+    return `EST-${clean}`;
+};
+
 export const generateProfessionalPDF = async (
     estimate: Estimate,
     company: CompanySettings | null,
@@ -142,8 +150,7 @@ export const generateProfessionalPDF = async (
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-    const rawEstNum = estimate.number || estimate.id || "DRAFT";
-    const estNum = rawEstNum.toUpperCase().startsWith("EST-") ? rawEstNum.toUpperCase() : `EST-${rawEstNum.toUpperCase()}`;
+    const estNum = formatEstimateNumber(estimate.number || estimate.id);
     const dateStr = estimate.created_at ? new Date(estimate.created_at).toLocaleDateString() : new Date().toLocaleDateString();
     const validUntilStr = estimate.valid_until ? new Date(estimate.valid_until).toLocaleDateString() : "30 Days from Issue";
 
@@ -196,25 +203,28 @@ export const generateProfessionalPDF = async (
     doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
     doc.text("PROJECT LOCATION", 111, boxY + 5.5);
 
-    const streetAddr = estimate.client_address || "Project Site Address on File";
+    const streetAddr = (estimate.project_address || estimate.client_address || "").trim();
+    const cszParts: string[] = [];
+    if (estimate.client_city) cszParts.push(estimate.client_city.trim());
+    if (estimate.client_state) cszParts.push(estimate.client_state.trim());
+    if (estimate.client_zip) cszParts.push(estimate.client_zip.trim());
+    const cityStateZip = cszParts.join(", ");
+
+    const displayAddressLine1 = streetAddr || (cityStateZip ? cityStateZip : "Project Site Address on File");
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-    doc.text(streetAddr, 111, boxY + 12);
-
-    const cszParts: string[] = [];
-    if (estimate.client_city) cszParts.push(estimate.client_city);
-    if (estimate.client_state) cszParts.push(estimate.client_state);
-    if (estimate.client_zip) cszParts.push(estimate.client_zip);
-    const cityStateZip = cszParts.join(", ").replace(", ", estimate.client_city && estimate.client_state ? ", " : " ");
+    doc.text(displayAddressLine1, 111, boxY + 12);
 
     doc.setFont("helvetica", "normal");
     doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    if (cityStateZip) {
-        doc.text(cityStateZip, 111, boxY + 17);
+    let locY = boxY + 17;
+    if (streetAddr && cityStateZip) {
+        doc.text(cityStateZip, 111, locY);
+        locY += 4.5;
     }
     const projType = estimate.project_type || estimate.title || "Residential / Commercial Project";
-    doc.text(`Project Type: ${projType}`, 111, boxY + 22);
+    doc.text(`Project Type: ${projType}`, 111, locY);
 
     let startTableY = boxY + boxH + 6;
 
@@ -533,7 +543,7 @@ export const generateProfessionalPDF = async (
         const docHashStr = options.auditDetails?.documentHash || `SHA256-${(estimate.id || '').replace(/-/g, '').slice(0, 32)}`;
 
         const auditRows = [
-            ["Document Reference:", `EST-${(estimate.id || '').split('-')[0].toUpperCase()} (${estimate.project_type || 'Commercial Estimate'})`],
+            ["Document Reference:", `${estNum} (${estimate.project_type || estimate.title || 'Commercial Estimate'})`],
             ["Document Snapshot Hash:", docHashStr],
             ["Signer Legal Name:", clientName],
             ["Signer Email Address:", clientEmail],
@@ -575,8 +585,8 @@ export const generateProfessionalPDF = async (
             headStyles: { fillColor: [primaryNavy[0], primaryNavy[1], primaryNavy[2]], textColor: 255, fontSize: 8, fontStyle: 'bold' },
             styles: { fontSize: 7.5, cellPadding: 3, lineColor: [226, 232, 240] },
             columnStyles: {
-                0: { cellWidth: 10, halign: 'center' },
-                1: { cellWidth: 50 },
+                0: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+                1: { cellWidth: 46 },
                 2: { cellWidth: 35 },
                 3: { cellWidth: 35 },
                 4: { cellWidth: 'auto' }
