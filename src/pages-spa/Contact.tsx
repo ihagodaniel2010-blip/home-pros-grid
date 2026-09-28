@@ -4,6 +4,7 @@ import { siteConfig } from "@/config/site";
 import { Phone, Mail, MapPin, Send, CheckCircle2, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { SocialMediaBadges } from "@/components/SocialMediaBadges";
 
 export default function Contact() {
   useEffect(() => {
@@ -144,11 +145,16 @@ export default function Contact() {
                 </div>
               </div>
 
+              <div className="pt-4 border-t border-slate-100 space-y-3">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Follow &amp; Connect</p>
+                <SocialMediaBadges size="md" />
+              </div>
+
               <div className="pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-2">
                 <p>
                   Looking for refund policies or billing inquiries? Check our{" "}
                   <Link to="/refund-policy" className="text-sky-600 font-semibold hover:underline">
-                    Refund & Review Policy
+                    Refund &amp; Review Policy
                   </Link>.
                 </p>
               </div>

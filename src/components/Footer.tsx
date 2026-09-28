@@ -10,6 +10,7 @@ import {
   WebsiteCategory
 } from "@/lib/website-cms";
 import { DEFAULT_ORG_ID } from "@/context/UserContext";
+import { SocialMediaBadges } from "@/components/SocialMediaBadges";
 
 const Footer = () => {
   const navigate = useNavigate();
@@ -50,53 +51,18 @@ const Footer = () => {
           </p>
 
           <div className="pt-2">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Follow Us</p>
-            <div className="flex items-center gap-2">
-              {settings.facebook_enabled && (
-                <a
-                  href={settings.facebook_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-8 h-8 rounded-md bg-blue-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
-                  title="Facebook"
-                >
-                  f
-                </a>
-              )}
-              {settings.instagram_enabled && (
-                <a
-                  href={settings.instagram_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-8 h-8 rounded-md bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
-                  title="Instagram"
-                >
-                  📷
-                </a>
-              )}
-              {settings.tiktok_enabled && (
-                <a
-                  href={settings.tiktok_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-8 h-8 rounded-md bg-black border border-slate-700 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
-                  title="TikTok"
-                >
-                  ♪
-                </a>
-              )}
-              {settings.youtube_enabled && (
-                <a
-                  href={settings.youtube_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-8 h-8 rounded-md bg-red-600 text-white flex items-center justify-center hover:opacity-90 transition-opacity text-xs font-bold"
-                  title="YouTube"
-                >
-                  ▶
-                </a>
-              )}
-            </div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">Follow Our Projects</p>
+            <SocialMediaBadges
+              facebookUrl={settings.facebook_url}
+              instagramUrl={settings.instagram_url}
+              tiktokUrl={settings.tiktok_url}
+              youtubeUrl={settings.youtube_url}
+              facebookEnabled={settings.facebook_enabled !== false}
+              instagramEnabled={settings.instagram_enabled !== false}
+              tiktokEnabled={settings.tiktok_enabled !== false}
+              youtubeEnabled={settings.youtube_enabled !== false}
+              size="md"
+            />
           </div>
         </div>
 

@@ -17,6 +17,103 @@ export interface SendEmailResult {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export const BRAND_EMAIL_FOOTER_HTML = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 36px; padding-top: 24px; border-top: 2px solid #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;" id="brand-social-footer">
+  <tr>
+    <td align="center" style="padding-bottom: 12px;">
+      <span style="font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 1.5px; text-transform: uppercase;">CONNECT WITH H&amp;A CONSTRUCTION</span>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" style="padding-bottom: 20px;">
+      <table border="0" cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto;">
+        <tr>
+          <!-- Instagram -->
+          <td style="padding: 0 6px;">
+            <a href="https://www.instagram.com/h.a_construction/" target="_blank" style="text-decoration: none;">
+              <table border="0" cellpadding="0" cellspacing="0" width="36" height="36" style="border-radius: 50%; background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); width: 36px; height: 36px;">
+                <tr>
+                  <td align="center" valign="middle">
+                    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/instagram-new.png" width="18" height="18" alt="Instagram" style="display: block; border: 0; margin: 0 auto;" />
+                  </td>
+                </tr>
+              </table>
+            </a>
+          </td>
+          <!-- Facebook -->
+          <td style="padding: 0 6px;">
+            <a href="https://www.facebook.com/" target="_blank" style="text-decoration: none;">
+              <table border="0" cellpadding="0" cellspacing="0" width="36" height="36" style="border-radius: 50%; background-color: #1877F2; width: 36px; height: 36px;">
+                <tr>
+                  <td align="center" valign="middle">
+                    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/facebook-new.png" width="18" height="18" alt="Facebook" style="display: block; border: 0; margin: 0 auto;" />
+                  </td>
+                </tr>
+              </table>
+            </a>
+          </td>
+          <!-- YouTube -->
+          <td style="padding: 0 6px;">
+            <a href="https://www.youtube.com/" target="_blank" style="text-decoration: none;">
+              <table border="0" cellpadding="0" cellspacing="0" width="36" height="36" style="border-radius: 50%; background-color: #FF0000; width: 36px; height: 36px;">
+                <tr>
+                  <td align="center" valign="middle">
+                    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/youtube-play.png" width="18" height="18" alt="YouTube" style="display: block; border: 0; margin: 0 auto;" />
+                  </td>
+                </tr>
+              </table>
+            </a>
+          </td>
+          <!-- LinkedIn -->
+          <td style="padding: 0 6px;">
+            <a href="https://www.linkedin.com/" target="_blank" style="text-decoration: none;">
+              <table border="0" cellpadding="0" cellspacing="0" width="36" height="36" style="border-radius: 50%; background-color: #0A66C2; width: 36px; height: 36px;">
+                <tr>
+                  <td align="center" valign="middle">
+                    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/linkedin-2.png" width="18" height="18" alt="LinkedIn" style="display: block; border: 0; margin: 0 auto;" />
+                  </td>
+                </tr>
+              </table>
+            </a>
+          </td>
+          <!-- Website -->
+          <td style="padding: 0 6px;">
+            <a href="https://h-a-construction.com" target="_blank" style="text-decoration: none;">
+              <table border="0" cellpadding="0" cellspacing="0" width="36" height="36" style="border-radius: 50%; background-color: #0b2a4a; width: 36px; height: 36px;">
+                <tr>
+                  <td align="center" valign="middle">
+                    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/domain.png" width="18" height="18" alt="Website" style="display: block; border: 0; margin: 0 auto;" />
+                  </td>
+                </tr>
+              </table>
+            </a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" style="font-size: 12px; color: #64748b; line-height: 1.6;">
+      <strong style="color: #0b2a4a;">H &amp; A Construction LLC</strong> &bull; Southern Maine Contractor<br />
+      Saco, Biddeford, Scarborough, Portland &amp; Surrounding Areas<br />
+      <a href="https://h-a-construction.com" style="color: #2563eb; text-decoration: none; font-weight: 600;">www.h-a-construction.com</a>
+    </td>
+  </tr>
+</table>
+`;
+
+export function attachSocialFooterToHtml(htmlBody: string): string {
+  if (!htmlBody) return BRAND_EMAIL_FOOTER_HTML;
+  if (htmlBody.includes('id="brand-social-footer"') || htmlBody.includes('CONNECT WITH H&amp;A CONSTRUCTION')) {
+    return htmlBody;
+  }
+  if (htmlBody.includes('</div>')) {
+    const lastDiv = htmlBody.lastIndexOf('</div>');
+    return htmlBody.slice(0, lastDiv) + BRAND_EMAIL_FOOTER_HTML + htmlBody.slice(lastDiv);
+  }
+  return htmlBody + BRAND_EMAIL_FOOTER_HTML;
+}
+
 export function validateEmailRecipient(email: string): boolean {
   if (!email || typeof email !== 'string') return false;
   return EMAIL_REGEX.test(email.trim());
@@ -70,7 +167,8 @@ export async function sendTransactionalEmail(payload: SendEmailPayload): Promise
   // 3. Render Subject and Content
   const renderedSubject = payload.customSubject || renderTemplateText(template.subject, payload.variables);
   const renderedBodyText = renderTemplateText(template.bodyText, payload.variables);
-  const renderedBodyHtml = renderTemplateText(template.bodyHtml, payload.variables);
+  const rawBodyHtml = renderTemplateText(template.bodyHtml, payload.variables);
+  const renderedBodyHtml = attachSocialFooterToHtml(rawBodyHtml);
 
   try {
     const resendBody: Record<string, any> = {

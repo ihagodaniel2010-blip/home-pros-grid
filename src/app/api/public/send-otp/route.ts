@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/server/supabase-admin";
+import { attachSocialFooterToHtml } from "@/lib/server/emailProvider";
 
 const NO_CACHE_HEADERS = {
   "Cache-Control": "no-store, private, no-cache, must-revalidate",
@@ -74,16 +75,16 @@ export async function POST(request: Request) {
             from: "H & A Construction LLC <noreply@h-a-construction.com>",
             to: [recipientEmail],
             subject: `Verification Code: ${otpCodeToSend} — H & A Construction Signature Vault`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px;">
-                <h2 style="color: #0b2a4a; margin-top: 0;">H & A Construction LLC</h2>
+            html: attachSocialFooterToHtml(`
+              <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                <h2 style="color: #0b2a4a; margin-top: 0;">H &amp; A Construction LLC</h2>
                 <p style="font-size: 14px; color: #475569;">You requested access to your saved electronic signature vault for document verification.</p>
                 <div style="background-color: #f8fafc; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0;">
                   <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #0b2a4a;">${otpCodeToSend}</span>
                 </div>
                 <p style="font-size: 12px; color: #64748b;">This verification code expires in <strong>10 minutes</strong>. If you did not request this code, please ignore this email.</p>
               </div>
-            `
+            `)
           })
         });
         if (!emailRes.ok) {
