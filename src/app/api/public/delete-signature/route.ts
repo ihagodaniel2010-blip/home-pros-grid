@@ -98,8 +98,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Safe removal of physical reusable PNG signature file from private Storage bucket
+    // 4. Consistent Physical Storage File Removal
     const storagePath = rpcRes.signature_storage_path;
+    let storageErrorMsg: string | null = null;
+
     if (storagePath && typeof storagePath === "string" && storagePath.trim() !== "") {
       try {
         const { error: storageErr } = await supabaseAdmin
@@ -108,15 +110,48 @@ export async function POST(request: Request) {
           .remove([storagePath.trim()]);
         
         if (storageErr) {
-          console.warn("[Delete Signature Storage Warning] Physical file deletion issue:", storageErr);
+          console.error("[Delete Signature Storage Error] Physical removal failed:", storageErr);
+          storageErrorMsg = storageErr.message || "Failed to remove physical storage asset";
         }
-      } catch (stEx) {
-        console.warn("[Delete Signature Storage Exception]", stEx);
+      } catch (stEx: any) {
+        console.error("[Delete Signature Storage Exception]", stEx);
+        storageErrorMsg = stEx?.message || "Storage exception during physical file removal";
       }
     }
 
+    // If physical storage file removal failed, do NOT return full success! Log cleanup pending and report partial error.
+    if (storageErrorMsg) {
+      console.warn(`[Delete Signature Warning] DB record deleted for ${clientEmail}, but storage removal failed: ${storagePath}`);
+      
+      // Explicitly log cleanup_pending event with factual staff actor_type
+      await supabaseAdmin.from("document_signature_events").insert({
+        organization_id: organizationId,
+        document_type: "client_saved_signature",
+        document_id: rpcRes.signature_id || organizationId,
+        event_type: "storage_cleanup_pending",
+        actor_type: isStaffMember ? "staff" : "client",
+        actor_email: clientEmail,
+        metadata: {
+          action: "storage_cleanup_pending",
+          storage_path: storagePath,
+          error: storageErrorMsg,
+          staff_user_id: isStaffMember ? staffUserId : null,
+          auth_method: isStaffMember ? "staff_session" : "email_otp"
+        }
+      });
+
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: "Signature record removed from database, but physical file deletion failed. Storage cleanup has been flagged.",
+          cleanup_pending: true 
+        },
+        { status: 207, headers: NO_CACHE_HEADERS }
+      );
+    }
+
     return NextResponse.json(
-      { success: true, message: "Saved reusable signature deleted successfully." },
+      { success: true, message: "Saved reusable signature and physical storage file deleted successfully." },
       { status: 200, headers: NO_CACHE_HEADERS }
     );
 

@@ -13,6 +13,7 @@
 -- 8. Authenticated signature deletion validating p_staff_user_id against active org staff or purpose-bound 'delete_signature' token.
 -- 9. RLS-Protected Application Immutability: UPDATE & DELETE policies on signed_document_artifacts set to USING (false) for standard application roles. (Note: PostgreSQL service_role/DB owner bypass RLS by engine design).
 -- 10. Strict Idempotency: All policies explicitly preceded by DROP POLICY IF EXISTS.
+-- 11. Factual Actor Audit Logging: Staff actions explicitly recorded with actor_type = 'staff' and auth_method = 'staff_session'.
 --
 -- DO NOT EXECUTE AUTOMATICALLY. PREPARED FOR USER REVIEW AND APPROVAL.
 -- ==============================================================================
@@ -394,7 +395,7 @@ BEGIN
         ) INTO v_is_staff;
     END IF;
 
-    -- Fallback check for auth.uid() in direct authenticated database context
+    -- Fallback check for auth.uid() in direct authenticated context
     IF NOT v_is_staff AND auth.uid() IS NOT NULL THEN
         SELECT EXISTS (
             SELECT 1 FROM public.organization_users
@@ -452,10 +453,10 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'No saved signature found to delete.');
     END IF;
 
-    -- Determine factual auth method for audit log
+    -- Determine factual auth method and factual actor_type ('staff' vs 'client') for audit log
     v_auth_method := CASE WHEN v_is_staff THEN 'staff_session' ELSE 'email_otp' END;
 
-    -- FACTUAL AUDIT EVENT (NO OTP OR VERIFICATION TOKEN LOGGED)
+    -- FACTUAL AUDIT EVENT LOGGING (actor_type = 'staff' for staff; actor_type = 'client' for client OTP)
     INSERT INTO public.document_signature_events (
         organization_id,
         document_type,
@@ -470,7 +471,7 @@ BEGIN
         'client_saved_signature',
         v_saved_sig.id::TEXT,
         'saved_signature_deleted',
-        CASE WHEN v_is_staff THEN 'contractor' ELSE 'client' END,
+        CASE WHEN v_is_staff THEN 'staff' ELSE 'client' END,
         v_saved_sig.client_name,
         v_clean_email,
         jsonb_build_object(
@@ -550,7 +551,7 @@ CREATE TABLE IF NOT EXISTS public.document_signature_events (
     document_version_id UUID REFERENCES public.document_versions(id),
     document_hash TEXT,
     event_type TEXT NOT NULL,
-    actor_type TEXT NOT NULL CHECK (actor_type IN ('client', 'contractor', 'system')),
+    actor_type TEXT NOT NULL CHECK (actor_type IN ('client', 'contractor', 'staff', 'system')),
     actor_name TEXT,
     actor_email TEXT,
     ip_address TEXT,
