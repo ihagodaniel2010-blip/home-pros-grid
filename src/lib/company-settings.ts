@@ -20,6 +20,9 @@ export interface CompanySettings {
     default_tax_rate: number;
     default_footer?: string;
     default_terms: string;
+    contractor_signature_url?: string;
+    contractor_printed_name?: string;
+    contractor_title?: string;
     business_ownership_type?: 'single_owner' | 'partnership';
     partners?: PartnerConfig[];
     lead_status?: string;

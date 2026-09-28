@@ -42,6 +42,13 @@ export interface Estimate {
     valid_until?: string;
     sent_at?: string;
     approved_at?: string;
+    signature_url?: string;
+    signed_pdf_url?: string;
+    signed_pdf_hash?: string;
+    contractor_signature_url?: string;
+    contractor_signed_at?: string;
+    contractor_name?: string;
+    title?: string;
     created_at: string;
     updated_at: string;
     items?: EstimateLineItem[];
@@ -88,7 +95,12 @@ const ALLOWED_ESTIMATE_COLUMNS = new Set([
     'client_name',
     'client_email',
     'client_phone',
+    'client_address',
+    'client_city',
+    'client_state',
+    'client_zip',
     'project_type',
+    'title',
     'status',
     'subtotal',
     'tax_rate',
@@ -103,7 +115,13 @@ const ALLOWED_ESTIMATE_COLUMNS = new Set([
     'terms',
     'valid_until',
     'sent_at',
-    'approved_at'
+    'approved_at',
+    'signature_url',
+    'signed_pdf_url',
+    'signed_pdf_hash',
+    'contractor_signature_url',
+    'contractor_signed_at',
+    'contractor_name'
 ]);
 
 const ALLOWED_ESTIMATE_ITEM_COLUMNS = new Set([

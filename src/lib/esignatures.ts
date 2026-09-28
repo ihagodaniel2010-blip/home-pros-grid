@@ -296,3 +296,133 @@ export async function createSignedDocumentArtifact(artifactData: {
 
     return data as SignedDocumentArtifactRecord;
 }
+
+export interface ClientSavedSignature {
+    id: string;
+    organization_id: string;
+    client_email: string;
+    client_name: string;
+    client_phone?: string;
+    signature_data_url: string;
+    signature_type: 'drawn' | 'typed';
+    created_at: string;
+    updated_at: string;
+}
+
+/**
+ * Saves or updates a client's reusable signature in the database / local vault.
+ */
+export async function saveClientSignature(
+    organizationId: string,
+    clientEmail: string,
+    clientName: string,
+    signatureDataUrl: string,
+    signatureType: 'drawn' | 'typed' = 'drawn'
+): Promise<ClientSavedSignature | null> {
+    const cleanEmail = clientEmail.trim().toLowerCase();
+    if (!cleanEmail || !signatureDataUrl) return null;
+
+    try {
+        const payload = {
+            organization_id: organizationId,
+            client_email: cleanEmail,
+            client_name: clientName.trim(),
+            signature_data_url: signatureDataUrl,
+            signature_type: signatureType,
+            updated_at: new Date().toISOString()
+        };
+
+        const { data, error } = await supabase
+            .from('client_saved_signatures')
+            .upsert(payload, { onConflict: 'organization_id,client_email' })
+            .select()
+            .maybeSingle();
+
+        if (error) {
+            console.warn("Notice saving client signature (falling back to localStorage):", error.message);
+            const localKey = `saved_sig_${organizationId}_${cleanEmail}`;
+            localStorage.setItem(localKey, JSON.stringify(payload));
+            return { id: `local-${Date.now()}`, ...payload, created_at: new Date().toISOString() } as ClientSavedSignature;
+        }
+
+        return data as ClientSavedSignature;
+    } catch (e) {
+        console.warn("Exception in saveClientSignature:", e);
+        return null;
+    }
+}
+
+/**
+ * Fetches a saved reusable client signature by email.
+ */
+export async function getSavedClientSignature(
+    organizationId: string,
+    clientEmail: string
+): Promise<ClientSavedSignature | null> {
+    const cleanEmail = clientEmail.trim().toLowerCase();
+    if (!cleanEmail) return null;
+
+    try {
+        const { data, error } = await supabase
+            .from('client_saved_signatures')
+            .select('*')
+            .eq('organization_id', organizationId)
+            .ilike('client_email', cleanEmail)
+            .maybeSingle();
+
+        if (!error && data) {
+            return data as ClientSavedSignature;
+        }
+    } catch (e) {
+        console.warn("DB lookup for saved signature warning:", e);
+    }
+
+    // Fallback to localStorage
+    try {
+        const localKey = `saved_sig_${organizationId}_${cleanEmail}`;
+        const raw = localStorage.getItem(localKey);
+        if (raw) {
+            return JSON.parse(raw) as ClientSavedSignature;
+        }
+    } catch (e) {}
+
+    return null;
+}
+
+/**
+ * Uploads final immutable signed PDF file to storage and returns public URL + hash.
+ */
+export async function uploadSignedPdfArtifact(
+    organizationId: string,
+    documentId: string,
+    pdfBlob: Blob
+): Promise<{ storagePath: string; publicUrl: string; pdfHash: string }> {
+    const canonicalPath = `${organizationId}/signed-documents/estimate/${documentId}/signed_contract_v1.pdf`;
+    
+    // Compute SHA-256 hash of PDF buffer
+    const arrayBuffer = await pdfBlob.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const pdfHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    let publicUrl = "";
+    try {
+        const { error } = await supabase
+            .storage
+            .from('documents')
+            .upload(canonicalPath, pdfBlob, {
+                contentType: 'application/pdf',
+                upsert: true
+            });
+
+        if (!error) {
+            const { data: pub } = supabase.storage.from('documents').getPublicUrl(canonicalPath);
+            publicUrl = pub?.publicUrl || "";
+        }
+    } catch (e) {
+        console.warn("PDF artifact upload exception:", e);
+    }
+
+    return { storagePath: canonicalPath, publicUrl, pdfHash };
+}
+

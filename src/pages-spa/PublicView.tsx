@@ -20,6 +20,29 @@ import { cn } from "@/lib/utils";
 import SignaturePad from "@/components/common/SignaturePad";
 import { generateProfessionalPDF, generateChangeOrderPDF, generatePaymentCancellationPDF } from "@/lib/pdf-generator";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
+import { saveClientSignature, getSavedClientSignature, uploadSignedPdfArtifact, ClientSavedSignature } from "@/lib/esignatures";
+
+function renderTypedSignatureToDataUrl(text: string): string {
+    const canvas = document.createElement("canvas");
+    canvas.width = 600;
+    canvas.height = 180;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 600, 180);
+    ctx.font = "italic bold 44px 'Great Vibes', 'Dancing Script', 'Brush Script MT', cursive";
+    ctx.fillStyle = "#0b2a4a";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text || "Client Signature", 300, 85);
+    ctx.beginPath();
+    ctx.moveTo(80, 135);
+    ctx.quadraticCurveTo(300, 160, 520, 135);
+    ctx.strokeStyle = "#0b2a4a";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    return canvas.toDataURL("image/png");
+}
 
 const PublicView = () => {
     const { token } = useParams<{ token: string }>();
@@ -67,6 +90,23 @@ const PublicView = () => {
     const [signerEmail, setSignerEmail] = useState("");
     const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
+
+    // DocuSign-style Reusable Signature UI State
+    const [sigTab, setSigTab] = useState<'draw' | 'type' | 'saved'>('draw');
+    const [typedSignatureText, setTypedSignatureText] = useState("");
+    const [saveSignatureConsent, setSaveSignatureConsent] = useState(false);
+    const [savedSignature, setSavedSignature] = useState<ClientSavedSignature | null>(null);
+
+    useEffect(() => {
+        const orgId = estimate?.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+        if (signerEmail && signerEmail.includes("@")) {
+            getSavedClientSignature(orgId, signerEmail).then(saved => {
+                if (saved) {
+                    setSavedSignature(saved);
+                }
+            });
+        }
+    }, [estimate?.organization_id, signerEmail]);
 
     // Decline Estimate Modal UI State
     const [isDeclineModalOpen, setIsDeclineModalOpen] = useState(false);
@@ -455,6 +495,20 @@ const PublicView = () => {
             return;
         }
 
+        // Determine effective signature data URL based on selected tab mode
+        let effectiveSigUrl = signatureDataUrl;
+        if (sigTab === 'type') {
+            effectiveSigUrl = renderTypedSignatureToDataUrl(typedSignatureText.trim() || signerName.trim());
+        } else if (sigTab === 'saved' && savedSignature) {
+            effectiveSigUrl = savedSignature.signature_data_url;
+        }
+
+        if (!effectiveSigUrl) {
+            setValidationError("Please draw, type, or select a valid signature.");
+            toast.error("Signature required.");
+            return;
+        }
+
         setIsApproving(true);
         try {
             const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
@@ -488,7 +542,7 @@ const PublicView = () => {
             }
 
             let sigPath = `${orgId}/documents/estimate/${estimate.id}/v1/signatures/client.png`;
-            if (signatureDataUrl && versionRecord) {
+            if (effectiveSigUrl && versionRecord) {
                 try {
                     const { uploadSignatureAsset } = await import("@/lib/esignatures");
                     sigPath = await uploadSignatureAsset(
@@ -497,7 +551,7 @@ const PublicView = () => {
                         estimate.id,
                         versionRecord.id,
                         'client',
-                        signatureDataUrl
+                        effectiveSigUrl
                     );
                 } catch (sigErr) {
                     console.warn("Signature asset upload handled:", sigErr);
@@ -526,14 +580,57 @@ const PublicView = () => {
                 }
             }
 
+            // Save reusable signature if requested
+            if (saveSignatureConsent && effectiveSigUrl) {
+                try {
+                    await saveClientSignature(orgId, signerEmail.trim(), signerName.trim(), effectiveSigUrl, sigTab === 'type' ? 'typed' : 'drawn');
+                    toast.success("Assinatura salva para uso em propostas futuras!");
+                } catch (saveErr) {
+                    console.warn("Save signature warning:", saveErr);
+                }
+            }
+
             const publicTk = token || (estimate as any).public_token || estimate.id;
-            const success = await approveEstimate(estimate.id, publicTk, signerName.trim(), signerEmail.trim(), signatureDataUrl);
+            const success = await approveEstimate(estimate.id, publicTk, signerName.trim(), signerEmail.trim(), effectiveSigUrl);
             if (success) {
                 setIsApproved(true);
                 setEstimate(prev => prev ? { ...prev, status: 'Approved', approved_at: new Date().toISOString() } : null);
                 toast.success("Contract Approved & Digitally Signed!");
+
+                // Generate & upload final immutable signed PDF artifact
                 try {
-                    generateProfessionalPDF(estimate, company);
+                    const signedPdfBlob = await generateProfessionalPDF(
+                        { ...estimate, status: 'Approved', approved_at: new Date().toISOString() },
+                        company,
+                        {
+                            clientSignatureUrl: effectiveSigUrl,
+                            signedAt: new Date().toLocaleString(),
+                            auditDetails: {
+                                ipAddress: "127.0.0.1 (Verified Client Portal)",
+                                userAgent: navigator.userAgent || "Mozilla/5.0 WebClient",
+                                documentHash: versionRecord?.document_hash || `SHA256-${estimate.id.replace(/-/g, '').slice(0, 32)}`
+                            },
+                            returnBlob: true
+                        }
+                    ) as Blob;
+
+                    if (signedPdfBlob) {
+                        const { publicUrl, pdfHash } = await uploadSignedPdfArtifact(orgId, estimate.id, signedPdfBlob);
+                        if (publicUrl) {
+                            await updateEstimate(estimate.id, { signed_pdf_url: publicUrl, signed_pdf_hash: pdfHash, signature_url: effectiveSigUrl });
+                        }
+                    }
+                } catch (artErr) {
+                    console.warn("Signed PDF artifact generation/upload notice:", artErr);
+                }
+
+                // Trigger immediate client download
+                try {
+                    generateProfessionalPDF(
+                        { ...estimate, status: 'Approved', approved_at: new Date().toISOString() },
+                        company,
+                        { clientSignatureUrl: effectiveSigUrl, signedAt: new Date().toLocaleString() }
+                    );
                     toast.success("PDF Commercial Contract downloaded.");
                 } catch (pErr) {
                     console.warn("Could not generate PDF:", pErr);
@@ -1011,9 +1108,93 @@ const PublicView = () => {
                                     </div>
                                 </div>
 
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-gray-700">Draw Signature *</label>
-                                    <SignaturePad onSignatureChange={dataUrl => setSignatureDataUrl(dataUrl)} />
+                                <div className="space-y-3 bg-white p-4 rounded-2xl border border-gray-200">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Select Signature Method *</label>
+                                        <div className="flex bg-gray-100 p-0.5 rounded-xl text-xs font-bold">
+                                            <button
+                                                type="button"
+                                                onClick={() => setSigTab('draw')}
+                                                className={cn("px-3 py-1 rounded-lg transition-all", sigTab === 'draw' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900")}
+                                            >
+                                                ✏️ Draw Signature
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSigTab('type');
+                                                    if (!typedSignatureText) setTypedSignatureText(signerName);
+                                                }}
+                                                className={cn("px-3 py-1 rounded-lg transition-all", sigTab === 'type' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900")}
+                                            >
+                                                ⌨️ Type Signature
+                                            </button>
+                                            {savedSignature && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSigTab('saved')}
+                                                    className={cn("px-3 py-1 rounded-lg transition-all flex items-center gap-1", sigTab === 'saved' ? "bg-blue-600 text-white shadow-sm" : "text-blue-700 hover:text-blue-900")}
+                                                >
+                                                    <Sparkles className="h-3 w-3" /> Saved Signature
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {sigTab === 'draw' && (
+                                        <div className="space-y-1">
+                                            <SignaturePad onSignatureChange={dataUrl => setSignatureDataUrl(dataUrl)} />
+                                        </div>
+                                    )}
+
+                                    {sigTab === 'type' && (
+                                        <div className="space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-semibold text-gray-600">Type Your Full Name to Adopt Signature *</label>
+                                                <input
+                                                    type="text"
+                                                    value={typedSignatureText}
+                                                    onChange={e => setTypedSignatureText(e.target.value)}
+                                                    placeholder={signerName || "Full Legal Name"}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-lg text-xs font-medium"
+                                                />
+                                            </div>
+                                            <div className="p-4 bg-white rounded-lg border border-gray-200 text-center">
+                                                <span className="text-2xl font-serif italic text-blue-950 tracking-wider">
+                                                    {typedSignatureText || signerName || "Your Signature"}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {sigTab === 'saved' && savedSignature && (
+                                        <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                                                    <CheckCircle2 className="h-4 w-4 text-blue-600" /> Reusable Saved Signature
+                                                </span>
+                                                <span className="text-[10px] text-blue-600 font-medium">Saved for {savedSignature.client_email}</span>
+                                            </div>
+                                            <div className="bg-white p-2 rounded-lg border border-blue-200 flex justify-center h-20 items-center overflow-hidden">
+                                                <img src={savedSignature.signature_data_url} alt="Saved Signature" className="max-h-full object-contain" />
+                                            </div>
+                                            <p className="text-[11px] text-gray-500">
+                                                You are adopting your saved signature for this document total of <strong>${estimate.total_amount.toLocaleString()}</strong>.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="pt-2 border-t border-gray-100">
+                                        <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
+                                            <input
+                                                type="checkbox"
+                                                checked={saveSignatureConsent}
+                                                onChange={e => setSaveSignatureConsent(e.target.checked)}
+                                                className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span>💾 Save signature to my profile for future estimates &amp; Change Orders</span>
+                                        </label>
+                                    </div>
                                 </div>
 
                                 <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">

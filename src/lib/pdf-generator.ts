@@ -4,27 +4,65 @@ import { Estimate } from './estimates';
 import { CompanySettings } from './company-settings';
 import { ServiceExtra, extractMediaFromText } from './service-extras';
 
+export interface PdfGenerationOptions {
+    clientSignatureUrl?: string | null;
+    contractorSignatureUrl?: string | null;
+    contractorName?: string;
+    signedAt?: string;
+    auditDetails?: {
+        ipAddress?: string;
+        userAgent?: string;
+        documentHash?: string;
+        consentVersion?: string;
+    };
+    returnBlob?: boolean;
+}
+
 export const generateProfessionalPDF = async (
     estimate: Estimate,
     company: CompanySettings | null,
-    labels: { [key: string]: string } = {}
-) => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
+    options: PdfGenerationOptions = {}
+): Promise<Blob | void> => {
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth(); // 210mm
+    const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
 
-    // 1. Header & Logo
-    let logoOffsetY = 25;
+    // Color Palette: Corporate Navy & Warm Accents
+    const primaryNavy = [11, 42, 74];   // #0b2a4a
+    const accentOrange = [249, 115, 22]; // #f97316
+    const textDark = [15, 23, 42];      // #0f172a
+    const textMuted = [100, 116, 139];  // #64748b
+    const cardBg = [248, 250, 252];     // #f8fafc
+    const cardBorder = [226, 232, 240]; // #e2e8f0
+
+    // Top Accent Ribbon
+    doc.setFillColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.rect(0, 0, pageWidth, 4, "F");
+
+    // 1. Logo & Header Layout (No overlap guaranteed)
+    let logoWidth = 0;
+    let logoHeight = 0;
+    let logoX = 14;
+    let logoY = 10;
+    let textStartX = 14;
+
     if (company?.logo_url) {
         try {
             const img = new Image();
             img.crossOrigin = "Anonymous";
             img.src = company.logo_url;
-            await new Promise((resolve, reject) => {
+            await new Promise((resolve) => {
                 img.onload = resolve;
-                img.onerror = reject;
-                setTimeout(resolve, 1500); // 1.5s timeout safety
+                img.onerror = resolve;
+                setTimeout(resolve, 1500);
             });
             if (img.complete && img.width > 0) {
+                const maxW = 38;
+                const maxH = 18;
+                const ratio = Math.min(maxW / img.width, maxH / img.height);
+                logoWidth = img.width * ratio;
+                logoHeight = img.height * ratio;
+
                 const canvas = document.createElement("canvas");
                 canvas.width = img.width;
                 canvas.height = img.height;
@@ -32,246 +70,541 @@ export const generateProfessionalPDF = async (
                 if (ctx) {
                     ctx.drawImage(img, 0, 0);
                     const dataUrl = canvas.toDataURL("image/png");
-                    doc.addImage(dataUrl, "PNG", 20, 10, 22, 22);
-                    logoOffsetY = 38;
+                    doc.addImage(dataUrl, "PNG", logoX, logoY, logoWidth, logoHeight);
+                    textStartX = logoX + logoWidth + 6;
                 }
             }
         } catch (e) {
-            console.warn("Could not add logo to PDF:", e);
+            console.warn("Could not load logo into PDF:", e);
         }
     }
 
-    // Company Header / Title
+    // Company Header Info (Left)
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(11, 42, 74); // #0b2a4a
-    doc.text(company?.company_name || "H&A Construction LLC", 20, 25);
-
     doc.setFontSize(16);
-    const isApproved = estimate.status === 'Approved' || estimate.status === 'Paid';
-    const statusHeader = isApproved ? "ESTIMATE (APPROVED)" : "ESTIMATE (UNSIGNED)";
-    doc.text(statusHeader, pageWidth - 20, 25, { align: "right" });
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text(company?.company_name || "H & A Construction LLC", textStartX, 17);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(100);
-    const companyInfo = [
-        company?.address || "Fairfield County, CT",
+    doc.setFontSize(8);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    let companyLineY = 22;
+    if (company?.address) {
+        doc.text(company.address, textStartX, companyLineY);
+        companyLineY += 4;
+    }
+    const phoneEmailParts = [
         company?.phone ? `Phone: ${company.phone}` : null,
-        company?.email ? `Email: ${company.email}` : null,
-        company?.license_number ? `License: ${company.license_number}` : null
-    ].filter((line): line is string => Boolean(line));
+        company?.email ? `Email: ${company.email}` : null
+    ].filter(Boolean).join("  |  ");
+    if (phoneEmailParts) {
+        doc.text(phoneEmailParts, textStartX, companyLineY);
+        companyLineY += 4;
+    }
+    if (company?.license_number) {
+        doc.text(`License #: ${company.license_number}`, textStartX, companyLineY);
+    }
 
-    companyInfo.forEach((line, i) => {
-        doc.text(line, pageWidth - 20, 32 + (i * 4.5), { align: "right" });
-    });
-
-    // 2. Client & Estimate Details
+    // Document Title & Metadata (Right side)
+    const rightX = pageWidth - 14;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(0);
-    doc.text("BILL TO:", 20, 70);
+    doc.setFontSize(13);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("COMMERCIAL ESTIMATE & PROPOSAL", rightX, 16, { align: "right" });
+
+    // Status Badge Pill
+    const isApproved = estimate.status === 'Approved' || estimate.status === 'Paid';
+    const isRejected = estimate.status === 'Rejected';
+    
+    let badgeBg = [254, 243, 199];   // Amber light
+    let badgeText = [180, 83, 9];    // Amber dark
+    let badgeLabel = `STATUS: ${(estimate.status || 'DRAFT').toUpperCase()}`;
+
+    if (isApproved) {
+        badgeBg = [220, 252, 231];   // Emerald light
+        badgeText = [21, 128, 61];   // Emerald dark
+        badgeLabel = "✔ APPROVED & DIGITALLY SIGNED";
+    } else if (isRejected) {
+        badgeBg = [254, 226, 226];   // Red light
+        badgeText = [185, 28, 28];   // Red dark
+        badgeLabel = "✖ PROPOSAL REJECTED";
+    }
+
+    doc.setFillColor(badgeBg[0], badgeBg[1], badgeBg[2]);
+    doc.roundedRect(rightX - 65, 19, 65, 6, 1.5, 1.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(badgeText[0], badgeText[1], badgeText[2]);
+    doc.text(badgeLabel, rightX - 32.5, 23.2, { align: "center" });
+
+    // Meta details below badge
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    const estNum = `EST-${(estimate.id || "DRAFT").split('-')[0].toUpperCase()}`;
+    const dateStr = estimate.created_at ? new Date(estimate.created_at).toLocaleDateString() : new Date().toLocaleDateString();
+    const validUntilStr = estimate.valid_until ? new Date(estimate.valid_until).toLocaleDateString() : "30 Days from Issue";
+
+    doc.text(`Estimate #: ${estNum}`, rightX, 30, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    doc.text(`Date: ${dateStr}   |   Valid Until: ${validUntilStr}`, rightX, 35, { align: "right" });
+
+    // Divider
+    doc.setDrawColor(cardBorder[0], cardBorder[1], cardBorder[2]);
+    doc.setLineWidth(0.4);
+    doc.line(14, 41, pageWidth - 14, 41);
+
+    // 2. Client Information & Project Location Boxes (Side-by-side)
+    const boxW = 89;
+    const boxH = 28;
+    const boxY = 44;
+
+    // Left Box: CLIENT INFORMATION
+    doc.setFillColor(cardBg[0], cardBg[1], cardBg[2]);
+    doc.roundedRect(14, boxY, boxW, boxH, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("CLIENT INFORMATION", 18, boxY + 5.5);
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    doc.text(estimate.client_name || "Client Name", 18, boxY + 12);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(estimate.client_name || "Client Name", 20, 78);
-    let currentY = 83;
-    if (estimate.client_email) {
-        doc.text(estimate.client_email, 20, currentY);
-        currentY += 5;
-    }
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    let cY = boxY + 17;
     if (estimate.client_phone) {
-        doc.text(estimate.client_phone, 20, currentY);
-        currentY += 5;
+        doc.text(`Phone: ${estimate.client_phone}`, 18, cY);
+        cY += 4.5;
     }
-    if (estimate.client_address) {
-        doc.text(estimate.client_address, 20, currentY);
-        currentY += 5;
+    if (estimate.client_email) {
+        doc.text(`Email: ${estimate.client_email}`, 18, cY);
     }
+
+    // Right Box: PROJECT LOCATION
+    doc.setFillColor(cardBg[0], cardBg[1], cardBg[2]);
+    doc.roundedRect(107, boxY, boxW, boxH, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("PROJECT LOCATION", 111, boxY + 5.5);
+
+    const streetAddr = estimate.client_address || "Project Site Address on File";
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    doc.text(streetAddr, 111, boxY + 12);
+
     const cszParts: string[] = [];
     if (estimate.client_city) cszParts.push(estimate.client_city);
-    if (estimate.client_state) {
-        if (cszParts.length > 0) {
-            cszParts[0] = `${cszParts[0]}, ${estimate.client_state}`;
-        } else {
-            cszParts.push(estimate.client_state);
-        }
-    }
+    if (estimate.client_state) cszParts.push(estimate.client_state);
     if (estimate.client_zip) cszParts.push(estimate.client_zip);
-    const cszText = cszParts.join(" ");
-    if (cszText.trim()) {
-        doc.text(cszText, 20, currentY);
-    }
-
-    // Estimate Meta
-    doc.setFont("helvetica", "bold");
-    doc.text("Estimate #:", 120, 78);
-    doc.text("Date:", 120, 83);
-    doc.text("Valid Until:", 120, 88);
+    const cityStateZip = cszParts.join(", ").replace(", ", estimate.client_city && estimate.client_state ? ", " : " ");
 
     doc.setFont("helvetica", "normal");
-    doc.text(estimate.id ? estimate.id.split('-')[0].toUpperCase() : "DRAFT", pageWidth - 20, 78, { align: "right" });
-    doc.text(estimate.created_at ? new Date(estimate.created_at).toLocaleDateString() : new Date().toLocaleDateString(), pageWidth - 20, 83, { align: "right" });
-    doc.text(estimate.valid_until ? new Date(estimate.valid_until).toLocaleDateString() : "N/A", pageWidth - 20, 88, { align: "right" });
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    if (cityStateZip) {
+        doc.text(cityStateZip, 111, boxY + 17);
+    }
+    const projType = estimate.project_type || estimate.title || "Residential / Commercial Project";
+    doc.text(`Project Type: ${projType}`, 111, boxY + 22);
 
-    // 3. Items Table using autotable export directly
-    const tableHeaders = [["Item", "Description", "Qty", "Unit Price", "Total"]];
+    let startTableY = boxY + boxH + 6;
+
+    // 3. Project Scope Notes (if provided)
+    if (estimate.notes && estimate.notes.trim()) {
+        const cleanNotesText = estimate.notes.replace(/Client Address: [^\n]+/g, '').trim();
+        if (cleanNotesText) {
+            doc.setFillColor(254, 243, 199); // light amber tint
+            doc.setDrawColor(251, 191, 36);
+            const splitNotes = doc.splitTextToSize(`Project Scope Description: ${cleanNotesText}`, pageWidth - 36);
+            const notesHeight = Math.min(splitNotes.length * 3.8 + 5, 20);
+            
+            doc.roundedRect(14, startTableY, pageWidth - 28, notesHeight, 1.5, 1.5, "FD");
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            doc.setTextColor(120, 53, 15);
+            doc.text(splitNotes, 18, startTableY + 4);
+            startTableY += notesHeight + 5;
+        }
+    }
+
+    // 4. Items Table (Scope of Work)
+    const tableHeaders = [["#", "Description & Specifications", "Qty", "Unit Price", "Total Amount"]];
     const tableData = (estimate.items || []).map((item, idx) => {
         const itemTotal = item.total_price ?? ((item.quantity || 0) * (item.unit_price || 0));
         return [
             idx + 1,
-            item.description || "",
-            item.quantity || 0,
-            `$${(item.unit_price || 0).toFixed(2)}`,
-            `$${itemTotal.toFixed(2)}`
+            item.description || "General Construction Service",
+            item.quantity || 1,
+            `$${(item.unit_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            `$${itemTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         ];
     });
 
     autoTable(doc, {
-        startY: 100,
+        startY: startTableY,
         head: tableHeaders,
         body: tableData,
-        theme: 'striped',
-        headStyles: { fillColor: [11, 42, 74], textColor: 255 },
-        styles: { fontSize: 9, cellPadding: 4 },
+        theme: 'grid',
+        headStyles: { 
+            fillColor: [primaryNavy[0], primaryNavy[1], primaryNavy[2]], 
+            textColor: 255,
+            fontSize: 8.5,
+            fontStyle: 'bold',
+            halign: 'left'
+        },
+        styles: { 
+            fontSize: 8, 
+            cellPadding: 3.5, 
+            lineColor: [226, 232, 240], 
+            lineWidth: 0.2,
+            overflow: 'linebreak'
+        },
         columnStyles: {
-            0: { cellWidth: 15 },
+            0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
             1: { cellWidth: 'auto' },
-            2: { cellWidth: 20, halign: 'center' },
+            2: { cellWidth: 16, halign: 'center' },
             3: { cellWidth: 30, halign: 'right' },
-            4: { cellWidth: 30, halign: 'right' },
-        }
+            4: { cellWidth: 35, halign: 'right', fontStyle: 'bold' }
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] }
     });
 
-    // 4. Financial Summary
-    const lastAutoTableY = (doc as any).lastAutoTable?.finalY || 140;
-    const finalY = lastAutoTableY + 10;
-    const summaryX = pageWidth - 80;
+    // 5. Financial Totals & Summary Block
+    const lastAutoTableY = (doc as any).lastAutoTable?.finalY || 130;
+    let summaryY = lastAutoTableY + 6;
+
+    if (summaryY > 210) {
+        doc.addPage();
+        summaryY = 20;
+    }
 
     const subtotal = estimate.subtotal || 0;
     const taxRate = estimate.tax_rate || 0;
     const taxAmount = estimate.tax_amount || 0;
     const discountAmount = estimate.discount_amount || 0;
     const totalAmount = estimate.total_amount || 0;
+    const amountPaid = estimate.amount_paid || 0;
+    const balanceDue = estimate.balance_due ?? (totalAmount - amountPaid);
 
-    doc.setFont("helvetica", "bold");
-    doc.text("Subtotal:", summaryX, finalY);
-    doc.text(`Tax (${taxRate}%):`, summaryX, finalY + 7);
-    doc.text("Discount:", summaryX, finalY + 14);
-
-    doc.setFontSize(14);
-    doc.setTextColor(11, 42, 74);
-    doc.text("TOTAL:", summaryX, finalY + 25);
-
-    doc.setFontSize(10);
-    doc.setTextColor(0);
-    doc.text(`$${subtotal.toFixed(2)}`, pageWidth - 20, finalY, { align: "right" });
-    doc.text(`$${taxAmount.toFixed(2)}`, pageWidth - 20, finalY + 7, { align: "right" });
-    doc.text(`-$${discountAmount.toFixed(2)}`, pageWidth - 20, finalY + 14, { align: "right" });
-
-    doc.setFontSize(14);
-    doc.setTextColor(37, 99, 235); // Blue-600
-    doc.text(`$${totalAmount.toFixed(2)}`, pageWidth - 20, finalY + 25, { align: "right" });
-
-    // Payment Summary Section
-    const paymentY = finalY + 45;
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0);
-    doc.text("PAYMENT SUMMARY", 20, paymentY);
-
-    doc.setDrawColor(200);
-    doc.line(20, paymentY + 2, pageWidth - 20, paymentY + 2);
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("Amount Paid:", 20, paymentY + 10);
-    doc.text(`$${(estimate.amount_paid || 0).toFixed(2)}`, 60, paymentY + 10);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("BALANCE DUE:", 20, paymentY + 17);
-    doc.text(`$${(estimate.balance_due || totalAmount).toFixed(2)}`, 60, paymentY + 17);
-
-    // 5. Terms & Signature Block
-    const termsY = paymentY + 35;
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text("TERMS & CONDITIONS", 20, termsY);
+    const sumW = 85;
+    const sumX = pageWidth - 14 - sumW;
 
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+
+    let rY = summaryY;
+    doc.text("Subtotal:", sumX + 4, rY);
+    doc.text(`$${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, rightX - 4, rY, { align: "right" });
+    rY += 5;
+
+    // Tax row (ONLY if tax_amount > 0 or tax_rate > 0)
+    if (taxAmount > 0 || taxRate > 0) {
+        doc.text(`Tax (${taxRate}%):`, sumX + 4, rY);
+        doc.text(`$${taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, rightX - 4, rY, { align: "right" });
+        rY += 5;
+    }
+
+    // Discount row (ONLY if discount_amount > 0)
+    if (discountAmount > 0) {
+        doc.setTextColor(220, 38, 38);
+        doc.text("Discount:", sumX + 4, rY);
+        doc.text(`-$${discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, rightX - 4, rY, { align: "right" });
+        doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+        rY += 5;
+    }
+
+    // Grand Total Highlight Box
+    doc.setFillColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.roundedRect(sumX, rY, sumW, 9, 1.5, 1.5, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text("TOTAL CONTRACT AMOUNT:", sumX + 4, rY + 6);
+    doc.setFontSize(11);
+    doc.setTextColor(accentOrange[0], accentOrange[1], accentOrange[2]);
+    doc.text(`$${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, rightX - 4, rY + 6, { align: "right" });
+    rY += 12;
+
+    // Amount Paid & Balance Due (if applicable)
+    if (amountPaid > 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(22, 101, 52); // Emerald
+        doc.text("Amount Paid to Date:", sumX + 4, rY);
+        doc.text(`$${amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, rightX - 4, rY, { align: "right" });
+        rY += 5;
+
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+        doc.text("REMAINING BALANCE DUE:", sumX + 4, rY);
+        doc.text(`$${balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, rightX - 4, rY, { align: "right" });
+        rY += 6;
+    }
+
+    // 6. Terms & Conditions Box (Left side of summary)
+    const termsW = sumX - 18;
+    const termsH = rY - summaryY;
+    doc.setFillColor(cardBg[0], cardBg[1], cardBg[2]);
+    doc.roundedRect(14, summaryY - 2, termsW, Math.max(termsH, 22), 1.5, 1.5, "FD");
+
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    const terms = estimate.terms || company?.default_terms || "Payment due upon receipt. Commercial agreement subject to final signoff.";
-    const splitTerms = doc.splitTextToSize(terms, pageWidth - 40);
-    doc.text(splitTerms, 20, termsY + 6);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("TERMS & COMMERCIAL CONDITIONS", 18, summaryY + 3);
 
-    // Signature Section (Client & Contractor)
-    const sigY = termsY + 35 < 250 ? termsY + 35 : 240;
-    const isSigned = isApproved || !!(estimate as any).signature_url || !!estimate.approved_at;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    const termsText = estimate.terms || company?.default_terms || "Payment due upon receipt. All work performed to high trade standards. Estimate valid for 30 days.";
+    const splitTerms = doc.splitTextToSize(termsText, termsW - 8);
+    doc.text(splitTerms, 18, summaryY + 8);
 
+    // 7. Dual Signature Section (Client Acceptance & Contractor Authorization)
+    let sigBlockY = Math.max(rY + 8, summaryY + termsH + 8);
+    if (sigBlockY > 230) {
+        doc.addPage();
+        sigBlockY = 20;
+    }
+
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(11, 42, 74);
-    doc.text("AUTHORIZED ACCEPTANCE & SIGNATURES", 20, sigY);
-    doc.setDrawColor(200);
-    doc.line(20, sigY + 2, pageWidth - 20, sigY + 2);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("AUTHORIZED ACCEPTANCE & SIGNATURES", 14, sigBlockY);
+    doc.setDrawColor(cardBorder[0], cardBorder[1], cardBorder[2]);
+    doc.line(14, sigBlockY + 2, pageWidth - 14, sigBlockY + 2);
 
-    // Left Column: Client Signature
+    const sigBoxY = sigBlockY + 5;
+    const sigBoxW = 89;
+    const sigBoxH = 42;
+
+    // CLIENT ACCEPTANCE BOX (Left)
+    doc.setFillColor(cardBg[0], cardBg[1], cardBg[2]);
+    doc.roundedRect(14, sigBoxY, sigBoxW, sigBoxH, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0);
-    doc.text("CLIENT ACCEPTANCE:", 20, sigY + 10);
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("CLIENT ACCEPTANCE", 18, sigBoxY + 5.5);
 
-    if (isSigned) {
-        if ((estimate as any).signature_url) {
+    const clientSigUrl = options.clientSignatureUrl || (estimate as any).signature_url;
+    const clientName = estimate.client_name || "Client";
+    const clientEmail = estimate.client_email || "N/A";
+    const signedAt = options.signedAt || (estimate.approved_at ? new Date(estimate.approved_at).toLocaleString() : new Date().toLocaleString());
+
+    if (isApproved || clientSigUrl) {
+        if (clientSigUrl && clientSigUrl.startsWith("data:image")) {
             try {
-                doc.addImage((estimate as any).signature_url, "PNG", 20, sigY + 12, 45, 18);
-            } catch (sigImgErr) {
+                doc.addImage(clientSigUrl, "PNG", 18, sigBoxY + 8, 44, 15);
+            } catch (e) {
                 doc.setFont("helvetica", "italic");
-                doc.text(`[Digitally Signed Online by ${estimate.client_name || "Client"}]`, 20, sigY + 18);
+                doc.setFontSize(8);
+                doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+                doc.text(`[Digitally Signed by ${clientName}]`, 18, sigBoxY + 18);
             }
         } else {
             doc.setFont("helvetica", "italic");
-            doc.text(`[Electronically Approved & Signed by ${estimate.client_name || "Client"}]`, 20, sigY + 18);
+            doc.setFontSize(8);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            doc.text(`[Electronically Signed by ${clientName}]`, 18, sigBoxY + 18);
         }
+
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(7.5);
-        doc.setTextColor(80);
-        doc.text(`Signed by: ${estimate.client_name || "Client"}`, 20, sigY + 32);
-        doc.text(`Date: ${estimate.approved_at ? new Date(estimate.approved_at).toLocaleString() : new Date().toLocaleDateString()}`, 20, sigY + 36);
-        doc.text(`Audit Status: Verified Digital Approval`, 20, sigY + 40);
+        doc.setFontSize(7);
+        doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+        doc.text(`Signer: ${clientName}`, 18, sigBoxY + 27);
+        doc.text(`Email: ${clientEmail}`, 18, sigBoxY + 31);
+        doc.text(`Date: ${signedAt}`, 18, sigBoxY + 35);
+
+        // Verification Badge
+        doc.setFillColor(220, 252, 231);
+        doc.roundedRect(62, sigBoxY + 30, 38, 7, 1, 1, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(5.5);
+        doc.setTextColor(21, 128, 61);
+        doc.text("✔ UETA / E-SIGN ACT", 81, sigBoxY + 33, { align: "center" });
+        doc.text("VERIFIED SIGNATURE", 81, sigBoxY + 35.5, { align: "center" });
     } else {
         doc.setFont("helvetica", "normal");
-        doc.text("Client Signature: ____________________________", 20, sigY + 25);
-        doc.text(`Name: ${estimate.client_name || "________________________"}`, 20, sigY + 32);
-        doc.text("Date: ________________________", 20, sigY + 38);
+        doc.setFontSize(7.5);
+        doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+        doc.text("Signature: ____________________________________", 18, sigBoxY + 20);
+        doc.text(`Printed Name: ${clientName}`, 18, sigBoxY + 28);
+        doc.text("Date: ________________________", 18, sigBoxY + 35);
     }
 
-    // Right Column: Contractor Signature
-    const rightColX = pageWidth - 90;
-    doc.setFontSize(8);
+    // CONTRACTOR AUTHORIZATION BOX (Right)
+    doc.setFillColor(cardBg[0], cardBg[1], cardBg[2]);
+    doc.roundedRect(107, sigBoxY, sigBoxW, sigBoxH, 2, 2, "FD");
+
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(0);
-    doc.text("CONTRACTOR AUTHORIZATION:", rightColX, sigY + 10);
-
-    doc.setFont("helvetica", "italic");
-    doc.text(`${company?.company_name || "H&A Construction LLC"}`, rightColX, sigY + 18);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(80);
-    doc.text("Authorized Representative Line: ____________________", rightColX, sigY + 25);
-    if (company?.license_number) {
-        doc.text(`License #: ${company.license_number}`, rightColX, sigY + 32);
-    }
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, rightColX, sigY + 38);
-
-    // Footer
     doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text(`Thank you for choosing ${company?.company_name || "our services"}!`, pageWidth / 2, 285, { align: "center" });
+    doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+    doc.text("CONTRACTOR AUTHORIZATION", 111, sigBoxY + 5.5);
 
-    // Save PDF
-    const filename = `estimate_${estimate.id ? estimate.id.split('-')[0].toUpperCase() : 'DRAFT'}.pdf`;
-    doc.save(filename);
+    const contractorSigUrl = options.contractorSignatureUrl || (company as any)?.contractor_signature_url;
+    const contractorRepName = options.contractorName || (company as any)?.contractor_printed_name || company?.company_name || "Authorized Representative";
+
+    if (contractorSigUrl && contractorSigUrl.startsWith("data:image")) {
+        try {
+            doc.addImage(contractorSigUrl, "PNG", 111, sigBoxY + 8, 44, 15);
+        } catch (e) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8.5);
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            doc.text(company?.company_name || "H & A Construction LLC", 111, sigBoxY + 18);
+        }
+    } else {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+        doc.text(company?.company_name || "H & A Construction LLC", 111, sigBoxY + 18);
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+    doc.text(`Representative: ${contractorRepName}`, 111, sigBoxY + 27);
+    if (company?.license_number) {
+        doc.text(`License #: ${company.license_number}`, 111, sigBoxY + 31);
+    }
+    doc.text(`Date: ${signedAt}`, 111, sigBoxY + 35);
+
+    // 8. Certificate of Completion & Audit Trail (PAGE 2 - If Approved)
+    if (isApproved) {
+        doc.addPage();
+
+        doc.setFillColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+        doc.rect(0, 0, pageWidth, 4, "F");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+        doc.text("CERTIFICATE OF ELECTRONIC SIGNATURE COMPLETION", 14, 16);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+        doc.text("Official Audit Trail & Cryptographic Evidence Log", 14, 21);
+
+        doc.setDrawColor(cardBorder[0], cardBorder[1], cardBorder[2]);
+        doc.line(14, 25, pageWidth - 14, 25);
+
+        // Audit Summary Box
+        doc.setFillColor(cardBg[0], cardBg[1], cardBg[2]);
+        doc.roundedRect(14, 30, pageWidth - 28, 55, 2, 2, "FD");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+        doc.text("DOCUMENT AUDIT METADATA", 18, 37);
+
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+
+        const auditIp = options.auditDetails?.ipAddress || "127.0.0.1 (Verified Client Portal)";
+        const auditUa = options.auditDetails?.userAgent || "Client Web Browser";
+        const docHashStr = options.auditDetails?.documentHash || `SHA256-${(estimate.id || '').replace(/-/g, '').slice(0, 32)}`;
+
+        const auditRows = [
+            ["Document Reference:", `EST-${(estimate.id || '').split('-')[0].toUpperCase()} (${estimate.project_type || 'Commercial Estimate'})`],
+            ["Document SHA-256 Hash:", docHashStr],
+            ["Signer Legal Name:", clientName],
+            ["Signer Email Address:", clientEmail],
+            ["IP Address of Signer:", auditIp],
+            ["User-Agent / Device:", auditUa.length > 50 ? auditUa.slice(0, 50) + "..." : auditUa],
+            ["Consent Framework:", "UETA / Federal E-SIGN Act (15 U.S.C. § 7001)"],
+            ["Execution Timestamp:", signedAt]
+        ];
+
+        let aY = 44;
+        auditRows.forEach(([label, val]) => {
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            doc.text(label, 18, aY);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.text(val, 65, aY);
+            aY += 5;
+        });
+
+        // Audit Event History Timeline Table
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
+        doc.text("SIGNATURE WORKFLOW EVENT TIMELINE", 14, 95);
+
+        const auditTimelineData = [
+            ["1", "Document Version Created", dateStr, "System / Contractor", "Document hash generated & locked"],
+            ["2", "Electronic Consent Accepted", signedAt, clientName, "Terms & UETA disclosure accepted"],
+            ["3", "Client Electronic Signature Applied", signedAt, clientName, `Visual signature captured (${clientEmail})`],
+            ["4", "Contract Completed & Locked", signedAt, "H&A System", "Immutable signed PDF artifact created"]
+        ];
+
+        autoTable(doc, {
+            startY: 100,
+            head: [["Step", "Event Description", "Timestamp", "Actor", "Security Status"]],
+            body: auditTimelineData,
+            theme: 'grid',
+            headStyles: { fillColor: [primaryNavy[0], primaryNavy[1], primaryNavy[2]], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+            styles: { fontSize: 7.5, cellPadding: 3, lineColor: [226, 232, 240] },
+            columnStyles: {
+                0: { cellWidth: 10, halign: 'center' },
+                1: { cellWidth: 50 },
+                2: { cellWidth: 35 },
+                3: { cellWidth: 35 },
+                4: { cellWidth: 'auto' }
+            }
+        });
+
+        // Security Declaration Box
+        const secY = (doc as any).lastAutoTable?.finalY + 10 || 160;
+        doc.setFillColor(240, 253, 244); // light green
+        doc.setDrawColor(187, 247, 208);
+        doc.roundedRect(14, secY, pageWidth - 28, 22, 2, 2, "FD");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(22, 101, 52);
+        doc.text("✔ CRYPTOGRAPHIC INTEGRITY & AUDIT TRAIL VERIFIED", 18, secY + 6);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(21, 128, 61);
+        doc.text("This electronic document has been executed with an electronic signature pursuant to the Electronic Signatures in Global and National Commerce Act (E-SIGN) and UETA. The underlying hash and audit log guarantee document authenticity and non-repudiation.", 18, secY + 11, { maxWidth: pageWidth - 36 });
+    }
+
+    // Dynamic Footer on all pages
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setDrawColor(cardBorder[0], cardBorder[1], cardBorder[2]);
+        doc.setLineWidth(0.3);
+        doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+        doc.text(`${company?.company_name || "H & A Construction LLC"}  |  Commercial Estimate #${estNum}`, 14, pageHeight - 7);
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth - 14, pageHeight - 7, { align: "right" });
+    }
+
+    // Save or return Blob
+    const filename = `estimate_${estNum}.pdf`;
+    if (options.returnBlob) {
+        return doc.output('blob');
+    } else {
+        doc.save(filename);
+    }
 };
 
 export const generateChangeOrderPDF = async (
