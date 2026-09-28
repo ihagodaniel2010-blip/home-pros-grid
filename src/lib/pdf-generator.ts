@@ -486,34 +486,70 @@ export const generateProfessionalPDF = async (
     doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
     doc.text("CONTRACTOR AUTHORIZATION", 111, sigBoxY + 5.5);
 
-    const shouldApplyContractorSig = options.contractorSignatureUrl || (company as any)?.auto_apply_contractor_signature;
-    const contractorSigUrl = shouldApplyContractorSig ? (options.contractorSignatureUrl || (company as any)?.contractor_signature_url) : null;
-    const contractorRepName = (options.contractorName || company?.contractor_printed_name || "").trim();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+    doc.text(company?.company_name || "H & A Construction LLC", 111, sigBoxY + 13);
 
-    if (contractorSigUrl && contractorSigUrl.startsWith("data:image")) {
-        try {
-            doc.addImage(contractorSigUrl, "PNG", 111, sigBoxY + 8, 44, 15);
-        } catch (e) {
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(8.5);
-            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-            doc.text(company?.company_name || "H & A Construction LLC", 111, sigBoxY + 18);
+    const contractorRepName = (options.contractorName || company?.contractor_printed_name || "").trim();
+    const hasRepresentative = contractorRepName.length > 0;
+
+    const rawContractorSig = options.contractorSignatureUrl || (company?.auto_apply_contractor_signature ? company?.contractor_signature_url : null);
+    const contractorSigUrl = (rawContractorSig && typeof rawContractorSig === 'string' && rawContractorSig.trim().length > 0) ? rawContractorSig.trim() : null;
+    
+    // Real contractor signature date must be present (passed via options or estimate)
+    const contractorDate = (options.contractorSignatureUrl || (company?.auto_apply_contractor_signature && company?.contractor_signature_url)) 
+        ? (options.signedAt || (estimate as any)?.contractor_signed_at || (estimate as any)?.approved_at || null)
+        : null;
+
+    const hasRealSignature = hasRepresentative && Boolean(contractorSigUrl) && Boolean(contractorDate);
+
+    if (hasRepresentative) {
+        if (hasRealSignature && contractorSigUrl && contractorSigUrl.startsWith("data:image")) {
+            try {
+                doc.addImage(contractorSigUrl, "PNG", 111, sigBoxY + 15, 44, 11);
+            } catch (e) {
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(7.5);
+                doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+                doc.text("Contractor signature pending", 111, sigBoxY + 20);
+            }
+        } else if (hasRealSignature && contractorSigUrl) {
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(7.5);
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.text("[Authorized Signature Applied]", 111, sigBoxY + 20);
+        } else {
+            // Neutral status when representative exists but signature is missing
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(7.5);
+            doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+            doc.text("Contractor signature pending", 111, sigBoxY + 20);
+        }
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+        doc.text(`Representative: ${contractorRepName}`, 111, sigBoxY + 28);
+
+        if (company?.license_number && company.license_number.trim() !== '') {
+            doc.text(`License #: ${company.license_number.trim()}`, 111, sigBoxY + 32);
+        }
+
+        if (hasRealSignature && contractorDate) {
+            doc.text(`Date: ${contractorDate}`, 111, sigBoxY + 36);
         }
     } else {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8.5);
-        doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-        doc.text(company?.company_name || "H & A Construction LLC", 111, sigBoxY + 18);
-    }
+        // When no representative is configured:
+        // Do NOT render contractor signature image, date, or any appearance of completed authorization
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-    doc.text(`Representative: ${contractorRepName}`, 111, sigBoxY + 27);
-    if (company?.license_number) {
-        doc.text(`License #: ${company.license_number}`, 111, sigBoxY + 31);
+        if (company?.license_number && company.license_number.trim() !== '') {
+            doc.text(`License #: ${company.license_number.trim()}`, 111, sigBoxY + 20);
+        }
     }
-    doc.text(`Date: ${signedAt}`, 111, sigBoxY + 35);
 
     // 8. Certificate of Completion & Audit Trail (PAGE 2 - If Approved)
     if (isApproved) {
