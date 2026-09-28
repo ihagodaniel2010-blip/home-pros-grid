@@ -20,7 +20,15 @@ import { cn } from "@/lib/utils";
 import SignaturePad from "@/components/common/SignaturePad";
 import { generateProfessionalPDF, generateChangeOrderPDF, generatePaymentCancellationPDF } from "@/lib/pdf-generator";
 import { getCompanySettings, CompanySettings } from "@/lib/company-settings";
-import { saveClientSignature, getSavedClientSignature, uploadSignedPdfArtifact, ClientSavedSignature } from "@/lib/esignatures";
+import { 
+    saveClientSignature, 
+    requestClientSignatureOtp, 
+    verifyClientSignatureOtp, 
+    deleteSavedClientSignature, 
+    checkSavedClientSignatureExists, 
+    uploadSignedPdfArtifact, 
+    ClientSavedSignature 
+} from "@/lib/esignatures";
 
 function renderTypedSignatureToDataUrl(text: string): string {
     const canvas = document.createElement("canvas");
@@ -91,22 +99,108 @@ const PublicView = () => {
     const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
 
-    // DocuSign-style Reusable Signature UI State
+    // DocuSign-style Reusable Signature UI State & OTP Authentication
     const [sigTab, setSigTab] = useState<'draw' | 'type' | 'saved'>('draw');
     const [typedSignatureText, setTypedSignatureText] = useState("");
     const [saveSignatureConsent, setSaveSignatureConsent] = useState(false);
     const [savedSignature, setSavedSignature] = useState<ClientSavedSignature | null>(null);
+    const [hasSavedSignature, setHasSavedSignature] = useState(false);
+
+    // OTP Modal & Verification State
+    const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
+    const [otpCodeInput, setOtpCodeInput] = useState("");
+    const [isRequestingOtp, setIsRequestingOtp] = useState(false);
+    const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+    const [otpMessage, setOtpMessage] = useState<string | null>(null);
+    const [otpError, setOtpError] = useState<string | null>(null);
+    const [isDeletingSavedSig, setIsDeletingSavedSig] = useState(false);
 
     useEffect(() => {
         const orgId = estimate?.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
         if (signerEmail && signerEmail.includes("@")) {
-            getSavedClientSignature(orgId, signerEmail).then(saved => {
-                if (saved) {
-                    setSavedSignature(saved);
-                }
+            checkSavedClientSignatureExists(orgId, signerEmail).then(exists => {
+                setHasSavedSignature(exists);
             });
+        } else {
+            setHasSavedSignature(false);
+            setSavedSignature(null);
         }
     }, [estimate?.organization_id, signerEmail]);
+
+    const handleRequestOtp = async () => {
+        if (!estimate || !signerEmail) return;
+        setIsRequestingOtp(true);
+        setOtpError(null);
+        setOtpMessage(null);
+        try {
+            const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+            const res = await requestClientSignatureOtp(orgId, estimate.id, signerEmail);
+            if (res.success) {
+                setOtpMessage(res.message + (res.otp_code ? ` (Demo Code: ${res.otp_code})` : ''));
+                toast.success(res.message);
+            } else {
+                setOtpError(res.message);
+                toast.error(res.message);
+            }
+        } catch (e: any) {
+            setOtpError("Error requesting verification code.");
+        } finally {
+            setIsRequestingOtp(false);
+        }
+    };
+
+    const handleVerifyOtp = async () => {
+        if (!estimate || !signerEmail || !otpCodeInput) return;
+        setIsVerifyingOtp(true);
+        setOtpError(null);
+        try {
+            const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+            const res = await verifyClientSignatureOtp(orgId, estimate.id, signerEmail, otpCodeInput);
+            if (res.success && res.signature_data_url) {
+                setSavedSignature({
+                    id: 'verified',
+                    organization_id: orgId,
+                    client_email: res.signer_email || signerEmail,
+                    client_name: res.signer_name || signerName,
+                    signature_data_url: res.signature_data_url,
+                    signature_type: res.signature_type || 'drawn',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                });
+                setSigTab('saved');
+                setIsOtpModalOpen(false);
+                toast.success("Saved signature authenticated & unlocked!");
+            } else {
+                setOtpError(res.message || "Invalid verification code.");
+                toast.error(res.message || "Invalid verification code.");
+            }
+        } catch (e: any) {
+            setOtpError("Failed to verify code.");
+        } finally {
+            setIsVerifyingOtp(false);
+        }
+    };
+
+    const handleDeleteSavedSignature = async () => {
+        if (!estimate || !signerEmail) return;
+        setIsDeletingSavedSig(true);
+        try {
+            const orgId = estimate.organization_id || "45689bbf-193b-4ae8-82f4-e32bbe63b6dd";
+            const res = await deleteSavedClientSignature(orgId, signerEmail);
+            if (res.success) {
+                setSavedSignature(null);
+                setHasSavedSignature(false);
+                if (sigTab === 'saved') setSigTab('draw');
+                toast.success("Saved signature deleted from vault. Historic documents remain intact.");
+            } else {
+                toast.error(res.message);
+            }
+        } catch (e: any) {
+            toast.error("Failed to delete saved signature.");
+        } finally {
+            setIsDeletingSavedSig(false);
+        }
+    };
 
     // Decline Estimate Modal UI State
     const [isDeclineModalOpen, setIsDeclineModalOpen] = useState(false);
@@ -1111,7 +1205,7 @@ const PublicView = () => {
                                 <div className="space-y-3 bg-white p-4 rounded-2xl border border-gray-200">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
                                         <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Select Signature Method *</label>
-                                        <div className="flex bg-gray-100 p-0.5 rounded-xl text-xs font-bold">
+                                        <div className="flex bg-gray-100 p-0.5 rounded-xl text-xs font-bold flex-wrap">
                                             <button
                                                 type="button"
                                                 onClick={() => setSigTab('draw')}
@@ -1129,7 +1223,7 @@ const PublicView = () => {
                                             >
                                                 ⌨️ Type Signature
                                             </button>
-                                            {savedSignature && (
+                                            {savedSignature ? (
                                                 <button
                                                     type="button"
                                                     onClick={() => setSigTab('saved')}
@@ -1137,7 +1231,15 @@ const PublicView = () => {
                                                 >
                                                     <Sparkles className="h-3 w-3" /> Saved Signature
                                                 </button>
-                                            )}
+                                            ) : hasSavedSignature ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsOtpModalOpen(true)}
+                                                    className="px-3 py-1 rounded-lg transition-all flex items-center gap-1 bg-amber-100 text-amber-900 font-bold hover:bg-amber-200"
+                                                >
+                                                    <Lock className="h-3 w-3 text-amber-700" /> Unlock Saved Signature (OTP)
+                                                </button>
+                                            ) : null}
                                         </div>
                                     </div>
 
@@ -1171,15 +1273,22 @@ const PublicView = () => {
                                         <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                                                    <CheckCircle2 className="h-4 w-4 text-blue-600" /> Reusable Saved Signature
+                                                    <CheckCircle2 className="h-4 w-4 text-blue-600" /> Reusable Saved Signature Vault
                                                 </span>
-                                                <span className="text-[10px] text-blue-600 font-medium">Saved for {savedSignature.client_email}</span>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleDeleteSavedSignature} 
+                                                    disabled={isDeletingSavedSig}
+                                                    className="text-[11px] text-red-600 font-bold hover:underline flex items-center gap-1"
+                                                >
+                                                    {isDeletingSavedSig ? <Loader2 className="h-3 w-3 animate-spin" /> : "🗑️ Delete Vault Entry"}
+                                                </button>
                                             </div>
                                             <div className="bg-white p-2 rounded-lg border border-blue-200 flex justify-center h-20 items-center overflow-hidden">
                                                 <img src={savedSignature.signature_data_url} alt="Saved Signature" className="max-h-full object-contain" />
                                             </div>
                                             <p className="text-[11px] text-gray-500">
-                                                You are adopting your saved signature for this document total of <strong>${estimate.total_amount.toLocaleString()}</strong>.
+                                                You are adopting your verified saved signature for this document total of <strong>${estimate.total_amount.toLocaleString()}</strong>.
                                             </p>
                                         </div>
                                     )}
@@ -1192,7 +1301,7 @@ const PublicView = () => {
                                                 onChange={e => setSaveSignatureConsent(e.target.checked)}
                                                 className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                                             />
-                                            <span>💾 Save signature to my profile for future estimates &amp; Change Orders</span>
+                                            <span>💾 Save signature to my vault for future estimates &amp; Change Orders</span>
                                         </label>
                                     </div>
                                 </div>
@@ -1960,6 +2069,70 @@ const PublicView = () => {
                             >
                                 {isDeclining ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                                 Confirmar Rejeição
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* OTP VERIFICATION MODAL FOR SAVED SIGNATURE */}
+            {isOtpModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-gray-100 animate-in zoom-in-95">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                            <h3 className="font-bold text-base text-[#0b2a4a] flex items-center gap-2">
+                                <Lock className="h-5 w-5 text-blue-600" /> Authenticate Saved Signature
+                            </h3>
+                            <button onClick={() => setIsOtpModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold p-1">✕</button>
+                        </div>
+
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                            To unlock and use your saved signature vault, we require email OTP authentication. Click below to receive a 6-digit verification code sent to <strong className="text-gray-900">{signerEmail}</strong>.
+                        </p>
+
+                        {otpMessage && (
+                            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium">
+                                {otpMessage}
+                            </div>
+                        )}
+
+                        {otpError && (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+                                {otpError}
+                            </div>
+                        )}
+
+                        <div className="space-y-4 pt-2">
+                            <Button 
+                                type="button" 
+                                onClick={handleRequestOtp} 
+                                disabled={isRequestingOtp} 
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-11 rounded-xl shadow-sm flex items-center justify-center gap-2"
+                            >
+                                {isRequestingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                                Send 6-Digit Email Code
+                            </Button>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-700 block uppercase tracking-wider">Enter 6-Digit Code *</label>
+                                <input 
+                                    type="text" 
+                                    maxLength={6} 
+                                    value={otpCodeInput} 
+                                    onChange={e => setOtpCodeInput(e.target.value.replace(/[^0-9]/g, ''))} 
+                                    placeholder="123456" 
+                                    className="w-full h-12 px-3 bg-gray-50 border border-gray-200 rounded-xl text-center text-xl tracking-widest font-mono font-bold text-gray-900 focus:ring-2 focus:ring-blue-500" 
+                                />
+                            </div>
+
+                            <Button 
+                                type="button" 
+                                onClick={handleVerifyOtp} 
+                                disabled={isVerifyingOtp || otpCodeInput.length !== 6} 
+                                className="w-full bg-[#0b2a4a] hover:bg-[#081e35] text-white font-bold text-xs h-11 rounded-xl shadow-lg flex items-center justify-center gap-2"
+                            >
+                                {isVerifyingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+                                Verify Code &amp; Unlock Signature
                             </Button>
                         </div>
                     </div>

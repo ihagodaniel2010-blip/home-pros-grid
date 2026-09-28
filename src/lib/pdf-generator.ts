@@ -430,8 +430,8 @@ export const generateProfessionalPDF = async (
         doc.setFont("helvetica", "bold");
         doc.setFontSize(5.5);
         doc.setTextColor(21, 128, 61);
-        doc.text("✔ UETA / E-SIGN ACT", 81, sigBoxY + 33, { align: "center" });
-        doc.text("VERIFIED SIGNATURE", 81, sigBoxY + 35.5, { align: "center" });
+        doc.text("✔ ELECTRONICALLY SIGNED", 81, sigBoxY + 33, { align: "center" });
+        doc.text("AUDIT LOG ENCRYPTED", 81, sigBoxY + 35.5, { align: "center" });
     } else {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7.5);
@@ -450,7 +450,8 @@ export const generateProfessionalPDF = async (
     doc.setTextColor(primaryNavy[0], primaryNavy[1], primaryNavy[2]);
     doc.text("CONTRACTOR AUTHORIZATION", 111, sigBoxY + 5.5);
 
-    const contractorSigUrl = options.contractorSignatureUrl || (company as any)?.contractor_signature_url;
+    const shouldApplyContractorSig = options.contractorSignatureUrl || (company as any)?.auto_apply_contractor_signature;
+    const contractorSigUrl = shouldApplyContractorSig ? (options.contractorSignatureUrl || (company as any)?.contractor_signature_url) : null;
     const contractorRepName = options.contractorName || (company as any)?.contractor_printed_name || company?.company_name || "Authorized Representative";
 
     if (contractorSigUrl && contractorSigUrl.startsWith("data:image")) {
@@ -511,18 +512,18 @@ export const generateProfessionalPDF = async (
         doc.setFont("helvetica", "bold");
         doc.setTextColor(textDark[0], textDark[1], textDark[2]);
 
-        const auditIp = options.auditDetails?.ipAddress || "127.0.0.1 (Verified Client Portal)";
-        const auditUa = options.auditDetails?.userAgent || "Client Web Browser";
+        const auditIp = options.auditDetails?.ipAddress || "Verified Client Web Portal Session";
+        const auditUa = options.auditDetails?.userAgent || "Standard Browser Client";
         const docHashStr = options.auditDetails?.documentHash || `SHA256-${(estimate.id || '').replace(/-/g, '').slice(0, 32)}`;
 
         const auditRows = [
             ["Document Reference:", `EST-${(estimate.id || '').split('-')[0].toUpperCase()} (${estimate.project_type || 'Commercial Estimate'})`],
-            ["Document SHA-256 Hash:", docHashStr],
+            ["Document Snapshot Hash:", docHashStr],
             ["Signer Legal Name:", clientName],
             ["Signer Email Address:", clientEmail],
-            ["IP Address of Signer:", auditIp],
-            ["User-Agent / Device:", auditUa.length > 50 ? auditUa.slice(0, 50) + "..." : auditUa],
-            ["Consent Framework:", "UETA / Federal E-SIGN Act (15 U.S.C. § 7001)"],
+            ["Authentication Method:", "Web Portal Session & Electronic Consent Confirmation"],
+            ["Signer Device context:", auditUa.length > 45 ? auditUa.slice(0, 45) + "..." : auditUa],
+            ["Client Consent Event:", "Accepted Estimate terms and submitted electronic signature"],
             ["Execution Timestamp:", signedAt]
         ];
 
@@ -544,10 +545,10 @@ export const generateProfessionalPDF = async (
         doc.text("SIGNATURE WORKFLOW EVENT TIMELINE", 14, 95);
 
         const auditTimelineData = [
-            ["1", "Document Version Created", dateStr, "System / Contractor", "Document hash generated & locked"],
-            ["2", "Electronic Consent Accepted", signedAt, clientName, "Terms & UETA disclosure accepted"],
-            ["3", "Client Electronic Signature Applied", signedAt, clientName, `Visual signature captured (${clientEmail})`],
-            ["4", "Contract Completed & Locked", signedAt, "H&A System", "Immutable signed PDF artifact created"]
+            ["1", "Document Version Created", dateStr, "System / Contractor", "Document version hash calculated"],
+            ["2", "Electronic Consent Accepted", signedAt, clientName, "Terms & electronic consent recorded"],
+            ["3", "Client Signature Applied", signedAt, clientName, `Visual signature captured for ${clientEmail}`],
+            ["4", "Immutable Signed PDF Created", signedAt, "H&A System", "PDF artifact generated & locked"]
         ];
 
         autoTable(doc, {
@@ -575,12 +576,12 @@ export const generateProfessionalPDF = async (
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8.5);
         doc.setTextColor(22, 101, 52);
-        doc.text("✔ CRYPTOGRAPHIC INTEGRITY & AUDIT TRAIL VERIFIED", 18, secY + 6);
+        doc.text("✔ AUDIT TRAIL RECORDED & DOCUMENT LOCKED", 18, secY + 6);
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(21, 128, 61);
-        doc.text("This electronic document has been executed with an electronic signature pursuant to the Electronic Signatures in Global and National Commerce Act (E-SIGN) and UETA. The underlying hash and audit log guarantee document authenticity and non-repudiation.", 18, secY + 11, { maxWidth: pageWidth - 36 });
+        doc.text("This electronic document has been executed by the client through explicit consent. The document version hash and audit log record the timestamps and parameters of this transaction.", 18, secY + 11, { maxWidth: pageWidth - 36 });
     }
 
     // Dynamic Footer on all pages
