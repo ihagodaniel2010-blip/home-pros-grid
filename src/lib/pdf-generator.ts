@@ -23,7 +23,8 @@ export const generateProfessionalPDF = async (
     company: CompanySettings | null,
     options: PdfGenerationOptions = {}
 ): Promise<Blob | void> => {
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const JsPdfClass = (jsPDF as any).jsPDF || (jsPDF as any).default || jsPDF;
+    const doc = new JsPdfClass({ orientation: 'p', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth(); // 210mm
     const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
 

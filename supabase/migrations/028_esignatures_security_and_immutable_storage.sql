@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS public.client_signature_otps (
     otp_salt TEXT NOT NULL, -- Random 16-byte salt per OTP row
     otp_code_hash TEXT NOT NULL, -- SHA-256 digest of (otp_salt || otp_code)
     verification_token TEXT, -- 32-byte hex token issued upon verification
+    token_purpose TEXT DEFAULT 'estimate_signature', -- Explicit single purpose binding
     token_expires_at TIMESTAMPTZ, -- Expiration timestamp of verification_token
     token_used BOOLEAN NOT NULL DEFAULT FALSE, -- Single-use token flag
     attempts_left INTEGER NOT NULL DEFAULT 3,
@@ -187,10 +188,13 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Maximum hourly verification attempts reached');
     END IF;
 
-    -- 4. Cryptographically secure 6-digit OTP generation via pgcrypto gen_random_bytes
+    -- 4. Cryptographically secure 6-digit OTP generation via single 4-byte pgcrypto call
     v_raw_bytes := EXTENSIONS.GEN_RANDOM_BYTES(4);
-    v_num := (GET_BYTE(v_raw_bytes, 0) * 16777216 + GET_BYTE(v_raw_bytes, 1) * 65536 + GET_BYTE(v_raw_bytes, 2) * 256 + GET_BYTE(v_raw_bytes, 3)) & 2147483647;
-    v_otp_code := LPAD((v_num % 900000 + 100000)::TEXT, 6, '0');
+    v_num := (((GET_BYTE(v_raw_bytes, 0) & 127) * 16777216) +
+              (GET_BYTE(v_raw_bytes, 1) * 65536) +
+              (GET_BYTE(v_raw_bytes, 2) * 256) +
+              GET_BYTE(v_raw_bytes, 3));
+    v_otp_code := LPAD((v_num % 1000000)::TEXT, 6, '0');
 
     -- Random 16-byte salt to protect against rainbow table enumeration
     v_salt := ENCODE(EXTENSIONS.GEN_RANDOM_BYTES(16), 'hex');
@@ -321,6 +325,7 @@ BEGIN
     UPDATE public.client_signature_otps
     SET verified_at = NOW(),
         verification_token = v_token,
+        token_purpose = 'estimate_signature',
         token_expires_at = v_token_expires,
         token_used = FALSE
     WHERE id = v_otp_record.id;
@@ -530,12 +535,24 @@ CREATE POLICY "Staff read org document_signature_events" ON public.document_sign
 CREATE POLICY "Staff read org signed_document_artifacts" ON public.signed_document_artifacts FOR SELECT TO authenticated
     USING (organization_id IN (SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid() AND status = 'active'));
 
--- STRICT RULE 7: Block UPDATE and DELETE on signed document artifacts to enforce absolute immutability
-DROP POLICY IF EXISTS "No update on signed artifacts" ON public.signed_document_artifacts;
-CREATE POLICY "No update on signed artifacts" ON public.signed_document_artifacts FOR UPDATE TO PUBLIC USING (false);
+-- ------------------------------------------------------------------------------
+-- 8. SUPABASE STORAGE BUCKETS & STRICT RLS POLICIES
+-- ------------------------------------------------------------------------------
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('signatures', 'signatures', false),
+       ('documents', 'documents', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
 
-DROP POLICY IF EXISTS "No delete on signed artifacts" ON public.signed_document_artifacts;
-CREATE POLICY "No delete on signed artifacts" ON public.signed_document_artifacts FOR DELETE TO PUBLIC USING (false);
+-- Restrict direct unauthenticated reads/uploads via Storage REST API
+DROP POLICY IF EXISTS "Private signatures bucket read" ON storage.objects;
+CREATE POLICY "Private signatures bucket read" ON storage.objects
+    FOR SELECT TO authenticated
+    USING (bucket_id = 'signatures');
+
+DROP POLICY IF EXISTS "Private documents bucket read" ON storage.objects;
+CREATE POLICY "Private documents bucket read" ON storage.objects
+    FOR SELECT TO authenticated
+    USING (bucket_id = 'documents');
 
 -- ------------------------------------------------------------------------------
 -- 8. STRICT PRIVILEGED RPC PERMISSION REVOCATION (RESTRICTED TO SERVICE_ROLE ONLY)
