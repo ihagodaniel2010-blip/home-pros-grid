@@ -358,8 +358,11 @@ END;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 6. RPC FUNCTION: AUTHENTICATED DELETE SAVED SIGNATURE (EXPLICIT STAFF USER ID OR TOKEN)
+-- 6. RPC FUNCTION: AUTHENTICATED DELETE SAVED SIGNATURE (DEFENSE IN DEPTH + AUDIT)
 -- ------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.delete_client_saved_signature(UUID, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.delete_client_saved_signature(UUID, TEXT, TEXT, UUID);
+
 CREATE OR REPLACE FUNCTION public.delete_client_saved_signature(
     p_organization_id UUID,
     p_client_email TEXT,
@@ -376,10 +379,12 @@ DECLARE
     v_deleted_count INT;
     v_is_staff BOOLEAN := FALSE;
     v_token_record RECORD;
+    v_saved_sig RECORD;
+    v_auth_method TEXT;
 BEGIN
     v_clean_email := LOWER(TRIM(p_client_email));
 
-    -- 1. Validate staff user if explicit p_staff_user_id is passed from authenticated backend route
+    -- 1. DEFENSE IN DEPTH: Validate explicit p_staff_user_id against active organization_users
     IF p_staff_user_id IS NOT NULL THEN
         SELECT EXISTS (
             SELECT 1 FROM public.organization_users
@@ -389,7 +394,7 @@ BEGIN
         ) INTO v_is_staff;
     END IF;
 
-    -- Fallback check for auth.uid() in case of direct authenticated database context
+    -- Fallback check for auth.uid() in direct authenticated database context
     IF NOT v_is_staff AND auth.uid() IS NOT NULL THEN
         SELECT EXISTS (
             SELECT 1 FROM public.organization_users
@@ -399,44 +404,90 @@ BEGIN
         ) INTO v_is_staff;
     END IF;
 
-    -- 2. STRICT PURPOSE CHECK: verification_token MUST have token_purpose = 'delete_signature'
-    IF p_verification_token IS NOT NULL THEN
+    -- 2. STRICT TOKEN PURPOSE & LIFECYCLE CHECK ('delete_signature')
+    IF p_verification_token IS NOT NULL AND TRIM(p_verification_token) <> '' THEN
         SELECT * INTO v_token_record
         FROM public.client_signature_otps
         WHERE organization_id = p_organization_id
           AND LOWER(client_email) = v_clean_email
-          AND verification_token = p_verification_token
-          AND token_purpose = 'delete_signature' -- MUST MATCH EXPLICIT PURPOSE!
+          AND verification_token = TRIM(p_verification_token)
+          AND token_purpose = 'delete_signature'
           AND verified_at IS NOT NULL
           AND token_used = FALSE
           AND token_expires_at > NOW();
     END IF;
 
-    -- Reject unauthenticated deletion attempts or tokens issued for other purposes (e.g. estimate_signature)
+    -- Reject unauthenticated deletion attempts or tokens issued for other purposes
     IF NOT v_is_staff AND v_token_record.id IS NULL THEN
         RETURN jsonb_build_object(
             'success', false, 
-            'message', 'Unauthorized: Deletion requires active staff session or a valid verification token issued specifically for deletion.'
+            'message', 'Unauthorized signature deletion attempt.'
         );
     END IF;
 
-    -- Invalidate token after single use
+    -- Retrieve active saved signature record to obtain ID & storage path before deletion
+    SELECT * INTO v_saved_sig
+    FROM public.client_saved_signatures
+    WHERE organization_id = p_organization_id AND LOWER(client_email) = v_clean_email;
+
+    IF v_saved_sig IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', false, 
+            'message', 'No saved reusable signature found for this recipient.'
+        );
+    END IF;
+
+    -- Invalidate verification token after single use
     IF v_token_record.id IS NOT NULL THEN
         UPDATE public.client_signature_otps SET token_used = TRUE WHERE id = v_token_record.id;
     END IF;
 
+    -- Delete reusable signature database record
     DELETE FROM public.client_saved_signatures
-    WHERE organization_id = p_organization_id AND LOWER(client_email) = v_clean_email;
+    WHERE id = v_saved_sig.id;
 
     GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
 
     IF v_deleted_count = 0 THEN
-        RETURN jsonb_build_object('success', false, 'message', 'No saved signature found to delete');
+        RETURN jsonb_build_object('success', false, 'message', 'No saved signature found to delete.');
     END IF;
+
+    -- Determine factual auth method for audit log
+    v_auth_method := CASE WHEN v_is_staff THEN 'staff_session' ELSE 'email_otp' END;
+
+    -- FACTUAL AUDIT EVENT (NO OTP OR VERIFICATION TOKEN LOGGED)
+    INSERT INTO public.document_signature_events (
+        organization_id,
+        document_type,
+        document_id,
+        event_type,
+        actor_type,
+        actor_name,
+        actor_email,
+        metadata
+    ) VALUES (
+        p_organization_id,
+        'client_saved_signature',
+        v_saved_sig.id::TEXT,
+        'saved_signature_deleted',
+        CASE WHEN v_is_staff THEN 'contractor' ELSE 'client' END,
+        v_saved_sig.client_name,
+        v_clean_email,
+        jsonb_build_object(
+            'action', 'saved_signature_deleted',
+            'auth_method', v_auth_method,
+            'staff_user_id', CASE WHEN v_is_staff THEN p_staff_user_id ELSE NULL END,
+            'signature_id', v_saved_sig.id,
+            'signature_storage_path', v_saved_sig.signature_storage_path,
+            'timestamp', NOW()
+        )
+    );
 
     RETURN jsonb_build_object(
         'success', true,
-        'message', 'Saved reusable signature deleted successfully. Historical signed documents remain preserved.'
+        'message', 'Saved reusable signature deleted successfully.',
+        'signature_id', v_saved_sig.id,
+        'signature_storage_path', v_saved_sig.signature_storage_path
     );
 END;
 $$;

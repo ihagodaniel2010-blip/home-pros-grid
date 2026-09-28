@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     try {
       body = await request.json();
     } catch (e) {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400, headers: NO_CACHE_HEADERS });
+      return NextResponse.json({ success: false, message: "Invalid request payload." }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
     const organizationId = typeof body.organizationId === "string" ? body.organizationId.trim() : "";
@@ -23,21 +23,19 @@ export async function POST(request: Request) {
 
     if (!organizationId || !clientEmail) {
       return NextResponse.json(
-        { success: false, message: "Invalid parameters." },
+        { success: false, message: "Invalid parameter configuration." },
         { status: 400, headers: NO_CACHE_HEADERS }
       );
     }
 
     if (!supabaseAdmin) {
       return NextResponse.json(
-        { success: false, message: "Server configuration error (supabaseAdmin uninitialized)." },
+        { success: false, message: "Server configuration error." },
         { status: 500, headers: NO_CACHE_HEADERS }
       );
     }
 
-    // --------------------------------------------------------------------------
-    // PASSO 1: Validação do JWT do Usuário Autenticado (Staff)
-    // --------------------------------------------------------------------------
+    // 1. Validate Staff JWT user session from Authorization bearer token
     let staffUserId: string | null = null;
     const authHeader = request.headers.get("authorization") || request.headers.get("Authorization");
     
@@ -54,9 +52,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // --------------------------------------------------------------------------
-    // PASSO 2: Conferência de Associação Ativa em organization_users
-    // --------------------------------------------------------------------------
+    // 2. Defense in Depth: Pre-check Staff active organization membership
     let isStaffMember = false;
     if (staffUserId) {
       const { data: staffOrgRecord } = await supabaseAdmin
@@ -72,17 +68,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // Se o solicitante não for um Staff autenticado E não possuir token de verificação do cliente (OTP)
     if (!isStaffMember && !verificationToken) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized: Active Staff session or valid OTP deletion token required." },
+        { success: false, message: "Unauthorized request." },
         { status: 401, headers: NO_CACHE_HEADERS }
       );
     }
 
-    // --------------------------------------------------------------------------
-    // PASSO 3: Invocação da RPC Privilegiada com service_role
-    // --------------------------------------------------------------------------
+    // 3. Execute privileged deletion RPC via service_role
     const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc("delete_client_saved_signature", {
       p_organization_id: organizationId,
       p_client_email: clientEmail,
@@ -91,29 +84,46 @@ export async function POST(request: Request) {
     });
 
     if (rpcErr || !rpcRes) {
-      console.error("[Delete Signature API Error] RPC failure:", rpcErr?.message);
+      console.error("[Delete Signature API Error] Internal RPC failure:", rpcErr);
       return NextResponse.json(
-        { success: false, message: rpcErr?.message || "Could not process signature deletion." },
+        { success: false, message: "Unable to process signature deletion request." },
         { status: 400, headers: NO_CACHE_HEADERS }
       );
     }
 
     if (!rpcRes.success) {
       return NextResponse.json(
-        { success: false, message: rpcRes.message || "Unauthorized deletion attempt." },
+        { success: false, message: rpcRes.message || "Unauthorized request." },
         { status: 403, headers: NO_CACHE_HEADERS }
       );
     }
 
+    // 4. Safe removal of physical reusable PNG signature file from private Storage bucket
+    const storagePath = rpcRes.signature_storage_path;
+    if (storagePath && typeof storagePath === "string" && storagePath.trim() !== "") {
+      try {
+        const { error: storageErr } = await supabaseAdmin
+          .storage
+          .from("signatures")
+          .remove([storagePath.trim()]);
+        
+        if (storageErr) {
+          console.warn("[Delete Signature Storage Warning] Physical file deletion issue:", storageErr);
+        }
+      } catch (stEx) {
+        console.warn("[Delete Signature Storage Exception]", stEx);
+      }
+    }
+
     return NextResponse.json(
-      { success: true, message: rpcRes.message || "Saved signature deleted from vault." },
+      { success: true, message: "Saved reusable signature deleted successfully." },
       { status: 200, headers: NO_CACHE_HEADERS }
     );
 
   } catch (error: any) {
     console.error("[Delete Signature API Exception]", error);
     return NextResponse.json(
-      { success: false, message: "Internal server error deleting saved signature." },
+      { success: false, message: "An unexpected error occurred while deleting saved signature." },
       { status: 500, headers: NO_CACHE_HEADERS }
     );
   }
