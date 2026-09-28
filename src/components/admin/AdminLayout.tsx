@@ -36,6 +36,8 @@ const AdminLayout = () => {
     return () => {
       mounted = false;
     };
+  }, [location.pathname, userLoading, orgId]); // Update badge when path changes
+
   useEffect(() => {
     if (isAuthed && orgId) {
       loadNotifications(orgId);
