@@ -79,19 +79,43 @@ const ServicesShowcase = () => {
 
   const categoryPhotosMap = useMemo(() => {
     const map: Record<string, string[]> = {};
+    
+    const normalizeCatKey = (raw: string): string => {
+      const k = (raw || "").toLowerCase().trim();
+      if (k.startsWith("bath")) return "bathrooms";
+      if (k.startsWith("kitchen")) return "kitchens";
+      if (k.startsWith("deck")) return "decks";
+      if (k.startsWith("roof")) return "roofing";
+      if (k.startsWith("siding")) return "siding";
+      if (k.startsWith("drywall")) return "drywall";
+      if (k.startsWith("framing")) return "framing";
+      if (k.startsWith("floor")) return "flooring";
+      if (k.startsWith("remodel")) return "remodeling";
+      return k;
+    };
+
     portfolioItems.forEach(item => {
       if (item.signedUrl) {
-        const catKey = (item.category || "").toLowerCase().trim();
-        if (!map[catKey]) map[catKey] = [];
-        if (!map[catKey].includes(item.signedUrl)) map[catKey].push(item.signedUrl);
+        const rawKey = (item.category || "").toLowerCase().trim();
+        const normKey = normalizeCatKey(rawKey);
+
+        [rawKey, normKey].forEach(k => {
+          if (k) {
+            if (!map[k]) map[k] = [];
+            if (!map[k].includes(item.signedUrl)) map[k].push(item.signedUrl);
+          }
+        });
 
         if (Array.isArray(item.categories)) {
           item.categories.forEach(c => {
-            const subKey = (c || "").toLowerCase().trim();
-            if (subKey) {
-              if (!map[subKey]) map[subKey] = [];
-              if (!map[subKey].includes(item.signedUrl)) map[subKey].push(item.signedUrl);
-            }
+            const subRaw = (c || "").toLowerCase().trim();
+            const subNorm = normalizeCatKey(subRaw);
+            [subRaw, subNorm].forEach(k => {
+              if (k) {
+                if (!map[k]) map[k] = [];
+                if (!map[k].includes(item.signedUrl)) map[k].push(item.signedUrl);
+              }
+            });
           });
         }
       }
@@ -103,9 +127,19 @@ const ServicesShowcase = () => {
     if (selectedCategory === "All") return portfolioItems;
     const cleanSel = selectedCategory.toLowerCase().trim();
     return portfolioItems.filter(item => {
-      const mainMatch = (item.category || "").toLowerCase().trim() === cleanSel;
-      const subMatch = Array.isArray(item.categories) && item.categories.some(c => (c || "").toLowerCase().trim() === cleanSel);
-      return mainMatch || subMatch;
+      const mainCat = (item.category || "").toLowerCase().trim();
+      if (mainCat === cleanSel) return true;
+      if (cleanSel.startsWith("bath") && mainCat.startsWith("bath")) return true;
+      if (cleanSel.startsWith("kitchen") && mainCat.startsWith("kitchen")) return true;
+      if (cleanSel.startsWith("deck") && mainCat.startsWith("deck")) return true;
+      if (cleanSel.startsWith("roof") && mainCat.startsWith("roof")) return true;
+      if (cleanSel.startsWith("siding") && mainCat.startsWith("siding")) return true;
+      if (cleanSel.startsWith("drywall") && mainCat.startsWith("drywall")) return true;
+      if (cleanSel.startsWith("framing") && mainCat.startsWith("framing")) return true;
+      if (cleanSel.startsWith("floor") && mainCat.startsWith("floor")) return true;
+      if (cleanSel.startsWith("remodel") && mainCat.startsWith("remodel")) return true;
+
+      return Array.isArray(item.categories) && item.categories.some(c => (c || "").toLowerCase().trim() === cleanSel);
     });
   }, [portfolioItems, selectedCategory]);
 
@@ -161,7 +195,15 @@ const ServicesShowcase = () => {
           {/* Dynamic Service Cards Grid with Auto Photo Carousel */}
           <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {homepageCategories.map((cat, index) => {
-              const catPhotos = categoryPhotosMap[cat.name.toLowerCase().trim()] || [];
+              const rawCat = cat.name.toLowerCase().trim();
+              let normCat = rawCat;
+              if (rawCat.startsWith("bath")) normCat = "bathrooms";
+              if (rawCat.startsWith("kitchen")) normCat = "kitchens";
+              if (rawCat.startsWith("deck")) normCat = "decks";
+              if (rawCat.startsWith("roof")) normCat = "roofing";
+              if (rawCat.startsWith("siding")) normCat = "siding";
+
+              const catPhotos = categoryPhotosMap[normCat] || categoryPhotosMap[rawCat] || [];
 
               return (
                 <motion.div

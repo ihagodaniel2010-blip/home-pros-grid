@@ -165,20 +165,34 @@ export interface PublicPortfolioShowcaseItem {
 
 export async function getPublicPortfolioShowcase(): Promise<PublicPortfolioShowcaseItem[]> {
     try {
-        const res = await fetch('/api/public/signed-url', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: 'public', type: 'portfolio', id: 'all' }),
-            cache: 'no-store'
-        });
-        if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data.portfolio)) {
-                return data.portfolio;
-            }
+        const { data, error } = await supabase
+            .from('service_job_media')
+            .select('*, service_jobs(title, project_type)')
+            .or('portfolio_approved.eq.true,visible_on_public_site.eq.true')
+            .order('created_at', { ascending: false });
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+            const resolved = await Promise.all(
+                data.map(async (item: any) => {
+                    const signedUrl = item.storage_path ? await resolveSignedMediaUrl(item.storage_path) : null;
+                    const jobTitle = item.service_jobs?.title || item.service_jobs?.project_type || '';
+                    const detectedCategory = autoCategorizePhoto(item.caption, item.file_name, jobTitle);
+                    
+                    return {
+                        id: item.id,
+                        media_type: item.media_type || 'image',
+                        file_name: item.file_name,
+                        caption: item.caption,
+                        signedUrl: signedUrl || '',
+                        category: detectedCategory,
+                        created_at: item.created_at
+                    };
+                })
+            );
+            return resolved.filter(i => !!i.signedUrl);
         }
     } catch (err) {
-        console.warn("getPublicPortfolioShowcase API error:", err);
+        console.warn("getPublicPortfolioShowcase direct query fallback:", err);
     }
 
     // Fallback via RPC get_public_portfolio_media
@@ -194,7 +208,7 @@ export async function getPublicPortfolioShowcase(): Promise<PublicPortfolioShowc
                         file_name: item.file_name,
                         caption: item.caption,
                         signedUrl: signedUrl || '',
-                        category: autoCategorizePhoto(item.caption, item.file_name),
+                        category: autoCategorizePhoto(item.caption, item.file_name, item.job_title),
                         created_at: item.created_at
                     };
                 })
