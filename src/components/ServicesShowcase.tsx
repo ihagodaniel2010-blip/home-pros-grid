@@ -9,6 +9,7 @@ import {
   getProjectsGalleryCategories, 
   WebsiteCategory 
 } from "@/lib/website-cms";
+import { CardPhotoCarousel } from "@/components/CardPhotoCarousel";
 
 const CategoryCoverPlaceholder = ({ title }: { title: string }) => (
   <div className="w-full h-full bg-gradient-to-br from-[#0b2a4a] via-[#103b66] to-slate-900 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden group-hover:scale-105 transition-transform duration-500">
@@ -76,6 +77,28 @@ const ServicesShowcase = () => {
     return ["All", ...names];
   }, [categories, portfolioItems]);
 
+  const categoryPhotosMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    portfolioItems.forEach(item => {
+      if (item.signedUrl) {
+        const catKey = (item.category || "").toLowerCase().trim();
+        if (!map[catKey]) map[catKey] = [];
+        if (!map[catKey].includes(item.signedUrl)) map[catKey].push(item.signedUrl);
+
+        if (Array.isArray(item.categories)) {
+          item.categories.forEach(c => {
+            const subKey = (c || "").toLowerCase().trim();
+            if (subKey) {
+              if (!map[subKey]) map[subKey] = [];
+              if (!map[subKey].includes(item.signedUrl)) map[subKey].push(item.signedUrl);
+            }
+          });
+        }
+      }
+    });
+    return map;
+  }, [portfolioItems]);
+
   const filteredPortfolio = useMemo(() => {
     if (selectedCategory === "All") return portfolioItems;
     const cleanSel = selectedCategory.toLowerCase().trim();
@@ -135,43 +158,37 @@ const ServicesShowcase = () => {
             </Link>
           </motion.div>
 
-          {/* Dynamic Service Cards Grid */}
+          {/* Dynamic Service Cards Grid with Auto Photo Carousel */}
           <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {homepageCategories.map((cat, index) => (
-              <motion.div
-                key={cat.id || cat.slug}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: index * 0.03 }}
-              >
-                <Link
-                  to={`/services/${cat.slug}`}
-                  className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/90 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full"
-                >
-                  <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
-                    {cat.cover_image_url ? (
-                      <img
-                        src={cat.cover_image_url}
-                        alt={`${cat.name} service`}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        loading="lazy"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <CategoryCoverPlaceholder title={cat.name} />
-                    )}
+            {homepageCategories.map((cat, index) => {
+              const catPhotos = categoryPhotosMap[cat.name.toLowerCase().trim()] || [];
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <div className="bg-white/20 backdrop-blur-md p-1.5 rounded-full border border-white/30 text-white">
-                        <ChevronRight className="h-4 w-4" />
+              return (
+                <motion.div
+                  key={cat.id || cat.slug}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: index * 0.03 }}
+                >
+                  <Link
+                    to={`/services/${cat.slug}`}
+                    className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/90 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full"
+                  >
+                    <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
+                      <CardPhotoCarousel
+                        primaryImage={cat.cover_image_url}
+                        additionalPhotos={catPhotos}
+                        title={cat.name}
+                      />
+
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
+                        <div className="bg-white/20 backdrop-blur-md p-1.5 rounded-full border border-white/30 text-white">
+                          <ChevronRight className="h-4 w-4" />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
                   <div className="p-5 flex-1 flex flex-col justify-between">
                     <div>
@@ -190,7 +207,8 @@ const ServicesShowcase = () => {
                   </div>
                 </Link>
               </motion.div>
-            ))}
+            );
+          })}
           </div>
         </div>
       </section>

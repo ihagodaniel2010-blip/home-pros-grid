@@ -42,19 +42,25 @@ export interface ServiceExtraMediaRecord {
 export function autoCategorizePhoto(caption?: string, fileName?: string, projectType?: string): string {
     const text = `${caption || ''} ${fileName || ''} ${projectType || ''}`.toLowerCase();
     
-    if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(text)) return "Framing & Structure";
-    if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(text)) return "Roofing & Gutters";
-    if (/drywall|gesso|sheetrock|wall|parede|teto/i.test(text)) return "Drywall & Painting";
-    if (/siding|revestimento|facade|exterior|cladding/i.test(text)) return "Siding & Exterior";
-    if (/deck|porch|patio|varanda|decking|rail/i.test(text)) return "Decks & Patios";
-    if (/remodel|reforma|kitchen|bath|cozinha|banheiro|tile|flooring/i.test(text)) return "Remodeling";
-    return "Construction Progress";
+    if (/bath|banheiro|shower|tub|vanity|toilet|duche/i.test(text)) return "Bathrooms";
+    if (/kitchen|cozinha|cabinet|countertop|armario|bancada/i.test(text)) return "Kitchens";
+    if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(text)) return "Framing";
+    if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(text)) return "Roofing";
+    if (/drywall|gesso|sheetrock|wall|parede|teto/i.test(text)) return "Drywall";
+    if (/siding|revestimento|facade|exterior|cladding/i.test(text)) return "Siding";
+    if (/deck|porch|patio|varanda|decking|rail/i.test(text)) return "Decks";
+    if (/tile|flooring|piso|chao|vinyl|hardwood|parquet/i.test(text)) return "Flooring";
+    if (/remodel|reforma|addition|renovation/i.test(text)) return "Remodeling";
+    return "Remodeling";
 }
 
 /**
  * Uploads a job photo or video adhering to canonical path structure:
  * {organization_id}/jobs/{service_job_id}/photos/{uuid}.jpg
  * {organization_id}/jobs/{service_job_id}/videos/{uuid}.mp4
+ * 
+ * Default Visibility Rule: All newly uploaded photos default to UNCHECKED (false)
+ * for both Client Portal and Public Site until explicitly approved by admin.
  */
 export async function uploadJobMediaRecord(params: {
     organization_id: string;
@@ -80,8 +86,8 @@ export async function uploadJobMediaRecord(params: {
         file_size_bytes: params.file_size_bytes,
         duration_seconds: params.duration_seconds || null,
         caption: params.caption || null,
-        visible_to_client: params.visible_to_client ?? true,
-        visible_on_public_site: params.visible_on_public_site ?? true,
+        visible_to_client: params.visible_to_client ?? false,
+        visible_on_public_site: params.visible_on_public_site ?? false,
         portfolio_approved: params.portfolio_approved ?? false,
         media_status: params.portfolio_approved ? 'approved' : 'pending'
     };
@@ -225,46 +231,81 @@ export async function createTemporarySignedUrl(bucket: string, storagePath: stri
  * Resolves a signed or public URL for any media storage path cleanly.
  */
 export async function resolveSignedMediaUrl(storagePath: string): Promise<string | null> {
-    if (!storagePath) return null;
+    if (!storagePath || typeof storagePath !== 'string') return null;
     
+    const trimmed = storagePath.trim();
+    if (!trimmed) return null;
+
     // If inline Base64 Data URI, return directly so fallback uploads display properly
-    if (storagePath.startsWith('data:')) {
-        return storagePath;
+    if (trimmed.startsWith('data:')) {
+        return trimmed;
     }
 
     let targetBucket = 'images';
-    let cleanPath = storagePath;
+    let cleanPath = trimmed;
 
     // Handle full URLs
-    if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
-        if (storagePath.includes('/storage/v1/object/')) {
-            const parts = storagePath.split('/storage/v1/object/')[1]?.split('/');
-            if (parts && parts.length >= 3) {
-                targetBucket = parts[1];
-                cleanPath = parts.slice(2).join('/');
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        if (trimmed.includes('/storage/v1/object/')) {
+            // Strip query string (e.g. ?token=... or ?t=...)
+            const urlWithoutQuery = trimmed.split('?')[0];
+            const parts = urlWithoutQuery.split('/storage/v1/object/')[1]?.split('/');
+            
+            if (parts && parts.length >= 2) {
+                if (['public', 'sign', 'authenticated'].includes(parts[0]) && parts.length >= 3) {
+                    targetBucket = parts[1];
+                    cleanPath = parts.slice(2).join('/');
+                } else {
+                    targetBucket = parts[0];
+                    cleanPath = parts.slice(1).join('/');
+                }
+                cleanPath = decodeURIComponent(cleanPath);
             } else {
-                return null;
+                return trimmed;
             }
         } else {
-            // STRICT SECURITY RULE: External HTTP links cannot be signed via SDK, return null for admin review
-            return null;
+            // Return direct external HTTP/HTTPS URL
+            return trimmed;
         }
     } else {
+        // Strip query string if present
+        cleanPath = trimmed.split('?')[0];
+        cleanPath = decodeURIComponent(cleanPath);
+
         // Clean relative path if bucket prefix was included
-        if (storagePath.startsWith('documents/')) {
-            cleanPath = storagePath.slice(10);
+        if (cleanPath.startsWith('documents/')) {
+            cleanPath = cleanPath.slice(10);
             targetBucket = 'documents';
-        } else if (storagePath.startsWith('images/')) {
-            cleanPath = storagePath.slice(7);
+        } else if (cleanPath.startsWith('images/')) {
+            cleanPath = cleanPath.slice(7);
             targetBucket = 'images';
-        } else if (storagePath.startsWith('receipts/')) {
-            cleanPath = storagePath.slice(9);
+        } else if (cleanPath.startsWith('receipts/')) {
+            cleanPath = cleanPath.slice(9);
             targetBucket = 'receipts';
         }
     }
 
-    const signedUrl = await createTemporarySignedUrl(targetBucket, cleanPath, 300);
-    return signedUrl;
+    // Try primary target bucket
+    let signedUrl = await createTemporarySignedUrl(targetBucket, cleanPath, 3600);
+    if (signedUrl) return signedUrl;
+
+    // Fallback: try other buckets if primary failed
+    const bucketsToTry = ['images', 'documents', 'receipts'].filter(b => b !== targetBucket);
+    for (const b of bucketsToTry) {
+        signedUrl = await createTemporarySignedUrl(b, cleanPath, 3600);
+        if (signedUrl) return signedUrl;
+    }
+
+    // Fallback 2: Supabase public URL
+    try {
+        const { data } = supabase.storage.from(targetBucket).getPublicUrl(cleanPath);
+        if (data?.publicUrl) return data.publicUrl;
+    } catch {
+        // ignore
+    }
+
+    // Fallback 3: Return original string if it is an HTTP URL
+    return trimmed.startsWith('http') ? trimmed : null;
 }
 
 /**

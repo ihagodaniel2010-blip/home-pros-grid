@@ -1300,8 +1300,9 @@ export default function JobWorkspace() {
           mime_type: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
           file_size_bytes: file.size,
           caption: mediaCaption.trim() || "Job progress documentation",
-          visible_to_client: true,
-          visible_on_public_site: true
+          visible_to_client: false,
+          visible_on_public_site: false,
+          portfolio_approved: false
         });
 
         uploadedRecords.push(record);

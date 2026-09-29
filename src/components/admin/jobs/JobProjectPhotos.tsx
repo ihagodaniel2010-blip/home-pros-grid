@@ -34,7 +34,7 @@ const JobProjectPhotos: React.FC<JobProjectPhotosProps> = ({ jobId }) => {
 
     const [isUploading, setIsUploading] = useState(false);
     const [newCaption, setNewCaption] = useState("");
-    const [newVisibility, setNewVisibility] = useState<'admin' | 'client' | 'public'>('client');
+    const [newVisibility, setNewVisibility] = useState<'admin' | 'client' | 'public'>('admin');
     const [selectedFileUrl, setSelectedFileUrl] = useState<string | null>(null);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

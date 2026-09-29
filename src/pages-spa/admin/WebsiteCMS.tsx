@@ -206,9 +206,9 @@ export default function WebsiteCMS() {
           mime_type: file.type || contentType,
           file_size_bytes: file.size,
           caption: file.name.replace(/\.[^/.]+$/, ""),
-          visible_to_client: true,
-          visible_on_public_site: true,
-          portfolio_approved: true
+          visible_to_client: false,
+          visible_on_public_site: false,
+          portfolio_approved: false
         });
 
         uploadedCount++;

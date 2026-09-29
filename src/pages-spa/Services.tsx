@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search, ChevronRight, Home, ArrowRight } from "lucide-react";
 import Layout from "@/components/Layout";
 import { motion } from "framer-motion";
 import { fetchPublicWebsiteCategories, WebsiteCategory } from "@/lib/website-cms";
+import { getPublicPortfolioShowcase, PublicPortfolioShowcaseItem } from "@/lib/job-media";
+import { CardPhotoCarousel } from "@/components/CardPhotoCarousel";
 
 const CategoryCoverPlaceholder = ({ name }: { name: string }) => (
   <div className="w-full h-full bg-gradient-to-br from-[#0b2a4a] via-[#103b66] to-slate-900 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
@@ -18,13 +20,18 @@ const Services = () => {
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [categories, setCategories] = useState<WebsiteCategory[]>([]);
+  const [portfolioItems, setPortfolioItems] = useState<PublicPortfolioShowcaseItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
-    fetchPublicWebsiteCategories().then((cats) => {
+    Promise.all([
+      fetchPublicWebsiteCategories(),
+      getPublicPortfolioShowcase()
+    ]).then(([cats, items]) => {
       if (isMounted) {
         setCategories(cats || []);
+        setPortfolioItems(items || []);
         setLoading(false);
       }
     }).catch(() => {
@@ -32,6 +39,18 @@ const Services = () => {
     });
     return () => { isMounted = false; };
   }, []);
+
+  const categoryPhotosMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    portfolioItems.forEach(item => {
+      if (item.signedUrl) {
+        const catKey = (item.category || "").toLowerCase().trim();
+        if (!map[catKey]) map[catKey] = [];
+        if (!map[catKey].includes(item.signedUrl)) map[catKey].push(item.signedUrl);
+      }
+    });
+    return map;
+  }, [portfolioItems]);
 
   const filtered = categories.filter((s) =>
     s.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -73,38 +92,33 @@ const Services = () => {
         ) : (
           <>
             <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {filtered.map((s, i) => (
-                <motion.div
-                  key={s.id || s.slug}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: i * 0.02 }}
-                >
-                  <Link
-                    to={`/services/${s.slug}`}
-                    className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full"
+              {filtered.map((s, i) => {
+                const catPhotos = categoryPhotosMap[s.name.toLowerCase().trim()] || [];
+
+                return (
+                  <motion.div
+                    key={s.id || s.slug}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: i * 0.02 }}
                   >
-                    <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
-                      {s.cover_image_url ? (
-                        <img
-                          src={s.cover_image_url}
-                          alt={s.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                          }}
+                    <Link
+                      to={`/services/${s.slug}`}
+                      className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full"
+                    >
+                      <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
+                        <CardPhotoCarousel
+                          primaryImage={s.cover_image_url}
+                          additionalPhotos={catPhotos}
+                          title={s.name}
                         />
-                      ) : (
-                        <CategoryCoverPlaceholder name={s.name} />
-                      )}
-                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="bg-white/20 backdrop-blur-md p-1.5 rounded-full text-white">
-                          <ChevronRight className="h-4 w-4" />
+
+                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                          <div className="bg-white/20 backdrop-blur-md p-1.5 rounded-full text-white">
+                            <ChevronRight className="h-4 w-4" />
+                          </div>
                         </div>
                       </div>
-                    </div>
 
                     <div className="p-5 flex-1 flex flex-col justify-between">
                       <div>
@@ -123,7 +137,8 @@ const Services = () => {
                     </div>
                   </Link>
                 </motion.div>
-              ))}
+              );
+            })}
             </div>
 
             {filtered.length === 0 && (

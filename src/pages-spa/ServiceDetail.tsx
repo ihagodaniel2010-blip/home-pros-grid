@@ -4,12 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ArrowRight, Image as ImageIcon, Maximize2, X, Film, CheckCircle2, ShieldCheck, Home } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { 
-  fetchPublicWebsiteCategories, 
+import { fetchPublicWebsiteCategories, 
   getCategoryBySlug, 
   WebsiteCategory 
 } from "@/lib/website-cms";
 import { getPublicPortfolioShowcase, PublicPortfolioShowcaseItem } from "@/lib/job-media";
+import { CardPhotoCarousel } from "@/components/CardPhotoCarousel";
 
 const CategoryPlaceholderImage = ({ name }: { name: string }) => (
   <div className="w-full h-full bg-gradient-to-br from-[#0b2a4a] via-[#103b66] to-slate-900 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
@@ -146,19 +146,11 @@ const ServiceDetail = () => {
 
             <div className="md:col-span-5">
               <div className="relative aspect-4/3 rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl bg-slate-900">
-                {category.cover_image_url ? (
-                  <img
-                    src={category.cover_image_url}
-                    alt={category.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <CategoryPlaceholderImage name={category.name} />
-                )}
+                <CardPhotoCarousel
+                  primaryImage={category.cover_image_url}
+                  additionalPhotos={categoryPhotos.map(p => p.signedUrl).filter(Boolean) as string[]}
+                  title={category.name}
+                />
               </div>
             </div>
           </div>
