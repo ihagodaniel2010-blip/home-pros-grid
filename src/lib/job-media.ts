@@ -164,6 +164,25 @@ export interface PublicPortfolioShowcaseItem {
 }
 
 export async function getPublicPortfolioShowcase(): Promise<PublicPortfolioShowcaseItem[]> {
+    // 1. Primary path: Server-side API endpoint POST /api/public/signed-url (Uses supabaseAdmin service role & generates 1h signed URLs)
+    try {
+        const res = await fetch('/api/public/signed-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: 'public_portfolio', type: 'portfolio', id: 'all' }),
+            cache: 'no-store'
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.portfolio) && data.portfolio.length > 0) {
+                return data.portfolio;
+            }
+        }
+    } catch (apiErr) {
+        console.warn("API /api/public/signed-url portfolio attempt fallback:", apiErr);
+    }
+
+    // 2. Direct query fallback
     try {
         const { data, error } = await supabase
             .from('service_job_media')
@@ -195,7 +214,7 @@ export async function getPublicPortfolioShowcase(): Promise<PublicPortfolioShowc
         console.warn("getPublicPortfolioShowcase direct query fallback:", err);
     }
 
-    // Fallback via RPC get_public_portfolio_media
+    // 3. Fallback via RPC get_public_portfolio_media
     try {
         const rpcItems = await getPublicPortfolioMedia();
         if (Array.isArray(rpcItems) && rpcItems.length > 0) {

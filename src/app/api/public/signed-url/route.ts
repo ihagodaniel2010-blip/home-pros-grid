@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       let mediaList: any[] = [];
       const { data: dbList, error: mErr } = await supabaseAdmin
         .from("service_job_media")
-        .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at")
+        .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at, service_jobs(title, project_type)")
         .or("visible_on_public_site.eq.true,portfolio_approved.eq.true")
         .order("created_at", { ascending: false });
 
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
           const ids = rpcMedia.map((r: any) => r.id);
           const { data: fullRecords } = await supabaseAdmin
             .from("service_job_media")
-            .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at")
+            .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at, service_jobs(title, project_type)")
             .in("id", ids);
 
           if (fullRecords && fullRecords.length > 0) {
@@ -67,52 +67,72 @@ export async function POST(request: Request) {
         mediaList.map(async (m: any) => {
           let signedUrl: string | null = null;
           let storagePath = m.storage_path;
+          const jobTitle = m.service_jobs?.title || m.service_jobs?.project_type || m.job_title || "";
 
           if (storagePath) {
             if (storagePath.startsWith("data:")) {
               signedUrl = storagePath;
             } else {
               let targetBucket = "images";
-              let cleanPath = storagePath;
+              let cleanPath = storagePath.split('?')[0];
+              cleanPath = decodeURIComponent(cleanPath);
 
-              if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
-                if (storagePath.includes("/storage/v1/object/")) {
-                  const urlParts = storagePath.split("/storage/v1/object/")[1]?.split("/");
+              if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+                if (cleanPath.includes("/storage/v1/object/")) {
+                  const urlParts = cleanPath.split("/storage/v1/object/")[1]?.split("/");
                   if (urlParts && urlParts.length >= 3) {
                     targetBucket = urlParts[1];
                     cleanPath = urlParts.slice(2).join("/");
+                  } else if (urlParts && urlParts.length >= 2) {
+                    targetBucket = urlParts[0];
+                    cleanPath = urlParts.slice(1).join("/");
                   }
+                } else {
+                  signedUrl = storagePath;
                 }
               } else {
-                if (storagePath.startsWith("documents/")) {
+                if (cleanPath.startsWith("documents/")) {
                   targetBucket = "documents";
-                  cleanPath = storagePath.slice(10);
-                } else if (storagePath.startsWith("images/")) {
+                  cleanPath = cleanPath.slice(10);
+                } else if (cleanPath.startsWith("images/")) {
                   targetBucket = "images";
-                  cleanPath = storagePath.slice(7);
-                } else if (storagePath.startsWith("job-media/")) {
+                  cleanPath = cleanPath.slice(7);
+                } else if (cleanPath.startsWith("job-media/")) {
                   targetBucket = "job-media";
-                  cleanPath = storagePath.slice(10);
-                } else if (storagePath.startsWith("receipts/")) {
+                  cleanPath = cleanPath.slice(10);
+                } else if (cleanPath.startsWith("receipts/")) {
                   targetBucket = "receipts";
-                  cleanPath = storagePath.slice(9);
+                  cleanPath = cleanPath.slice(9);
                 }
               }
 
-              const { data: signedData } = await supabaseAdmin.storage
-                .from(targetBucket)
-                .createSignedUrl(cleanPath, 3600);
+              if (!signedUrl) {
+                const { data: signedData } = await supabaseAdmin.storage
+                  .from(targetBucket)
+                  .createSignedUrl(cleanPath, 3600);
 
-              if (signedData?.signedUrl) {
-                signedUrl = signedData.signedUrl;
-              } else {
-                // Fallback attempt across other buckets
-                const bucketsToTry = ["images", "documents", "job-media"].filter(b => b !== targetBucket);
-                for (const b of bucketsToTry) {
-                  const { data: fbData } = await supabaseAdmin.storage.from(b).createSignedUrl(cleanPath, 3600);
-                  if (fbData?.signedUrl) {
-                    signedUrl = fbData.signedUrl;
-                    break;
+                if (signedData?.signedUrl) {
+                  signedUrl = signedData.signedUrl;
+                } else {
+                  // Fallback attempt across other buckets
+                  const bucketsToTry = ["images", "documents", "job-media", "receipts"].filter(b => b !== targetBucket);
+                  for (const b of bucketsToTry) {
+                    const { data: fbData } = await supabaseAdmin.storage.from(b).createSignedUrl(cleanPath, 3600);
+                    if (fbData?.signedUrl) {
+                      signedUrl = fbData.signedUrl;
+                      break;
+                    }
+                  }
+                }
+
+                if (!signedUrl) {
+                  // Final fallback to public URL or direct storagePath
+                  try {
+                    const { data: pubData } = supabaseAdmin.storage.from(targetBucket).getPublicUrl(cleanPath);
+                    if (pubData?.publicUrl) signedUrl = pubData.publicUrl;
+                  } catch {}
+                  if (!signedUrl && storagePath.startsWith("http")) {
+                    signedUrl = storagePath;
                   }
                 }
               }
@@ -120,7 +140,7 @@ export async function POST(request: Request) {
           }
 
           // Category classification: check database media_category_relations first
-          let category = "Recent Projects";
+          let category = "";
           let dbCategories: string[] = [];
           try {
             const { data: catRels } = await supabaseAdmin
@@ -138,14 +158,17 @@ export async function POST(request: Request) {
             }
           } catch (e) {}
 
-          if (dbCategories.length === 0) {
-            const text = `${m.caption || ''} ${m.file_name || ''}`.toLowerCase();
-            if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(text)) category = "Framing";
+          if (dbCategories.length === 0 || !category) {
+            const text = `${m.caption || ''} ${m.file_name || ''} ${jobTitle || ''}`.toLowerCase();
+            if (/bath|banheiro|shower|tub|vanity|toilet|duche/i.test(text)) category = "Bathrooms";
+            else if (/kitchen|cozinha|cabinet|countertop|armario|bancada/i.test(text)) category = "Kitchens";
+            else if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(text)) category = "Framing";
             else if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(text)) category = "Roofing";
             else if (/drywall|gesso|sheetrock|wall|parede|teto/i.test(text)) category = "Drywall";
             else if (/siding|revestimento|facade|exterior|cladding/i.test(text)) category = "Siding";
             else if (/deck|porch|patio|varanda|decking|rail/i.test(text)) category = "Decks";
-            else if (/remodel|reforma|kitchen|bath|cozinha|banheiro|tile|flooring/i.test(text)) category = "Remodeling";
+            else if (/tile|flooring|piso|chao|vinyl|hardwood|parquet/i.test(text)) category = "Flooring";
+            else category = "Remodeling";
           }
 
           return {
