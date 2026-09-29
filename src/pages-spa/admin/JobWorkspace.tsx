@@ -1393,6 +1393,30 @@ export default function JobWorkspace() {
     }
   };
 
+  const handleApproveAllPhotosForPublic = async () => {
+    if (!jobId || !media || media.length === 0) return;
+    try {
+      const updates = {
+        visible_to_client: true,
+        visible_on_public_site: true,
+        portfolio_approved: true,
+        media_status: 'approved'
+      };
+      const { error } = await supabase
+        .from('service_job_media')
+        .update(updates)
+        .eq('service_job_id', jobId);
+
+      if (error) throw error;
+
+      setMedia(prev => prev.map(m => ({ ...m, ...updates })));
+      toast.success("Todas as fotos do projeto foram aprovadas para o Portfólio do Site!");
+    } catch (err: any) {
+      console.error("Error approving all photos for public site:", err);
+      toast.error("Erro ao aprovar fotos para o site.");
+    }
+  };
+
   const handleGeneratePDF = async () => {
     if (!estimate) return;
     setIsGeneratingPDF(true);
@@ -2286,6 +2310,14 @@ export default function JobWorkspace() {
                     title="Desmarcar todas as fotos (manter privadas)"
                   >
                     <EyeOff className="h-3.5 w-3.5 text-slate-500" /> Uncheck All (Make Private)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleApproveAllPhotosForPublic}
+                    className="border-purple-300 text-purple-800 bg-purple-50 hover:bg-purple-100 font-bold text-xs h-9 gap-1"
+                    title="Aprovar e publicar todas as fotos para o site público"
+                  >
+                    <Globe className="h-3.5 w-3.5 text-purple-600" /> Publish All to Website
                   </Button>
                   <Button onClick={() => setIsAddMediaOpen(true)} className="bg-[#0b2a4a] text-white font-bold text-xs h-9">
                     <Plus className="h-3.5 w-3.5 mr-1" /> Add Photo
