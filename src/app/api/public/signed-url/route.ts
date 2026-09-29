@@ -36,38 +36,51 @@ export async function POST(request: Request) {
 
     // 0. Handle Institutional Public Portfolio Showcase query (No estimate token required)
     if (type === "portfolio") {
+      const clientToUse = supabaseAdmin || null;
+      if (!clientToUse) {
+        return NextResponse.json({ error: "Supabase service role unavailable" }, { status: 500, headers: NO_CACHE_HEADERS });
+      }
+
       let mediaList: any[] = [];
-      const { data: dbList, error: mErr } = await supabaseAdmin
+      const { data: dbList, error: mErr } = await clientToUse
         .from("service_job_media")
-        .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at, service_jobs(title, project_type)")
+        .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at")
         .or("visible_on_public_site.eq.true,portfolio_approved.eq.true")
         .order("created_at", { ascending: false });
 
       if (!mErr && dbList && dbList.length > 0) {
         mediaList = dbList;
       } else {
-        // Fallback to RPC get_public_portfolio_media or direct table select
-        const { data: rpcMedia, error: rpcErr } = await supabaseAdmin.rpc("get_public_portfolio_media");
+        const { data: rpcMedia, error: rpcErr } = await clientToUse.rpc("get_public_portfolio_media");
         if (!rpcErr && Array.isArray(rpcMedia) && rpcMedia.length > 0) {
-          const ids = rpcMedia.map((r: any) => r.id);
-          const { data: fullRecords } = await supabaseAdmin
-            .from("service_job_media")
-            .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at, service_jobs(title, project_type)")
-            .in("id", ids);
-
-          if (fullRecords && fullRecords.length > 0) {
-            mediaList = fullRecords;
-          } else {
-            mediaList = rpcMedia;
-          }
+          mediaList = rpcMedia;
         }
+      }
+
+      // Collect job titles without complex PostgREST joins
+      const jobIds = Array.from(new Set(mediaList.map((m: any) => m.service_job_id).filter(Boolean)));
+      const jobTitleMap: Record<string, string> = {};
+
+      if (jobIds.length > 0) {
+        try {
+          const { data: jobs } = await clientToUse
+            .from("service_jobs")
+            .select("id, title, project_type")
+            .in("id", jobIds);
+
+          if (jobs) {
+            jobs.forEach((j: any) => {
+              jobTitleMap[j.id] = j.title || j.project_type || "";
+            });
+          }
+        } catch (e) {}
       }
 
       const itemsWithUrls = await Promise.all(
         mediaList.map(async (m: any) => {
           let signedUrl: string | null = null;
           let storagePath = m.storage_path;
-          const jobTitle = m.service_jobs?.title || m.service_jobs?.project_type || m.job_title || "";
+          const jobTitle = jobTitleMap[m.service_job_id] || m.job_title || "";
 
           if (storagePath) {
             if (storagePath.startsWith("data:")) {
@@ -107,17 +120,16 @@ export async function POST(request: Request) {
               }
 
               if (!signedUrl) {
-                const { data: signedData } = await supabaseAdmin.storage
+                const { data: signedData } = await clientToUse.storage
                   .from(targetBucket)
                   .createSignedUrl(cleanPath, 3600);
 
                 if (signedData?.signedUrl) {
                   signedUrl = signedData.signedUrl;
                 } else {
-                  // Fallback attempt across other buckets
                   const bucketsToTry = ["images", "documents", "job-media", "receipts"].filter(b => b !== targetBucket);
                   for (const b of bucketsToTry) {
-                    const { data: fbData } = await supabaseAdmin.storage.from(b).createSignedUrl(cleanPath, 3600);
+                    const { data: fbData } = await clientToUse.storage.from(b).createSignedUrl(cleanPath, 3600);
                     if (fbData?.signedUrl) {
                       signedUrl = fbData.signedUrl;
                       break;
@@ -126,9 +138,8 @@ export async function POST(request: Request) {
                 }
 
                 if (!signedUrl) {
-                  // Final fallback to public URL or direct storagePath
                   try {
-                    const { data: pubData } = supabaseAdmin.storage.from(targetBucket).getPublicUrl(cleanPath);
+                    const { data: pubData } = clientToUse.storage.from(targetBucket).getPublicUrl(cleanPath);
                     if (pubData?.publicUrl) signedUrl = pubData.publicUrl;
                   } catch {}
                   if (!signedUrl && storagePath.startsWith("http")) {
@@ -143,7 +154,7 @@ export async function POST(request: Request) {
           let category = "";
           let dbCategories: string[] = [];
           try {
-            const { data: catRels } = await supabaseAdmin
+            const { data: catRels } = await clientToUse
               .from("media_category_relations")
               .select("category_id, website_categories(name)")
               .eq("media_id", m.id);
