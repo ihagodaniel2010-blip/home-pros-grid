@@ -3,6 +3,7 @@ import { Send, CheckCircle2, AlertCircle, Loader2, ShieldCheck } from "lucide-re
 import { siteConfig } from "@/config/site";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { SMSConsentCheckbox } from "@/components/SMSConsentCheckbox";
 
 export default function DirectEstimateForm() {
   const [formData, setFormData] = useState({
@@ -16,6 +17,7 @@ export default function DirectEstimateForm() {
     websiteUrl: "" // Honeypot anti-spam field
   });
 
+  const [smsConsent, setSmsConsent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -39,6 +41,14 @@ export default function DirectEstimateForm() {
     setIsSubmitting(true);
 
     try {
+      const now = new Date().toISOString();
+      const smsConsentEvidence = {
+        smsConsent: smsConsent,
+        smsConsentTimestamp: now,
+        smsConsentTextVersion: "A2P 10DLC v1.0 - 2026-09-28",
+        smsConsentPageUrl: typeof window !== "undefined" ? window.location.href : "https://www.h-a-construction.com/"
+      };
+
       // 1. Try sending to backend API or Supabase lead table
       let saved = false;
 
@@ -52,7 +62,8 @@ export default function DirectEstimateForm() {
             service_type: formData.serviceType,
             project_description: `${formData.description}\n\n[Preferred Contact: ${formData.contactMethod}]`,
             status: "new",
-            source: "website_estimate_form"
+            source: "website_estimate_form",
+            client_answers: smsConsentEvidence
           }
         ]);
 
@@ -68,7 +79,10 @@ export default function DirectEstimateForm() {
         const res = await fetch("/api/contact", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData)
+          body: JSON.stringify({
+            ...formData,
+            ...smsConsentEvidence
+          })
         });
         if (res.ok) saved = true;
       } catch (err) {
@@ -291,6 +305,9 @@ export default function DirectEstimateForm() {
                 className="w-full p-4 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
               />
             </div>
+
+            {/* Twilio A2P 10DLC Compliant SMS Consent Checkbox */}
+            <SMSConsentCheckbox checked={smsConsent} onChange={setSmsConsent} darkTheme={true} />
 
             {/* Submit Button */}
             <div className="pt-2">

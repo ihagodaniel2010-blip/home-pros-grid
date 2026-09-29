@@ -13,6 +13,7 @@ import { supabase, supabasePublic } from "@/lib/supabase";
 import { useLanguage } from "@/context/LanguageContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SMSConsentCheckbox } from "@/components/SMSConsentCheckbox";
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 24 },
@@ -27,6 +28,8 @@ const Quote = () => {
   const service = getServiceBySlug(serviceSlug || "");
   const subServices = getSubServices(serviceSlug || "");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const [smsConsent, setSmsConsent] = useState(false);
 
   const [revealedSections, setRevealedSections] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -281,6 +284,14 @@ const Quote = () => {
         }
       }
 
+      const now = new Date().toISOString();
+      const smsConsentEvidence = {
+        smsConsent: smsConsent,
+        smsConsentTimestamp: now,
+        smsConsentTextVersion: "A2P 10DLC v1.0 - 2026-09-28",
+        smsConsentPageUrl: typeof window !== "undefined" ? window.location.href : "https://www.h-a-construction.com/quote"
+      };
+
       const selectedProNames = mockPros.filter((p) => formData.selectedPros.includes(p.id)).map((p) => p.name);
       await saveLead({
         serviceSlug: serviceSlug || "",
@@ -296,7 +307,10 @@ const Quote = () => {
         selectedPros: selectedProNames,
         media_urls: uploadedUrls,
         taskSlug: hasDynamicFlow ? (taskSlug || "needs_review") : undefined,
-        clientAnswers: clientAnswers
+        clientAnswers: {
+          ...(clientAnswers || {}),
+          ...smsConsentEvidence
+        }
       });
       navigate("/success");
     } catch (error) {
@@ -787,11 +801,7 @@ const Quote = () => {
                   ))}
                 </div>
 
-                <p className="text-[11px] text-muted-foreground mb-6 leading-relaxed">
-                  By clicking "{t("quote.submit")}", you agree to our Terms of Service and Privacy Policy.
-                  You consent to receive calls, texts and emails from service professionals at the number
-                  and email provided.
-                </p>
+                <SMSConsentCheckbox checked={smsConsent} onChange={setSmsConsent} className="mb-4" />
 
                 <button
                   onClick={handleSubmit}

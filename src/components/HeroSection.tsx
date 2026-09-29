@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { createLead } from "@/lib/leads";
 import { fetchWebsiteSettings, fetchPublicWebsiteCategories, DEFAULT_WEBSITE_SETTINGS, WebsiteSettings, WebsiteCategory } from "@/lib/website-cms";
 import { DEFAULT_ORG_ID } from "@/context/UserContext";
+import { SMSConsentCheckbox } from "@/components/SMSConsentCheckbox";
 
 const HeroSection = () => {
   const navigate = useNavigate();
@@ -34,6 +35,8 @@ const HeroSection = () => {
     // Honeypot
     websiteUrl: ""
   });
+
+  const [smsConsent, setSmsConsent] = useState(false);
 
   // Contact Preferences
   const [contactPrefs, setContactPrefs] = useState<{
@@ -158,6 +161,14 @@ const HeroSection = () => {
 
     setIsSubmitting(true);
     try {
+      const now = new Date().toISOString();
+      const smsConsentEvidence = {
+        smsConsent: smsConsent,
+        smsConsentTimestamp: now,
+        smsConsentTextVersion: "A2P 10DLC v1.0 - 2026-09-28",
+        smsConsentPageUrl: typeof window !== "undefined" ? window.location.href : "https://www.h-a-construction.com/"
+      };
+
       const clientAnswersPayload = {
         street_address: formData.streetAddress.trim(),
         unit: formData.unit.trim() || undefined,
@@ -166,7 +177,8 @@ const HeroSection = () => {
         zip: formData.zip.trim(),
         preferred_contact_methods: selectedPrefsList,
         project_type: formData.projectType,
-        project_description: formData.description.trim()
+        project_description: formData.description.trim(),
+        ...smsConsentEvidence
       };
 
       await createLead({
@@ -486,6 +498,9 @@ const HeroSection = () => {
                       </label>
                     </div>
                   </div>
+
+                  {/* Twilio A2P 10DLC Compliant SMS Consent Checkbox */}
+                  <SMSConsentCheckbox checked={smsConsent} onChange={setSmsConsent} darkTheme={true} />
 
                   <Button
                     type="submit"

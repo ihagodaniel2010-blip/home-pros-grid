@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { siteConfig } from "@/config/site";
-import { Phone, Mail, MapPin, Send, CheckCircle2, Clock } from "lucide-react";
+import { Phone, Mail, MapPin, Send, CheckCircle2, Clock, MessageSquare } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { SocialMediaBadges } from "@/components/SocialMediaBadges";
+import { SMSConsentCheckbox } from "@/components/SMSConsentCheckbox";
 
 export default function Contact() {
   useEffect(() => {
@@ -20,6 +21,7 @@ export default function Contact() {
     websiteUrl: "" // Honeypot
   });
 
+  const [smsConsent, setSmsConsent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -41,6 +43,14 @@ export default function Contact() {
     setIsSubmitting(true);
 
     try {
+      const now = new Date().toISOString();
+      const smsConsentEvidence = {
+        smsConsent: smsConsent,
+        smsConsentTimestamp: now,
+        smsConsentTextVersion: "A2P 10DLC v1.0 - 2026-09-28",
+        smsConsentPageUrl: typeof window !== "undefined" ? window.location.href : "https://www.h-a-construction.com/contact"
+      };
+
       if (supabase) {
         await supabase.from("leads").insert([
           {
@@ -50,7 +60,8 @@ export default function Contact() {
             service_type: formData.subject,
             project_description: `[Subject: ${formData.subject}]\n${formData.message}`,
             status: "new",
-            source: "contact_page"
+            source: "contact_page",
+            client_answers: smsConsentEvidence
           }
         ]);
       }
@@ -129,10 +140,20 @@ export default function Contact() {
                 </div>
 
                 <div className="flex items-start gap-3">
+                  <MessageSquare className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Text / SMS Support</p>
+                    <a href="sms:+12078198622" className="block hover:text-emerald-600 font-bold text-emerald-700">
+                      (207) 819-8622
+                    </a>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
                   <MapPin className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold text-slate-900">Service Area</p>
-                    <p className="text-slate-600">Southern Maine (Saco, OOB, Biddeford, Scarborough & surrounding areas)</p>
+                    <p className="text-slate-600">Southern Maine (Saco, OOB, Biddeford, Scarborough &amp; surrounding areas)</p>
                   </div>
                 </div>
 
@@ -176,6 +197,7 @@ export default function Contact() {
                   <button
                     onClick={() => {
                       setIsSuccess(false);
+                      setSmsConsent(false);
                       setFormData({ fullName: "", email: "", phone: "", subject: "General Inquiry", message: "", websiteUrl: "" });
                     }}
                     className="mt-4 px-6 py-2.5 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 transition-colors text-sm"
@@ -257,8 +279,8 @@ export default function Contact() {
                         className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:bg-white text-sm"
                       >
                         <option value="General Inquiry">General Inquiry</option>
-                        <option value="Estimate Support">Estimate & Quote Request</option>
-                        <option value="Billing & Refund">Billing / Refund Question</option>
+                        <option value="Estimate Support">Estimate &amp; Quote Request</option>
+                        <option value="Billing &amp; Refund">Billing / Refund Question</option>
                         <option value="Schedule Project">Project Scheduling</option>
                       </select>
                     </div>
@@ -276,6 +298,9 @@ export default function Contact() {
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:bg-white text-sm"
                     />
                   </div>
+
+                  {/* Twilio A2P 10DLC Compliant SMS Consent Checkbox */}
+                  <SMSConsentCheckbox checked={smsConsent} onChange={setSmsConsent} />
 
                   <button
                     type="submit"

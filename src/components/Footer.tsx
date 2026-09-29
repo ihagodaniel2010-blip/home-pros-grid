@@ -126,15 +126,17 @@ const Footer = () => {
 
       </div>
 
-      {/* Bottom Copyright & Guarantee Bar */}
+      {/* Bottom Copyright & Legal Links Bar */}
       <div className="max-w-7xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
         <p>&copy; {new Date().getFullYear()} H &amp; A Construction LLC. All rights reserved.</p>
-        <div className="flex flex-wrap items-center gap-4 text-[11px]">
-          <span>Licensed &amp; Insured</span>
-          <span>•</span>
-          <span>Serving Southern Maine</span>
-          <span>•</span>
-          <span>Built on Quality, Trust &amp; Relationships</span>
+        <div className="flex flex-wrap items-center gap-3.5 text-xs font-semibold">
+          <Link to="/privacy" className="hover:text-amber-400 text-slate-300 transition-colors underline decoration-slate-600">Privacy Policy</Link>
+          <span className="text-slate-600">•</span>
+          <Link to="/terms" className="hover:text-amber-400 text-slate-300 transition-colors underline decoration-slate-600">Terms &amp; Conditions</Link>
+          <span className="text-slate-600">•</span>
+          <Link to="/contact" className="hover:text-amber-400 text-slate-300 transition-colors underline decoration-slate-600">Contact</Link>
+          <span className="text-slate-600">•</span>
+          <span className="text-slate-400 font-normal">Licensed &amp; Insured</span>
         </div>
       </div>
     </footer>

@@ -8,6 +8,7 @@ import { CheckCircle2, ShieldCheck, ArrowRight, Building2, Wrench, Sparkles } fr
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { SMSConsentCheckbox } from "@/components/SMSConsentCheckbox";
 
 const tradeCategories = [
   "General Contractor & Remodeling",
@@ -30,6 +31,7 @@ const Join = () => {
     zipCode: "",
     trade: tradeCategories[0],
   });
+  const [smsConsent, setSmsConsent] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -234,6 +236,8 @@ const Join = () => {
                         ))}
                       </select>
                     </div>
+
+                    <SMSConsentCheckbox checked={smsConsent} onChange={setSmsConsent} className="mt-2" />
 
                     <Button type="submit" className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-600/20 mt-2">
                       Complete Registration <ArrowRight className="w-4 h-4 ml-2" />
