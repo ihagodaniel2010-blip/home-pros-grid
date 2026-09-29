@@ -1299,7 +1299,7 @@ export default function JobWorkspace() {
           file_name: file.name,
           mime_type: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
           file_size_bytes: file.size,
-          caption: mediaCaption.trim() || "Job progress documentation",
+          caption: mediaCaption.trim() || job?.title || estimate?.project_type || lead?.project_type || "Job progress documentation",
           visible_to_client: false,
           visible_on_public_site: false,
           portfolio_approved: false
