@@ -29,7 +29,7 @@ const Quote = () => {
   const subServices = getSubServices(serviceSlug || "");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const [smsConsent, setSmsConsent] = useState(false);
+  const [smsConsent, setSmsConsent] = useState<boolean | null>(null);
 
   const [revealedSections, setRevealedSections] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -221,6 +221,7 @@ const Quote = () => {
     if (!formData.address.trim()) e.address = "Address is required";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) e.email = "Enter a valid email";
     if (!/^[\d\s()+-]{7,}$/.test(formData.phone)) e.phone = "Enter a valid phone number";
+    if (smsConsent === null) e.smsConsent = "Please select YES or NO for SMS/Text updates.";
     return e;
   };
 
@@ -286,9 +287,9 @@ const Quote = () => {
 
       const now = new Date().toISOString();
       const smsConsentEvidence = {
-        smsConsent: smsConsent,
+        smsConsent: smsConsent === true,
         smsConsentTimestamp: now,
-        smsConsentTextVersion: "A2P 10DLC v1.0 - 2026-09-28",
+        smsConsentTextVersion: "A2P 10DLC Radio Choice v2.0 - 2026-09-29",
         smsConsentPageUrl: typeof window !== "undefined" ? window.location.href : "https://www.h-a-construction.com/quote"
       };
 
@@ -801,7 +802,15 @@ const Quote = () => {
                   ))}
                 </div>
 
-                <SMSConsentCheckbox checked={smsConsent} onChange={setSmsConsent} className="mb-4" />
+                <SMSConsentCheckbox 
+                  checked={smsConsent} 
+                  onChange={(val) => {
+                    setSmsConsent(val);
+                    setErrors((p) => ({ ...p, smsConsent: "" }));
+                  }} 
+                  error={errors.smsConsent}
+                  className="mb-4" 
+                />
 
                 <button
                   onClick={handleSubmit}

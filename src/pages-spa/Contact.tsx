@@ -21,7 +21,8 @@ export default function Contact() {
     websiteUrl: "" // Honeypot
   });
 
-  const [smsConsent, setSmsConsent] = useState(false);
+  const [smsConsent, setSmsConsent] = useState<boolean | null>(null);
+  const [smsError, setSmsError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -40,14 +41,20 @@ export default function Contact() {
       return;
     }
 
+    if (smsConsent === null) {
+      setSmsError("Please select YES or NO for SMS/Text updates.");
+      return;
+    }
+    setSmsError(null);
+
     setIsSubmitting(true);
 
     try {
       const now = new Date().toISOString();
       const smsConsentEvidence = {
-        smsConsent: smsConsent,
+        smsConsent: smsConsent === true,
         smsConsentTimestamp: now,
-        smsConsentTextVersion: "A2P 10DLC v1.0 - 2026-09-28",
+        smsConsentTextVersion: "A2P 10DLC Radio Choice v2.0 - 2026-09-29",
         smsConsentPageUrl: typeof window !== "undefined" ? window.location.href : "https://www.h-a-construction.com/contact"
       };
 
@@ -61,6 +68,10 @@ export default function Contact() {
             project_description: `[Subject: ${formData.subject}]\n${formData.message}`,
             status: "new",
             source: "contact_page",
+            sms_consent: smsConsent === true,
+            sms_consent_timestamp: now,
+            sms_consent_text_version: "A2P 10DLC Radio Choice v2.0 - 2026-09-29",
+            sms_consent_page_url: typeof window !== "undefined" ? window.location.href : "https://www.h-a-construction.com/contact",
             client_answers: smsConsentEvidence
           }
         ]);
@@ -299,8 +310,15 @@ export default function Contact() {
                     />
                   </div>
 
-                  {/* Twilio A2P 10DLC Compliant SMS Consent Checkbox */}
-                  <SMSConsentCheckbox checked={smsConsent} onChange={setSmsConsent} />
+                  {/* Twilio A2P 10DLC Compliant SMS Consent Radio Group */}
+                  <SMSConsentCheckbox 
+                    checked={smsConsent} 
+                    onChange={(val) => {
+                      setSmsConsent(val);
+                      setSmsError(null);
+                    }}
+                    error={smsError}
+                  />
 
                   <button
                     type="submit"

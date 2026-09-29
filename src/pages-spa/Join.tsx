@@ -31,7 +31,8 @@ const Join = () => {
     zipCode: "",
     trade: tradeCategories[0],
   });
-  const [smsConsent, setSmsConsent] = useState(false);
+  const [smsConsent, setSmsConsent] = useState<boolean | null>(null);
+  const [smsError, setSmsError] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -40,6 +41,12 @@ const Join = () => {
       toast.error("Please fill in all required fields.");
       return;
     }
+    if (smsConsent === null) {
+      toast.error("Please select YES or NO for SMS/Text updates.");
+      setSmsError("Please select YES or NO for SMS/Text updates.");
+      return;
+    }
+    setSmsError(null);
     setIsSubmitted(true);
     toast.success("Registration request received! Accessing contractor portal...");
   };
@@ -237,7 +244,15 @@ const Join = () => {
                       </select>
                     </div>
 
-                    <SMSConsentCheckbox checked={smsConsent} onChange={setSmsConsent} className="mt-2" />
+                    <SMSConsentCheckbox 
+                      checked={smsConsent} 
+                      onChange={(val) => {
+                        setSmsConsent(val);
+                        setSmsError(null);
+                      }} 
+                      error={smsError}
+                      className="mt-2" 
+                    />
 
                     <Button type="submit" className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-600/20 mt-2">
                       Complete Registration <ArrowRight className="w-4 h-4 ml-2" />

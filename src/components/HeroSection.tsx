@@ -36,7 +36,8 @@ const HeroSection = () => {
     websiteUrl: ""
   });
 
-  const [smsConsent, setSmsConsent] = useState(false);
+  const [smsConsent, setSmsConsent] = useState<boolean | null>(null);
+  const [smsError, setSmsError] = useState<string | null>(null);
 
   // Contact Preferences
   const [contactPrefs, setContactPrefs] = useState<{
@@ -138,6 +139,13 @@ const HeroSection = () => {
       return;
     }
 
+    if (smsConsent === null) {
+      toast.error("Please select YES or NO for SMS/Text updates.");
+      setSmsError("Please select YES or NO for SMS/Text updates.");
+      return;
+    }
+    setSmsError(null);
+
     // Format selected contact methods
     const selectedPrefsList: string[] = [];
     if (contactPrefs.any) {
@@ -163,9 +171,9 @@ const HeroSection = () => {
     try {
       const now = new Date().toISOString();
       const smsConsentEvidence = {
-        smsConsent: smsConsent,
+        smsConsent: smsConsent === true,
         smsConsentTimestamp: now,
-        smsConsentTextVersion: "A2P 10DLC v1.0 - 2026-09-28",
+        smsConsentTextVersion: "A2P 10DLC Radio Choice v2.0 - 2026-09-29",
         smsConsentPageUrl: typeof window !== "undefined" ? window.location.href : "https://www.h-a-construction.com/"
       };
 
@@ -499,8 +507,16 @@ const HeroSection = () => {
                     </div>
                   </div>
 
-                  {/* Twilio A2P 10DLC Compliant SMS Consent Checkbox */}
-                  <SMSConsentCheckbox checked={smsConsent} onChange={setSmsConsent} darkTheme={true} />
+                  {/* Twilio A2P 10DLC Compliant SMS Consent Radio Group */}
+                  <SMSConsentCheckbox 
+                    checked={smsConsent} 
+                    onChange={(val) => {
+                      setSmsConsent(val);
+                      setSmsError(null);
+                    }} 
+                    error={smsError}
+                    darkTheme={true} 
+                  />
 
                   <Button
                     type="submit"

@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
-import { sendCustomerServiceSMS, isTwilioSMSEnabled } from "@/lib/server/twilio";
+import { sendCustomerServiceSMS, normalizePhoneE164, SMSConsentRecord } from "@/lib/server/twilio";
+import { supabaseAdmin } from "@/lib/server/supabase-admin";
+import { createClient } from "@supabase/supabase-js";
 
 const NO_CACHE_HEADERS = {
   "Cache-Control": "no-store, private, no-cache, must-revalidate",
   "Pragma": "no-cache",
   "Expires": "0"
 };
+
+function getDbClient() {
+  if (supabaseAdmin) return supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +29,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { toPhone, message, consentRecord, bypassConsentCheck } = body;
+    const { toPhone, message, estimateId, leadId, consentRecord: providedConsent, bypassConsentCheck } = body;
 
     if (!toPhone) {
       return NextResponse.json(
@@ -35,11 +45,100 @@ export async function POST(request: Request) {
       );
     }
 
+    let verifiedConsentRecord: SMSConsentRecord | null = providedConsent || null;
+    const db = getDbClient();
+
+    // If consentRecord is not passed directly, look up lead via estimateId or leadId
+    if (!verifiedConsentRecord && db) {
+      let targetLeadId: string | null = leadId || null;
+
+      if (!targetLeadId && estimateId) {
+        const { data: est } = await db
+          .from("estimates")
+          .select("lead_id, client_phone")
+          .eq("id", estimateId)
+          .maybeSingle();
+
+        if (est && est.lead_id) {
+          targetLeadId = est.lead_id;
+        }
+      }
+
+      if (!targetLeadId) {
+        return NextResponse.json(
+          {
+            success: false,
+            blockedByConsent: true,
+            message: "SMS dispatch notice: No lead or consent record provided. (Manual estimate without linked lead)"
+          },
+          { status: 403, headers: NO_CACHE_HEADERS }
+        );
+      }
+
+      // Fetch lead details from database using only existing schema columns
+      const { data: lead } = await db
+        .from("leads")
+        .select("id, fullName, phone, client_answers")
+        .eq("id", targetLeadId)
+        .maybeSingle();
+
+      if (!lead) {
+        return NextResponse.json(
+          {
+            success: false,
+            blockedByConsent: true,
+            message: "SMS dispatch notice: Linked lead record not found in database."
+          },
+          { status: 403, headers: NO_CACHE_HEADERS }
+        );
+      }
+
+      // 1. Phone matching validation (Compare normalized E.164)
+      const normLeadPhone = normalizePhoneE164(lead.phone);
+      const normToPhone = normalizePhoneE164(toPhone);
+
+      if (!normLeadPhone || !normToPhone || normLeadPhone !== normToPhone) {
+        return NextResponse.json(
+          {
+            success: false,
+            blockedByConsent: true,
+            message: `SMS dispatch notice: Phone number on estimate (${toPhone}) does not match the phone number given during SMS consent (${lead.phone || 'N/A'}). Re-consent required.`
+          },
+          { status: 403, headers: NO_CACHE_HEADERS }
+        );
+      }
+
+      // 2. Validate SMS consent from client_answers JSONB
+      const ca = lead.client_answers || {};
+      const hasConsent = ca.smsConsent === true;
+
+      if (!hasConsent) {
+        return NextResponse.json(
+          {
+            success: false,
+            blockedByConsent: true,
+            message: "SMS dispatch notice: Customer explicitly selected NO or did not provide SMS opt-in consent."
+          },
+          { status: 403, headers: NO_CACHE_HEADERS }
+        );
+      }
+
+      verifiedConsentRecord = {
+        smsConsent: true,
+        smsConsentTimestamp: ca.smsConsentTimestamp,
+        smsConsentTextVersion: ca.smsConsentTextVersion,
+        smsConsentPageUrl: ca.smsConsentPageUrl,
+        phone: lead.phone,
+        leadId: lead.id,
+        client_answers: ca
+      };
+    }
+
     // Dispatch via centralized Twilio module (Consent Gate & Feature Flag enforced)
     const result = await sendCustomerServiceSMS({
       toPhone: String(toPhone),
       messageText: String(message),
-      consentRecord: consentRecord || null
+      consentRecord: verifiedConsentRecord
     });
 
     if (result.disabled) {
@@ -80,3 +179,4 @@ export async function POST(request: Request) {
     }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
+

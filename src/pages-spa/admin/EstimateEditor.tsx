@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer, Copy, Wrench, Wand2, Mail, PenTool, Phone } from "lucide-react";
+import { ArrowLeft, Save, Loader2, CheckCircle2, CreditCard, FileText, Share2, Printer, Copy, Wrench, Wand2, Mail, PenTool, Phone, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { supabase } from "@/lib/supabase";
@@ -47,6 +47,19 @@ const EstimateEditor = () => {
     const [isSendingEmail, setIsSendingEmail] = useState(false);
     const [isSendingSMS, setIsSendingSMS] = useState(false);
     const [leadContactPrefs, setLeadContactPrefs] = useState<string[]>([]);
+    const [linkedLead, setLinkedLead] = useState<any>(null);
+
+    const normalizePhoneE164Client = (phoneInput?: string | null): string | null => {
+        if (!phoneInput || typeof phoneInput !== "string") return null;
+        const cleaned = phoneInput.trim().replace(/[^\d+]/g, "");
+        if (cleaned.startsWith("+")) {
+            const digits = cleaned.replace(/\D/g, "");
+            return digits.length >= 10 && digits.length <= 15 ? `+${digits}` : null;
+        }
+        if (cleaned.length === 10) return `+1${cleaned}`;
+        if (cleaned.length === 11 && cleaned.startsWith("1")) return `+${cleaned}`;
+        return null;
+    };
 
     const handleSendEstimateEmail = async () => {
         if (userRole === 'worker') {
@@ -105,6 +118,11 @@ const EstimateEditor = () => {
             return;
         }
 
+        if (!smsConsentInfo.canSend) {
+            toast.error(smsConsentInfo.reason);
+            return;
+        }
+
         const phone = formData.client_phone || "";
         if (!phone || phone.trim().length < 7) {
             toast.error("Please provide a valid customer phone number in the estimate details.");
@@ -122,7 +140,9 @@ const EstimateEditor = () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     toPhone: phone.trim(),
-                    message: messageText
+                    message: messageText,
+                    estimateId: id || undefined,
+                    leadId: formData.lead_id || undefined
                 })
             });
 
@@ -181,8 +201,11 @@ const EstimateEditor = () => {
                     if (estimate.lead_id) {
                         getLeads().then(leads => {
                             const l = leads.find(item => item.id === estimate.lead_id);
-                            if (l && l.preferred_contact_methods) {
-                                setLeadContactPrefs(l.preferred_contact_methods);
+                            if (l) {
+                                setLinkedLead(l);
+                                if (l.preferred_contact_methods) {
+                                    setLeadContactPrefs(l.preferred_contact_methods);
+                                }
                             }
                         }).catch(() => {});
                     }
@@ -229,6 +252,7 @@ const EstimateEditor = () => {
                         const leads = await getLeads();
                         const lead = leads.find(l => l.id === draft.lead_id);
                         if (lead) {
+                            setLinkedLead(lead);
                             if (lead.preferred_contact_methods) setLeadContactPrefs(lead.preferred_contact_methods);
                             const parsedAddr = parseLeadAddressComplete(lead);
                             setFormData(prev => ({
@@ -248,6 +272,7 @@ const EstimateEditor = () => {
                 const leads = await getLeads();
                 const lead = leads.find(l => l.id === leadId);
                 if (lead) {
+                    setLinkedLead(lead);
                     if (lead.preferred_contact_methods) {
                         setLeadContactPrefs(lead.preferred_contact_methods);
                     }
@@ -317,6 +342,55 @@ const EstimateEditor = () => {
         if (isUserLoading) return;
         loadData();
     }, [isUserLoading, user?.organization?.id, loadData]);
+
+    const getSmsConsentInfo = () => {
+        if (!formData.lead_id || !linkedLead) {
+            return {
+                status: "no_lead",
+                label: "SMS consent: No lead linked (Manual Estimate)",
+                canSend: false,
+                color: "bg-gray-100 text-gray-700 border-gray-300",
+                reason: "This estimate was created manually without a linked lead consent record."
+            };
+        }
+
+        const hasConsent = linkedLead.sms_consent === true || linkedLead.client_answers?.smsConsent === true;
+        if (!hasConsent) {
+            return {
+                status: "refused",
+                label: "SMS consent: Not provided / Refused",
+                canSend: false,
+                color: "bg-red-100 text-red-800 border-red-200",
+                reason: "Customer explicitly selected NO or did not provide SMS consent."
+            };
+        }
+
+        const normEstPhone = normalizePhoneE164Client(formData.client_phone);
+        const normLeadPhone = normalizePhoneE164Client(linkedLead.phone);
+
+        if (!normEstPhone || !normLeadPhone || normEstPhone !== normLeadPhone) {
+            return {
+                status: "phone_mismatch",
+                label: "SMS consent: Phone number changed (re-consent required)",
+                canSend: false,
+                color: "bg-amber-100 text-amber-900 border-amber-300 font-medium",
+                reason: `Phone number on estimate (${formData.client_phone || 'N/A'}) does not match original consent number (${linkedLead.phone || 'N/A'}).`
+            };
+        }
+
+        const timestamp = linkedLead.sms_consent_timestamp || linkedLead.client_answers?.smsConsentTimestamp;
+        const formattedDate = timestamp ? new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Confirmed";
+
+        return {
+            status: "confirmed",
+            label: `SMS consent: Confirmed — ${formattedDate}`,
+            canSend: true,
+            color: "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold",
+            reason: "Valid SMS consent recorded for this lead and phone number."
+        };
+    };
+
+    const smsConsentInfo = getSmsConsentInfo();
 
 
     const calculateTotals = (currentItems: EstimateLineItem[], taxRate: number, discount: number) => {
@@ -698,16 +772,27 @@ const EstimateEditor = () => {
                                 {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin text-blue-600" /> : <Mail className="h-4 w-4 text-blue-600" />}
                                 {formData.status === 'Sent' ? "Resend Email" : "Send Estimate Email"}
                             </Button>
-                            <Button
-                                variant="outline"
-                                className="h-10 gap-2 border-emerald-200 text-emerald-800 hover:bg-emerald-50 font-semibold"
-                                onClick={handleSendEstimateSMS}
-                                disabled={isSendingSMS || userRole === 'worker'}
-                                title={userRole === 'worker' ? "Worker role restricted" : "Send Estimate SMS"}
-                            >
-                                {isSendingSMS ? <Loader2 className="h-4 w-4 animate-spin text-emerald-600" /> : <Phone className="h-4 w-4 text-emerald-600" />}
-                                Send Estimate SMS
-                            </Button>
+                            <div className="flex flex-col items-end gap-1">
+                                <Button
+                                    variant="outline"
+                                    className={cn(
+                                        "h-10 gap-2 font-semibold",
+                                        smsConsentInfo.canSend
+                                            ? "border-emerald-200 text-emerald-800 hover:bg-emerald-50"
+                                            : "border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed"
+                                    )}
+                                    onClick={handleSendEstimateSMS}
+                                    disabled={isSendingSMS || userRole === 'worker' || !smsConsentInfo.canSend}
+                                    title={!smsConsentInfo.canSend ? smsConsentInfo.reason : (userRole === 'worker' ? "Worker role restricted" : "Send Estimate SMS")}
+                                >
+                                    {isSendingSMS ? <Loader2 className="h-4 w-4 animate-spin text-emerald-600" /> : <Phone className="h-4 w-4 text-emerald-600" />}
+                                    Send Estimate SMS
+                                </Button>
+                                <span className={cn("text-[11px] px-2.5 py-0.5 rounded-full border inline-flex items-center gap-1 font-medium shadow-xs", smsConsentInfo.color)}>
+                                    {smsConsentInfo.status === 'confirmed' ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <ShieldAlert className="h-3 w-3 text-amber-600" />}
+                                    {smsConsentInfo.label}
+                                </span>
+                            </div>
                             <Button
                                 variant="outline"
                                 className="h-10 gap-2 border-gray-200"
