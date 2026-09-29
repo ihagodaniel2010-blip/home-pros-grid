@@ -2,7 +2,7 @@ import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "@/lib/navigation-compat";
 import { useUser } from "@/context/UserContext";
 import { getLeads, type Lead } from "@/lib/leads";
-import { Users, TrendingUp, Calendar, Clock, DollarSign, FileText, CheckCircle2, AlertCircle, Play, ClipboardList, Plus, Sparkles, Check, Loader2, Wrench, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, TrendingUp, Calendar, Clock, DollarSign, FileText, CheckCircle2, AlertCircle, Play, ClipboardList, Plus, Sparkles, Check, Loader2, Wrench, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { fetchLoginAttempts, type LoginAttempt } from "@/lib/admin-auth";
 import { getEstimates, type Estimate } from "@/lib/estimates";
 import { getServiceJobs } from "@/lib/service-jobs";
@@ -240,40 +240,52 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeJobs.slice(0, 6).map((job) => (
-              <div
-                key={job.id}
-                onClick={() => navigate(`/admin/jobs/${job.id}`)}
-                className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:border-blue-500 hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                      job.status === "completed" ? "bg-green-100 text-green-800" :
-                      job.status === "in_progress" ? "bg-blue-100 text-blue-800" :
-                      "bg-amber-100 text-amber-800"
-                    }`}>
-                      {job.status?.replace("_", " ")}
-                    </span>
-                    <span className="text-xs text-gray-400 font-mono">#{job.id.slice(0, 8)}</span>
+            {activeJobs.slice(0, 6).map((job) => {
+              const clientFirstName = job.client_first_name || (job.client_name ? job.client_name.split(" ")[0] : "Client");
+              const jobCode = job.job_code || `Job #${job.id.slice(0, 8)}`;
+              const address = job.address || "Project Site";
+
+              return (
+                <div
+                  key={job.id}
+                  onClick={() => navigate(`/admin/jobs/${job.id}`)}
+                  className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:border-blue-500 hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        job.status === "completed" ? "bg-green-100 text-green-800" :
+                        job.status === "in_progress" ? "bg-blue-100 text-blue-800" :
+                        "bg-amber-100 text-amber-800"
+                      }`}>
+                        {job.status?.replace("_", " ")}
+                      </span>
+                      <span className="text-xs text-gray-500 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded-md">{jobCode}</span>
+                    </div>
+
+                    <h3 className="font-extrabold text-gray-900 text-base group-hover:text-blue-600 transition-colors flex items-center gap-1.5">
+                      <span>{clientFirstName}</span>
+                    </h3>
+
+                    <div className="flex items-start gap-1.5 text-xs text-gray-600 font-medium mt-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">{address}</span>
+                    </div>
                   </div>
-                  <h3 className="font-bold text-gray-900 text-base group-hover:text-blue-600 transition-colors">
-                    {job.title || `Job #${job.id.slice(0, 8)}`}
-                  </h3>
+                  <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/admin/jobs/${job.id}`);
+                      }}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    >
+                      Open Project Workspace &rarr;
+                    </button>
+                  </div>
                 </div>
-                <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/admin/jobs/${job.id}`);
-                    }}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                  >
-                    Open Project Workspace →
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

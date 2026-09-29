@@ -173,14 +173,26 @@ export default function WebsiteCMS() {
         const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
         const storagePath = `${orgId}/jobs/${targetJobId}/${mediaType}s/${fileName}`;
 
-        // Direct upload to Supabase Storage bucket 'images'
-        const { error: uploadErr } = await supabase.storage
-          .from('images')
-          .upload(storagePath, file, { cacheControl: '3600', upsert: true });
+        // Multi-bucket upload fallback with explicit content type
+        let uploadErr: any = null;
+        const bucketsToTry = ['images', 'documents', 'receipts'];
+        const contentType = file.type || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
+
+        for (const bucket of bucketsToTry) {
+          const { error } = await supabase.storage
+            .from(bucket)
+            .upload(storagePath, file, { cacheControl: '3600', upsert: true, contentType });
+
+          if (!error) {
+            uploadErr = null;
+            break;
+          }
+          uploadErr = error;
+        }
 
         if (uploadErr) {
           console.error(`Upload error for ${file.name}:`, uploadErr);
-          toast.error(`Error uploading ${file.name}`);
+          toast.error(`Error uploading ${file.name}: ${uploadErr?.message || "Storage error"}`);
           continue;
         }
 
@@ -191,7 +203,7 @@ export default function WebsiteCMS() {
           media_type: mediaType,
           storage_path: storagePath,
           file_name: file.name,
-          mime_type: file.type,
+          mime_type: file.type || contentType,
           file_size_bytes: file.size,
           caption: file.name.replace(/\.[^/.]+$/, ""),
           visible_to_client: true,
@@ -220,10 +232,21 @@ export default function WebsiteCMS() {
       const fileExt = file.name.split('.').pop();
       const fileName = `cms_${target.type}_${Date.now()}.${fileExt}`;
       const storagePath = `${orgId}/cms/${fileName}`;
+      const contentType = file.type || 'image/jpeg';
 
-      const { error: uploadErr } = await supabase.storage
-        .from('images')
-        .upload(storagePath, file, { cacheControl: '3600', upsert: true });
+      let uploadErr: any = null;
+      const bucketsToTry = ['images', 'documents', 'receipts'];
+      for (const bucket of bucketsToTry) {
+        const { error } = await supabase.storage
+          .from(bucket)
+          .upload(storagePath, file, { cacheControl: '3600', upsert: true, contentType });
+
+        if (!error) {
+          uploadErr = null;
+          break;
+        }
+        uploadErr = error;
+      }
 
       if (uploadErr) throw uploadErr;
 
