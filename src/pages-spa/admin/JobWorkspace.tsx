@@ -1369,6 +1369,30 @@ export default function JobWorkspace() {
     }
   };
 
+  const handleUncheckAllPhotos = async () => {
+    if (!jobId || !media || media.length === 0) return;
+    try {
+      const updates = {
+        visible_to_client: false,
+        visible_on_public_site: false,
+        portfolio_approved: false,
+        media_status: 'pending'
+      };
+      const { error } = await supabase
+        .from('service_job_media')
+        .update(updates)
+        .eq('service_job_id', jobId);
+
+      if (error) throw error;
+
+      setMedia(prev => prev.map(m => ({ ...m, ...updates })));
+      toast.success("Todas as fotos do projeto foram desmarcadas (tornadas privadas)!");
+    } catch (err: any) {
+      console.error("Error unchecking all photos:", err);
+      toast.error("Erro ao desmarcar fotos.");
+    }
+  };
+
   const handleGeneratePDF = async () => {
     if (!estimate) return;
     setIsGeneratingPDF(true);
@@ -2255,6 +2279,14 @@ export default function JobWorkspace() {
                       </button>
                     ))}
                   </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleUncheckAllPhotos}
+                    className="border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-xs h-9 gap-1"
+                    title="Desmarcar todas as fotos (manter privadas)"
+                  >
+                    <EyeOff className="h-3.5 w-3.5 text-slate-500" /> Uncheck All (Make Private)
+                  </Button>
                   <Button onClick={() => setIsAddMediaOpen(true)} className="bg-[#0b2a4a] text-white font-bold text-xs h-9">
                     <Plus className="h-3.5 w-3.5 mr-1" /> Add Photo
                   </Button>
