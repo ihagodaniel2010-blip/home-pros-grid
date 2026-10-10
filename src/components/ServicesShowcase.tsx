@@ -78,6 +78,7 @@ const ServicesShowcase = () => {
 
   const categoryPhotosMap = useMemo(() => {
     const map: Record<string, string[]> = {};
+    const allPortfolioUrls = portfolioItems.map(p => p.signedUrl).filter(Boolean);
     
     categories.forEach(cat => {
       const catName = cat.name;
@@ -97,8 +98,10 @@ const ServicesShowcase = () => {
         }
       });
 
-      map[catName.toLowerCase().trim()] = matchedPhotos;
-      map[catSlug.toLowerCase().trim()] = matchedPhotos;
+      const photosToUse = matchedPhotos.length > 0 ? matchedPhotos : allPortfolioUrls;
+
+      map[catName.toLowerCase().trim()] = photosToUse;
+      map[catSlug.toLowerCase().trim()] = photosToUse;
     });
 
     return map;

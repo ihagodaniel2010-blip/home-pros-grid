@@ -149,8 +149,13 @@ const ServiceDetail = () => {
               <div className="relative aspect-4/3 rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl bg-slate-900">
                 <CardPhotoCarousel
                   primaryImage={category.cover_image_url}
-                  additionalPhotos={categoryPhotos.map(p => p.signedUrl).filter(Boolean) as string[]}
+                  additionalPhotos={
+                    categoryPhotos.length > 0
+                      ? (categoryPhotos.map(p => p.signedUrl).filter(Boolean) as string[])
+                      : (portfolioItems.map(p => p.signedUrl).filter(Boolean) as string[])
+                  }
                   title={category.name}
+                  intervalMs={3000}
                 />
               </div>
             </div>

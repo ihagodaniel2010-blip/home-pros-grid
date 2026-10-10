@@ -18,7 +18,7 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
   className = "w-full h-full object-cover",
   onClick
 }) => {
-  // Put real project photos first, followed by primaryImage as fallback
+  // Combine real project photos first, followed by primaryImage as fallback
   const allImages = React.useMemo(() => {
     const list: string[] = [];
     
@@ -38,18 +38,17 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
   }, [primaryImage, additionalPhotos]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
 
-  // Auto-play slideshow transition every ~3 seconds
+  // Continuous auto-play slideshow transition every ~3 seconds
   useEffect(() => {
-    if (allImages.length <= 1 || isPaused) return;
+    if (allImages.length <= 1) return;
 
     const timer = setInterval(() => {
       setCurrentIndex(prev => (prev + 1) % allImages.length);
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [allImages.length, intervalMs, isPaused]);
+  }, [allImages.length, intervalMs]);
 
   if (allImages.length === 0) {
     return (
@@ -80,8 +79,6 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
   return (
     <div
       className="relative w-full h-full overflow-hidden group"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
       onClick={onClick}
     >
       {allImages.map((imgUrl, idx) => (
@@ -89,15 +86,16 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
           key={`${imgUrl}-${idx}`}
           src={imgUrl}
           alt={`${title} photo ${idx + 1}`}
-          className={`${className} absolute inset-0 transition-all duration-800 ease-in-out ${
+          style={{ transition: "opacity 800ms ease-in-out, transform 800ms ease-in-out" }}
+          className={`${className} absolute inset-0 ${
             idx === currentIndex ? "opacity-100 z-10 scale-100" : "opacity-0 z-0 scale-105 pointer-events-none"
-          } group-hover:scale-105 transition-transform duration-500`}
+          }`}
           loading="lazy"
         />
       ))}
 
       {/* Real Photos Count Badge */}
-      <div className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-[10px] font-bold text-white border border-white/20 shadow-md">
+      <div className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/75 backdrop-blur-md text-[10px] font-bold text-white border border-white/20 shadow-md">
         <ImageIcon className="w-3 h-3 text-amber-400" />
         <span>
           {currentIndex + 1} / {allImages.length}
@@ -105,7 +103,7 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
       </div>
 
       {/* Slide Progress Dots Indicator */}
-      <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-2 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 shadow-xs">
+      <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-2 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 shadow-xs">
         {allImages.map((_, idx) => (
           <button
             key={idx}
