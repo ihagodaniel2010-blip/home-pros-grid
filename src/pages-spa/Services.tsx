@@ -50,14 +50,13 @@ const Services = () => {
 
       portfolioItems.forEach(item => {
         if (item.signedUrl) {
-          const itemCat = item.category || "";
-          const subCats = Array.isArray(item.categories) ? item.categories.join(" ") : "";
-          const fullText = `${itemCat} ${subCats} ${item.caption || ""} ${item.file_name || ""}`;
+          const text = `${item.caption || ""} ${item.file_name || ""}`;
+          const isMatch = 
+            isCategoryMatch(catName, item.category, item.categories, text) ||
+            isCategoryMatch(catSlug, item.category, item.categories, text);
 
-          if (isCategoryMatch(fullText, catName) || isCategoryMatch(fullText, catSlug)) {
-            if (!matchedPhotos.includes(item.signedUrl)) {
-              matchedPhotos.push(item.signedUrl);
-            }
+          if (isMatch && !matchedPhotos.includes(item.signedUrl)) {
+            matchedPhotos.push(item.signedUrl);
           }
         }
       });

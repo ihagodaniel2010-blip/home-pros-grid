@@ -86,14 +86,13 @@ const ServicesShowcase = () => {
 
       portfolioItems.forEach(item => {
         if (item.signedUrl) {
-          const itemCat = item.category || "";
-          const subCats = Array.isArray(item.categories) ? item.categories.join(" ") : "";
-          const fullText = `${itemCat} ${subCats} ${item.caption || ""} ${item.file_name || ""}`;
+          const text = `${item.caption || ""} ${item.file_name || ""}`;
+          const isMatch = 
+            isCategoryMatch(catName, item.category, item.categories, text) ||
+            isCategoryMatch(catSlug, item.category, item.categories, text);
 
-          if (isCategoryMatch(fullText, catName) || isCategoryMatch(fullText, catSlug)) {
-            if (!matchedPhotos.includes(item.signedUrl)) {
-              matchedPhotos.push(item.signedUrl);
-            }
+          if (isMatch && !matchedPhotos.includes(item.signedUrl)) {
+            matchedPhotos.push(item.signedUrl);
           }
         }
       });
@@ -107,10 +106,9 @@ const ServicesShowcase = () => {
 
   const filteredPortfolio = useMemo(() => {
     if (selectedCategory === "All") return portfolioItems;
-    return portfolioItems.filter(item => {
-      const fullText = `${item.category || ""} ${Array.isArray(item.categories) ? item.categories.join(" ") : ""} ${item.caption || ""} ${item.file_name || ""}`;
-      return isCategoryMatch(fullText, selectedCategory);
-    });
+    return portfolioItems.filter(item => 
+      isCategoryMatch(selectedCategory, item.category, item.categories, `${item.caption || ""} ${item.file_name || ""}`)
+    );
   }, [portfolioItems, selectedCategory]);
 
   const handleCategorySelect = (catName: string) => {
@@ -185,9 +183,9 @@ const ServicesShowcase = () => {
                   viewport={{ once: true }}
                   transition={{ duration: 0.4, delay: index * 0.03 }}
                 >
-                  <div
-                    onClick={() => handleCategorySelect(cat.name)}
-                    className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/90 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full cursor-pointer"
+                  <Link
+                    to={`/services/${cat.slug}`}
+                    className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/90 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full cursor-pointer block"
                   >
                     <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
                       <CardPhotoCarousel
@@ -229,7 +227,7 @@ const ServicesShowcase = () => {
                         <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 </motion.div>
               );
             })}

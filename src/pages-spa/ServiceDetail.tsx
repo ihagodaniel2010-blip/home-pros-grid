@@ -62,7 +62,13 @@ const ServiceDetail = () => {
 
   const categoryPhotos = useMemo(() => {
     if (!category || !portfolioItems || portfolioItems.length === 0) return [];
-    return portfolioItems.filter(item => isCategoryMatch(category.name, item.category, item.categories));
+    return portfolioItems.filter(item => {
+      const text = `${item.caption || ''} ${item.file_name || ''}`;
+      return (
+        isCategoryMatch(category.name, item.category, item.categories, text) ||
+        isCategoryMatch(category.slug, item.category, item.categories, text)
+      );
+    });
   }, [category, portfolioItems]);
 
   const otherCategories = useMemo(() => {

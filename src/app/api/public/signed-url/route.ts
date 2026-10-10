@@ -150,7 +150,7 @@ export async function POST(request: Request) {
             }
           }
 
-          // Category classification: check database media_category_relations first
+          // Category classification: check database media_category_relations and project_category_relations
           let category = "";
           let dbCategories: string[] = [];
           try {
@@ -163,9 +163,24 @@ export async function POST(request: Request) {
               dbCategories = catRels
                 .map((r: any) => r.website_categories?.name)
                 .filter(Boolean);
-              if (dbCategories.length > 0) {
-                category = dbCategories[0];
+            }
+
+            // Fallback to project_category_relations if no direct photo category assigned
+            if (dbCategories.length === 0 && m.service_job_id) {
+              const { data: jobCatRels } = await clientToUse
+                .from("project_category_relations")
+                .select("category_id, website_categories(name)")
+                .eq("job_id", m.service_job_id);
+
+              if (jobCatRels && jobCatRels.length > 0) {
+                dbCategories = jobCatRels
+                  .map((r: any) => r.website_categories?.name)
+                  .filter(Boolean);
               }
+            }
+
+            if (dbCategories.length > 0) {
+              category = dbCategories[0];
             }
           } catch (e) {}
 
@@ -180,6 +195,10 @@ export async function POST(request: Request) {
             else if (/deck|porch|patio|varanda|decking|rail/i.test(text)) category = "Decks";
             else if (/tile|flooring|piso|chao|vinyl|hardwood|parquet/i.test(text)) category = "Flooring";
             else category = "Remodeling";
+
+            if (category && dbCategories.length === 0) {
+              dbCategories = [category];
+            }
           }
 
           return {

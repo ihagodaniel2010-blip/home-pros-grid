@@ -91,19 +91,63 @@ export function getCategoryTokens(name: string): string[] {
     return tokens;
 }
 
-export function isCategoryMatch(itemCategory: string | undefined | null, targetCategoryName: string | undefined | null): boolean {
-    if (!itemCategory || !targetCategoryName) return false;
+export function isCategoryMatch(
+    targetCategoryNameOrSlug: string | undefined | null,
+    itemCategory: string | undefined | null,
+    itemCategories?: string[] | null,
+    itemText?: string | null
+): boolean {
+    if (!targetCategoryNameOrSlug) return false;
     
-    const c1 = String(itemCategory).toLowerCase().trim();
-    const c2 = String(targetCategoryName).toLowerCase().trim();
+    const target = String(targetCategoryNameOrSlug).toLowerCase().trim();
+    if (!target) return false;
 
-    if (!c1 || !c2) return false;
-    if (c1 === c2) return true;
+    const targetTokens = getCategoryTokens(target);
 
-    const tokens1 = getCategoryTokens(c1);
-    const tokens2 = getCategoryTokens(c2);
+    // 1. Direct match or token match on itemCategory
+    if (itemCategory) {
+        const itemCatStr = String(itemCategory).toLowerCase().trim();
+        if (itemCatStr === target) return true;
+        const itemCatTokens = getCategoryTokens(itemCatStr);
+        if (targetTokens.some(t => itemCatTokens.includes(t))) return true;
+    }
 
-    return tokens1.some(t => tokens2.includes(t));
+    // 2. Direct match or token match on itemCategories array
+    if (Array.isArray(itemCategories) && itemCategories.length > 0) {
+        for (const cat of itemCategories) {
+            if (!cat) continue;
+            const catStr = String(cat).toLowerCase().trim();
+            if (catStr === target) return true;
+            const catTokens = getCategoryTokens(catStr);
+            if (targetTokens.some(t => catTokens.includes(t))) return true;
+        }
+    }
+
+    // 3. Fallback keyword matching in itemText (caption, filename, job title)
+    if (itemText) {
+        const text = String(itemText).toLowerCase().trim();
+        if (text) {
+            if (/bath|banheiro|shower|tub|vanity|toilet|duche/i.test(text) && targetTokens.some(t => ["bathrooms", "bath", "bathroom", "bathroom remodel"].includes(t))) return true;
+            if (/kitchen|cozinha|cabinet|countertop|armario|bancada/i.test(text) && targetTokens.some(t => ["kitchens", "kitchen", "kitchen remodel"].includes(t))) return true;
+            if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(text) && targetTokens.some(t => ["roofing", "roof", "roof repair"].includes(t))) return true;
+            if (/deck|porch|patio|varanda|decking|rail/i.test(text) && targetTokens.some(t => ["decks", "deck"].includes(t))) return true;
+            if (/siding|revestimento|facade|exterior/i.test(text) && targetTokens.includes("siding")) return true;
+            if (/drywall|gesso|sheetrock/i.test(text) && targetTokens.includes("drywall")) return true;
+            if (/framing|estrutura|madeira/i.test(text) && targetTokens.includes("framing")) return true;
+            if (/tile|flooring|piso|chao|vinyl|hardwood/i.test(text) && targetTokens.some(t => ["flooring", "floor"].includes(t))) return true;
+            if (/remodel|reforma|renovation/i.test(text) && targetTokens.some(t => ["remodeling", "remodel"].includes(t))) return true;
+        }
+    }
+
+    // 4. Special match for Remodeling:
+    // If target is Remodeling and item is categorized as Remodeling (or uncategorized default), match it!
+    if (targetTokens.some(t => ["remodeling", "remodel"].includes(t))) {
+        if (!itemCategory || itemCategory.toLowerCase().trim() === "remodeling") {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 export function autoCategorizePhoto(caption?: string, fileName?: string, projectType?: string): string {
