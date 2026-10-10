@@ -24,37 +24,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { 
-          error: "SUPABASE_SERVICE_ROLE_KEY is missing in production environment variables. Please add SUPABASE_SERVICE_ROLE_KEY in Vercel Project Settings.", 
-          serviceRoleMissing: true 
-        }, 
-        { status: 500, headers: NO_CACHE_HEADERS }
-      );
-    }
-
     // 0. Handle Institutional Public Portfolio Showcase query (No estimate token required)
     if (type === "portfolio") {
-      const clientToUse = supabaseAdmin || null;
+      const clientToUse = supabaseAdmin || supabase;
       if (!clientToUse) {
-        return NextResponse.json({ error: "Supabase service role unavailable" }, { status: 500, headers: NO_CACHE_HEADERS });
+        return NextResponse.json({ portfolio: [] }, { status: 200, headers: NO_CACHE_HEADERS });
       }
 
       let mediaList: any[] = [];
-      const { data: dbList, error: mErr } = await clientToUse
-        .from("service_job_media")
-        .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at")
-        .or("visible_on_public_site.eq.true,portfolio_approved.eq.true")
-        .order("created_at", { ascending: false });
+      try {
+        const { data: dbList, error: mErr } = await clientToUse
+          .from("service_job_media")
+          .select("id, organization_id, service_job_id, media_type, storage_path, file_name, mime_type, caption, visible_on_public_site, portfolio_approved, created_at")
+          .or("visible_on_public_site.eq.true,portfolio_approved.eq.true")
+          .order("created_at", { ascending: false });
 
-      if (!mErr && dbList && dbList.length > 0) {
-        mediaList = dbList;
-      } else {
-        const { data: rpcMedia, error: rpcErr } = await clientToUse.rpc("get_public_portfolio_media");
-        if (!rpcErr && Array.isArray(rpcMedia) && rpcMedia.length > 0) {
-          mediaList = rpcMedia;
+        if (!mErr && dbList && dbList.length > 0) {
+          mediaList = dbList;
         }
+      } catch (e) {}
+
+      if (mediaList.length === 0) {
+        try {
+          const { data: rpcMedia, error: rpcErr } = await clientToUse.rpc("get_public_portfolio_media");
+          if (!rpcErr && Array.isArray(rpcMedia) && rpcMedia.length > 0) {
+            mediaList = rpcMedia;
+          }
+        } catch (e) {}
+      }
+
+      if (mediaList.length === 0) {
+        return NextResponse.json({ portfolio: [] }, { status: 200, headers: NO_CACHE_HEADERS });
       }
 
       // Collect job titles without complex PostgREST joins
