@@ -173,7 +173,41 @@ export const getServiceExtrasByJobOrEstimateId = async (
     }
 };
 
-export const getPublicServiceExtras = getServiceExtrasByJobOrEstimateId;
+export const updateServiceExtraStatus = async (
+    extraIdOrToken: string,
+    status: 'pending' | 'approved' | 'rejected'
+) => {
+    if (!supabase || !extraIdOrToken) return false;
+
+    try {
+        const updatePayload: Record<string, any> = {
+            status,
+            updated_at: new Date().toISOString()
+        };
+
+        if (status === 'approved') {
+            updatePayload.approved_at = new Date().toISOString();
+            updatePayload.rejected_at = null;
+        } else if (status === 'rejected') {
+            updatePayload.rejected_at = new Date().toISOString();
+            updatePayload.approved_at = null;
+        } else if (status === 'pending') {
+            updatePayload.approved_at = null;
+            updatePayload.rejected_at = null;
+        }
+
+        const { error } = await supabase
+            .from('service_extras')
+            .update(updatePayload)
+            .or(`id.eq.${extraIdOrToken},public_token.eq.${extraIdOrToken}`);
+
+        if (!error) return true;
+        console.error("Error updating service extra status:", error);
+    } catch (err) {
+        console.error("Exception updating service extra status:", err);
+    }
+    return false;
+};
 
 export const respondPublicServiceExtra = async (tokenOrId: string, status: 'approved' | 'rejected') => {
     if (!supabase || !tokenOrId) return false;
@@ -204,23 +238,7 @@ export const respondPublicServiceExtra = async (tokenOrId: string, status: 'appr
     }
 
     // 3. Direct table update fallback by public_token OR id
-    try {
-        const { error } = await supabase
-            .from('service_extras')
-            .update({ 
-                status, 
-                approved_at: status === 'approved' ? new Date().toISOString() : null,
-                rejected_at: status === 'rejected' ? new Date().toISOString() : null,
-                updated_at: new Date().toISOString() 
-            })
-            .or(`public_token.eq.${tokenOrId},id.eq.${tokenOrId}`);
-
-        if (!error) return true;
-    } catch (updateErr) {
-        console.error("Direct update service_extras failed:", updateErr);
-    }
-
-    return false;
+    return await updateServiceExtraStatus(tokenOrId, status);
 };
 
 export const getPublicServiceExtra = async (token: string) => {

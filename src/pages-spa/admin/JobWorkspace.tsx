@@ -5,7 +5,7 @@ import {
   MoreHorizontal, Images, Wrench, UserCheck, DollarSign, Plus, Download, Copy,
   Printer, ShieldCheck, PenTool, Calendar, AlertCircle, Sparkles, ExternalLink,
   ChevronRight, Eye, EyeOff, Globe, Tag, CreditCard, Receipt, FileCheck, Building2,
-  Pencil, Trash2, Info, X, Upload
+  Pencil, Trash2, Info, X, Upload, RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { useUser, DEFAULT_ORG_ID } from "@/context/UserContext";
 import { supabase } from "@/lib/supabase";
 import { getEstimateById, Estimate } from "@/lib/estimates";
-import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra, extractMediaFromText, respondPublicServiceExtra } from "@/lib/service-extras";
+import { getServiceExtrasByJobId, createServiceExtra, ServiceExtra, extractMediaFromText, respondPublicServiceExtra, updateServiceExtraStatus } from "@/lib/service-extras";
 import { getJobMediaRecords, uploadJobMediaRecord, updateJobMediaVisibility, deleteJobMediaRecord, resolveSignedMediaUrl, uploadExtraMediaRecord, ServiceJobMediaRecord, getExtraMediaRecords, isExtraMediaPublishedToGallery, toggleExtraMediaGalleryPublication, ServiceExtraMediaRecord } from "@/lib/job-media";
 import { getExpenses, createExpense, Expense, updateExpense, deleteExpense } from "@/lib/expenses";
 import { getClientPayments, createClientPayment, updateClientPayment, deleteClientPayment, ClientPayment } from "@/lib/client-payments";
@@ -995,34 +995,33 @@ export default function JobWorkspace() {
     }
   };
 
-  const handleAdminApproveExtra = async (extraId: string) => {
+  const handleAdminChangeExtraStatus = async (extraId: string, newStatus: 'pending' | 'approved' | 'rejected') => {
     try {
-      const success = await respondPublicServiceExtra(extraId, 'approved');
+      const success = await updateServiceExtraStatus(extraId, newStatus);
       if (success) {
-        toast.success("Extra/Change Order aprovado e confirmado pelo Administrador!");
+        if (newStatus === 'pending') {
+          toast.success("Aprovação desfeita com sucesso! Status do Extra reverter para PENDENTE.");
+        } else if (newStatus === 'approved') {
+          toast.success("Extra/Change Order aprovado e confirmado pelo Administrador!");
+        } else if (newStatus === 'rejected') {
+          toast.success("Extra marcado como Recusado / Cancelado.");
+        }
         loadJobWorkspace();
       } else {
-        toast.error("Erro ao aprovar extra.");
+        toast.error("Erro ao atualizar status do extra.");
       }
     } catch (err) {
-      console.error("Error approving extra:", err);
-      toast.error("Erro ao aprovar extra.");
+      console.error("Error changing extra status:", err);
+      toast.error("Erro ao atualizar status do extra.");
     }
   };
 
+  const handleAdminApproveExtra = async (extraId: string) => {
+    await handleAdminChangeExtraStatus(extraId, 'approved');
+  };
+
   const handleAdminRejectExtra = async (extraId: string) => {
-    try {
-      const success = await respondPublicServiceExtra(extraId, 'rejected');
-      if (success) {
-        toast.success("Extra marcado como recusado.");
-        loadJobWorkspace();
-      } else {
-        toast.error("Erro ao recusar extra.");
-      }
-    } catch (err) {
-      console.error("Error rejecting extra:", err);
-      toast.error("Erro ao recusar extra.");
-    }
+    await handleAdminChangeExtraStatus(extraId, 'rejected');
   };
 
   const handleDeleteExpense = async (expenseId: string) => {
@@ -2220,7 +2219,8 @@ export default function JobWorkspace() {
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200 text-xs">
                         <div className="flex items-center gap-3">
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            extra.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            extra.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                            extra.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
                           }`}>
                             {extra.status}
                           </span>
@@ -2232,7 +2232,7 @@ export default function JobWorkspace() {
                             <div className="flex items-center gap-1.5">
                               <Button
                                 size="sm"
-                                onClick={() => handleAdminApproveExtra(extra.id)}
+                                onClick={() => handleAdminChangeExtraStatus(extra.id, 'approved')}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-7 px-2.5 rounded-lg shadow-2xs gap-1"
                                 title="Aprovar Extra Verbalmente/SMS (Admin)"
                               >
@@ -2241,11 +2241,56 @@ export default function JobWorkspace() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleAdminRejectExtra(extra.id)}
+                                onClick={() => handleAdminChangeExtraStatus(extra.id, 'rejected')}
                                 className="border-red-300 text-red-700 hover:bg-red-50 font-bold text-xs h-7 px-2.5 rounded-lg gap-1"
-                                title="Recusar Extra"
+                                title="Recusar / Cancelar Extra"
                               >
                                 <X className="h-3.5 w-3.5" /> Recusar
+                              </Button>
+                            </div>
+                          )}
+
+                          {extra.status === 'approved' && (
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAdminChangeExtraStatus(extra.id, 'pending')}
+                                className="border-amber-300 text-amber-800 hover:bg-amber-50 font-bold text-xs h-7 px-2.5 rounded-lg gap-1"
+                                title="Desfazer aprovação/confirmação e reverter para Pendente"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5 text-amber-600" /> Desfazer Aprovação (Voltar a Pendente)
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAdminChangeExtraStatus(extra.id, 'rejected')}
+                                className="border-red-300 text-red-700 hover:bg-red-50 font-bold text-xs h-7 px-2.5 rounded-lg gap-1"
+                                title="Mudar status para Recusado / Cancelado"
+                              >
+                                <X className="h-3.5 w-3.5" /> Cancelar / Recusar
+                              </Button>
+                            </div>
+                          )}
+
+                          {extra.status === 'rejected' && (
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAdminChangeExtraStatus(extra.id, 'pending')}
+                                className="border-amber-300 text-amber-800 hover:bg-amber-50 font-bold text-xs h-7 px-2.5 rounded-lg gap-1"
+                                title="Reverter status para Pendente"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5 text-amber-600" /> Reverter para Pendente
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleAdminChangeExtraStatus(extra.id, 'approved')}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-7 px-2.5 rounded-lg shadow-2xs gap-1"
+                                title="Aprovar Extra (Admin)"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Aprovar (Admin)
                               </Button>
                             </div>
                           )}
