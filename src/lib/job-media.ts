@@ -39,6 +39,73 @@ export interface ServiceExtraMediaRecord {
     created_at: string;
 }
 
+export function getCategoryTokens(name: string): string[] {
+    const n = String(name || "").toLowerCase().trim();
+    if (!n) return [];
+
+    const tokens: string[] = [n];
+
+    if (/bath|banheiro|duche|shower|tub|vanity|toilet/i.test(n)) {
+        tokens.push("bathrooms", "bath", "bathroom", "bathroom remodel");
+    }
+    if (/kitchen|cozinha|cabinet|countertop|armario|bancada/i.test(n)) {
+        tokens.push("kitchens", "kitchen", "kitchen remodel");
+    }
+    if (/roof|telhado|calha|gutter|shingle|fascia|soffit/i.test(n)) {
+        tokens.push("roofing", "roof", "roof repair");
+    }
+    if (/deck|porch|patio|varanda|decking|rail/i.test(n)) {
+        tokens.push("decks", "deck");
+    }
+    if (/siding|facade|cladding|revestimento|exterior/i.test(n)) {
+        tokens.push("siding");
+    }
+    if (/drywall|gesso|sheetrock|wall|parede|teto/i.test(n)) {
+        tokens.push("drywall");
+    }
+    if (/framing|estrutura|madeira|joist|beam|stud|barrote/i.test(n)) {
+        tokens.push("framing");
+    }
+    if (/floor|piso|chao|tile|hardwood|parquet|vinyl/i.test(n)) {
+        tokens.push("flooring", "floor");
+    }
+    if (/remodel|reforma|addition|renovation/i.test(n)) {
+        tokens.push("remodeling", "remodel");
+    }
+    if (/paint|pintura/i.test(n)) {
+        tokens.push("painting", "paint");
+    }
+    if (/door|window|janela|porta/i.test(n)) {
+        tokens.push("doors & windows", "doors-windows", "doors", "windows");
+    }
+    if (/addition/i.test(n)) {
+        tokens.push("home additions", "additions");
+    }
+    if (/repair|conserto|general/i.test(n)) {
+        tokens.push("general repairs", "repairs");
+    }
+    if (/carpentry|trim|molding/i.test(n)) {
+        tokens.push("finish carpentry", "carpentry");
+    }
+
+    return tokens;
+}
+
+export function isCategoryMatch(itemCategory: string | undefined | null, targetCategoryName: string | undefined | null): boolean {
+    if (!itemCategory || !targetCategoryName) return false;
+    
+    const c1 = String(itemCategory).toLowerCase().trim();
+    const c2 = String(targetCategoryName).toLowerCase().trim();
+
+    if (!c1 || !c2) return false;
+    if (c1 === c2) return true;
+
+    const tokens1 = getCategoryTokens(c1);
+    const tokens2 = getCategoryTokens(c2);
+
+    return tokens1.some(t => tokens2.includes(t));
+}
+
 export function autoCategorizePhoto(caption?: string, fileName?: string, projectType?: string): string {
     const text = `${caption || ''} ${fileName || ''} ${projectType || ''}`.toLowerCase();
     

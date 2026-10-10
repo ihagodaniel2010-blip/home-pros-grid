@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Link } from "@/lib/navigation-compat";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Maximize2, X, Image as ImageIcon, Film, Home, ArrowRight } from "lucide-react";
-import { getPublicPortfolioShowcase, PublicPortfolioShowcaseItem } from "@/lib/job-media";
+import { getPublicPortfolioShowcase, PublicPortfolioShowcaseItem, isCategoryMatch } from "@/lib/job-media";
 import { 
   fetchPublicWebsiteCategories, 
   getHomepageCategories, 
@@ -60,7 +60,6 @@ const ServicesShowcase = () => {
     const galleryCats = getProjectsGalleryCategories(categories);
     const names = galleryCats.map(c => c.name);
     
-    // Also include any categories present in loaded portfolio items that may not be in list
     portfolioItems.forEach(item => {
       if (item.category && !names.includes(item.category)) {
         names.push(item.category);
@@ -80,68 +79,47 @@ const ServicesShowcase = () => {
   const categoryPhotosMap = useMemo(() => {
     const map: Record<string, string[]> = {};
     
-    const normalizeCatKey = (raw: string): string => {
-      const k = (raw || "").toLowerCase().trim();
-      if (k.startsWith("bath")) return "bathrooms";
-      if (k.startsWith("kitchen")) return "kitchens";
-      if (k.startsWith("deck")) return "decks";
-      if (k.startsWith("roof")) return "roofing";
-      if (k.startsWith("siding")) return "siding";
-      if (k.startsWith("drywall")) return "drywall";
-      if (k.startsWith("framing")) return "framing";
-      if (k.startsWith("floor")) return "flooring";
-      if (k.startsWith("remodel")) return "remodeling";
-      return k;
-    };
+    categories.forEach(cat => {
+      const catName = cat.name;
+      const catSlug = cat.slug;
+      const matchedPhotos: string[] = [];
 
-    portfolioItems.forEach(item => {
-      if (item.signedUrl) {
-        const rawKey = (item.category || "").toLowerCase().trim();
-        const normKey = normalizeCatKey(rawKey);
+      portfolioItems.forEach(item => {
+        if (item.signedUrl) {
+          const itemCat = item.category || "";
+          const subCats = Array.isArray(item.categories) ? item.categories.join(" ") : "";
+          const fullText = `${itemCat} ${subCats} ${item.caption || ""} ${item.file_name || ""}`;
 
-        [rawKey, normKey].forEach(k => {
-          if (k) {
-            if (!map[k]) map[k] = [];
-            if (!map[k].includes(item.signedUrl)) map[k].push(item.signedUrl);
+          if (isCategoryMatch(fullText, catName) || isCategoryMatch(fullText, catSlug)) {
+            if (!matchedPhotos.includes(item.signedUrl)) {
+              matchedPhotos.push(item.signedUrl);
+            }
           }
-        });
-
-        if (Array.isArray(item.categories)) {
-          item.categories.forEach(c => {
-            const subRaw = (c || "").toLowerCase().trim();
-            const subNorm = normalizeCatKey(subRaw);
-            [subRaw, subNorm].forEach(k => {
-              if (k) {
-                if (!map[k]) map[k] = [];
-                if (!map[k].includes(item.signedUrl)) map[k].push(item.signedUrl);
-              }
-            });
-          });
         }
-      }
+      });
+
+      map[catName.toLowerCase().trim()] = matchedPhotos;
+      map[catSlug.toLowerCase().trim()] = matchedPhotos;
     });
+
     return map;
-  }, [portfolioItems]);
+  }, [categories, portfolioItems]);
 
   const filteredPortfolio = useMemo(() => {
     if (selectedCategory === "All") return portfolioItems;
-    const cleanSel = selectedCategory.toLowerCase().trim();
     return portfolioItems.filter(item => {
-      const mainCat = (item.category || "").toLowerCase().trim();
-      if (mainCat === cleanSel) return true;
-      if (cleanSel.startsWith("bath") && mainCat.startsWith("bath")) return true;
-      if (cleanSel.startsWith("kitchen") && mainCat.startsWith("kitchen")) return true;
-      if (cleanSel.startsWith("deck") && mainCat.startsWith("deck")) return true;
-      if (cleanSel.startsWith("roof") && mainCat.startsWith("roof")) return true;
-      if (cleanSel.startsWith("siding") && mainCat.startsWith("siding")) return true;
-      if (cleanSel.startsWith("drywall") && mainCat.startsWith("drywall")) return true;
-      if (cleanSel.startsWith("framing") && mainCat.startsWith("framing")) return true;
-      if (cleanSel.startsWith("floor") && mainCat.startsWith("floor")) return true;
-      if (cleanSel.startsWith("remodel") && mainCat.startsWith("remodel")) return true;
-
-      return Array.isArray(item.categories) && item.categories.some(c => (c || "").toLowerCase().trim() === cleanSel);
+      const fullText = `${item.category || ""} ${Array.isArray(item.categories) ? item.categories.join(" ") : ""} ${item.caption || ""} ${item.file_name || ""}`;
+      return isCategoryMatch(fullText, selectedCategory);
     });
   }, [portfolioItems, selectedCategory]);
+
+  const handleCategorySelect = (catName: string) => {
+    setSelectedCategory(catName);
+    const elem = document.getElementById("recent-work-gallery");
+    if (elem) {
+      elem.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   if (loading) {
     return (
@@ -195,15 +173,9 @@ const ServicesShowcase = () => {
           {/* Dynamic Service Cards Grid with Auto Photo Carousel */}
           <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {homepageCategories.map((cat, index) => {
-              const rawCat = cat.name.toLowerCase().trim();
-              let normCat = rawCat;
-              if (rawCat.startsWith("bath")) normCat = "bathrooms";
-              if (rawCat.startsWith("kitchen")) normCat = "kitchens";
-              if (rawCat.startsWith("deck")) normCat = "decks";
-              if (rawCat.startsWith("roof")) normCat = "roofing";
-              if (rawCat.startsWith("siding")) normCat = "siding";
-
-              const catPhotos = categoryPhotosMap[normCat] || categoryPhotosMap[rawCat] || [];
+              const rawCatKey = cat.name.toLowerCase().trim();
+              const slugKey = cat.slug.toLowerCase().trim();
+              const catPhotos = categoryPhotosMap[rawCatKey] || categoryPhotosMap[slugKey] || [];
 
               return (
                 <motion.div
@@ -213,18 +185,28 @@ const ServicesShowcase = () => {
                   viewport={{ once: true }}
                   transition={{ duration: 0.4, delay: index * 0.03 }}
                 >
-                  <Link
-                    to={`/services/${cat.slug}`}
-                    className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/90 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full"
+                  <div
+                    onClick={() => handleCategorySelect(cat.name)}
+                    className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/90 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full cursor-pointer"
                   >
                     <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
                       <CardPhotoCarousel
                         primaryImage={cat.cover_image_url}
                         additionalPhotos={catPhotos}
                         title={cat.name}
+                        intervalMs={3000}
                       />
 
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                      
+                      {catPhotos.length > 0 && (
+                        <div className="absolute top-3 left-3 z-20">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#0b2a4a]/90 backdrop-blur-md text-amber-400 border border-amber-400/30 shadow-md">
+                            📷 {catPhotos.length} Real Project Photo{catPhotos.length > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      )}
+
                       <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
                         <div className="bg-white/20 backdrop-blur-md p-1.5 rounded-full border border-white/30 text-white">
                           <ChevronRight className="h-4 w-4" />
@@ -232,25 +214,25 @@ const ServicesShowcase = () => {
                       </div>
                     </div>
 
-                  <div className="p-5 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900 mb-1.5 group-hover:text-primary transition-colors">
-                        {cat.name}
-                      </h3>
-                      <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                        {cat.description || `Professional ${cat.name.toLowerCase()} services in Southern Maine.`}
-                      </p>
-                    </div>
+                    <div className="p-5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900 mb-1.5 group-hover:text-primary transition-colors">
+                          {cat.name}
+                        </h3>
+                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                          {cat.description || `Professional ${cat.name.toLowerCase()} services in Southern Maine.`}
+                        </p>
+                      </div>
 
-                    <div className="mt-4 border-t border-slate-100 pt-3 flex items-center justify-between text-xs text-primary font-bold">
-                      <span>Explore Service</span>
-                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                      <div className="mt-4 border-t border-slate-100 pt-3 flex items-center justify-between text-xs text-primary font-bold">
+                        <span className="hover:underline">Explore Category &amp; Photos</span>
+                        <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                      </div>
                     </div>
                   </div>
-                </Link>
-              </motion.div>
-            );
-          })}
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>

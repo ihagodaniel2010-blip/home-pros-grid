@@ -14,16 +14,14 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
   primaryImage,
   additionalPhotos = [],
   title,
-  intervalMs = 3500,
+  intervalMs = 3000,
   className = "w-full h-full object-cover",
   onClick
 }) => {
-  // Deduplicate and filter valid photo URLs
+  // Put real project photos first, followed by primaryImage as fallback
   const allImages = React.useMemo(() => {
     const list: string[] = [];
-    if (primaryImage && typeof primaryImage === "string" && primaryImage.trim()) {
-      list.push(primaryImage.trim());
-    }
+    
     if (Array.isArray(additionalPhotos)) {
       additionalPhotos.forEach(p => {
         if (p && typeof p === "string" && p.trim() && !list.includes(p.trim())) {
@@ -31,13 +29,18 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
         }
       });
     }
+
+    if (primaryImage && typeof primaryImage === "string" && primaryImage.trim() && !list.includes(primaryImage.trim())) {
+      list.push(primaryImage.trim());
+    }
+
     return list;
   }, [primaryImage, additionalPhotos]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
-  // Auto-play slideshow transition when there are multiple photos
+  // Auto-play slideshow transition every ~3 seconds
   useEffect(() => {
     if (allImages.length <= 1 || isPaused) return;
 
@@ -86,23 +89,23 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
           key={`${imgUrl}-${idx}`}
           src={imgUrl}
           alt={`${title} photo ${idx + 1}`}
-          className={`${className} absolute inset-0 transition-opacity duration-700 ease-in-out ${
+          className={`${className} absolute inset-0 transition-all duration-800 ease-in-out ${
             idx === currentIndex ? "opacity-100 z-10 scale-100" : "opacity-0 z-0 scale-105 pointer-events-none"
           } group-hover:scale-105 transition-transform duration-500`}
           loading="lazy"
         />
       ))}
 
-      {/* Counter Badge & Progress Dots */}
-      <div className="absolute bottom-2 right-2 z-20 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white border border-white/20">
+      {/* Real Photos Count Badge */}
+      <div className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-[10px] font-bold text-white border border-white/20 shadow-md">
         <ImageIcon className="w-3 h-3 text-amber-400" />
         <span>
           {currentIndex + 1} / {allImages.length}
         </span>
       </div>
 
-      {/* Progress Dots Indicator */}
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-2 py-1 rounded-full bg-black/30 backdrop-blur-xs">
+      {/* Slide Progress Dots Indicator */}
+      <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 px-2 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 shadow-xs">
         {allImages.map((_, idx) => (
           <button
             key={idx}

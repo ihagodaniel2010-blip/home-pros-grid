@@ -4,7 +4,7 @@ import { Search, ChevronRight, Home, ArrowRight } from "lucide-react";
 import Layout from "@/components/Layout";
 import { motion } from "framer-motion";
 import { fetchPublicWebsiteCategories, WebsiteCategory } from "@/lib/website-cms";
-import { getPublicPortfolioShowcase, PublicPortfolioShowcaseItem } from "@/lib/job-media";
+import { getPublicPortfolioShowcase, PublicPortfolioShowcaseItem, isCategoryMatch } from "@/lib/job-media";
 import { CardPhotoCarousel } from "@/components/CardPhotoCarousel";
 
 const CategoryCoverPlaceholder = ({ name }: { name: string }) => (
@@ -42,15 +42,32 @@ const Services = () => {
 
   const categoryPhotosMap = useMemo(() => {
     const map: Record<string, string[]> = {};
-    portfolioItems.forEach(item => {
-      if (item.signedUrl) {
-        const catKey = (item.category || "").toLowerCase().trim();
-        if (!map[catKey]) map[catKey] = [];
-        if (!map[catKey].includes(item.signedUrl)) map[catKey].push(item.signedUrl);
-      }
+
+    categories.forEach(cat => {
+      const catName = cat.name;
+      const catSlug = cat.slug;
+      const matchedPhotos: string[] = [];
+
+      portfolioItems.forEach(item => {
+        if (item.signedUrl) {
+          const itemCat = item.category || "";
+          const subCats = Array.isArray(item.categories) ? item.categories.join(" ") : "";
+          const fullText = `${itemCat} ${subCats} ${item.caption || ""} ${item.file_name || ""}`;
+
+          if (isCategoryMatch(fullText, catName) || isCategoryMatch(fullText, catSlug)) {
+            if (!matchedPhotos.includes(item.signedUrl)) {
+              matchedPhotos.push(item.signedUrl);
+            }
+          }
+        }
+      });
+
+      map[catName.toLowerCase().trim()] = matchedPhotos;
+      map[catSlug.toLowerCase().trim()] = matchedPhotos;
     });
+
     return map;
-  }, [portfolioItems]);
+  }, [categories, portfolioItems]);
 
   const filtered = categories.filter((s) =>
     s.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -93,7 +110,7 @@ const Services = () => {
           <>
             <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {filtered.map((s, i) => {
-                const catPhotos = categoryPhotosMap[s.name.toLowerCase().trim()] || [];
+                const catPhotos = categoryPhotosMap[s.name.toLowerCase().trim()] || categoryPhotosMap[s.slug.toLowerCase().trim()] || [];
 
                 return (
                   <motion.div

@@ -8,7 +8,7 @@ import { fetchPublicWebsiteCategories,
   getCategoryBySlug, 
   WebsiteCategory 
 } from "@/lib/website-cms";
-import { getPublicPortfolioShowcase, PublicPortfolioShowcaseItem } from "@/lib/job-media";
+import { getPublicPortfolioShowcase, PublicPortfolioShowcaseItem, isCategoryMatch } from "@/lib/job-media";
 import { CardPhotoCarousel } from "@/components/CardPhotoCarousel";
 
 const CategoryPlaceholderImage = ({ name }: { name: string }) => (
@@ -62,12 +62,7 @@ const ServiceDetail = () => {
 
   const categoryPhotos = useMemo(() => {
     if (!category || !portfolioItems || portfolioItems.length === 0) return [];
-    const catName = category.name.toLowerCase().trim();
-    return portfolioItems.filter(item => {
-      const mainCatMatch = (item.category || "").toLowerCase().trim() === catName;
-      const subCatMatch = Array.isArray(item.categories) && item.categories.some(c => (c || "").toLowerCase().trim() === catName);
-      return mainCatMatch || subCatMatch;
-    });
+    return portfolioItems.filter(item => isCategoryMatch(category.name, item.category, item.categories));
   }, [category, portfolioItems]);
 
   const otherCategories = useMemo(() => {
