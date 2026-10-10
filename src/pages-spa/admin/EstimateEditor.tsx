@@ -44,6 +44,29 @@ const EstimateEditor = () => {
     const userRole = user?.organization?.role;
     const { t } = useLanguage();
 
+    const normalizePhoneE164Client = (phoneInput?: string | null): string | null => {
+        if (!phoneInput || typeof phoneInput !== "string") return null;
+        const cleaned = phoneInput.trim().replace(/[^\d+]/g, "");
+        if (cleaned.startsWith("+")) {
+            const digits = cleaned.replace(/\D/g, "");
+            return digits.length >= 10 && digits.length <= 15 ? `+${digits}` : null;
+        }
+        if (cleaned.length === 10) return `+1${cleaned}`;
+        if (cleaned.length === 11 && cleaned.startsWith("1")) return `+${cleaned}`;
+        return null;
+    };
+
+    const getLocalTodayIsoDate = (): string => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const todayIsoDate = getLocalTodayIsoDate();
+
+    // 1. ALL STATE HOOKS FIRST
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -62,18 +85,107 @@ const EstimateEditor = () => {
     const [leadContactPrefs, setLeadContactPrefs] = useState<string[]>([]);
     const [linkedLead, setLinkedLead] = useState<any>(null);
 
-    const normalizePhoneE164Client = (phoneInput?: string | null): string | null => {
-        if (!phoneInput || typeof phoneInput !== "string") return null;
-        const cleaned = phoneInput.trim().replace(/[^\d+]/g, "");
-        if (cleaned.startsWith("+")) {
-            const digits = cleaned.replace(/\D/g, "");
-            return digits.length >= 10 && digits.length <= 15 ? `+${digits}` : null;
-        }
-        if (cleaned.length === 10) return `+1${cleaned}`;
-        if (cleaned.length === 11 && cleaned.startsWith("1")) return `+${cleaned}`;
-        return null;
+    const [formData, setFormData] = useState<Partial<Estimate>>({
+        status: 'Draft',
+        subtotal: 0,
+        tax_amount: 0,
+        discount_amount: 0,
+        total_amount: 0,
+        valid_until: todayIsoDate,
+        terms: "Payment due upon receipt. Proposal valid for 30 days."
+    });
+
+    const [items, setItems] = useState<EstimateLineItem[]>([]);
+    const [serviceJob, setServiceJob] = useState<any>(null);
+
+    const [validationState, setValidationState] = useState<{
+        isOpen: boolean;
+        title?: string;
+        message: string;
+        targetElementId?: string;
+    }>({ isOpen: false, message: "" });
+
+    // 2. DERIVED CALCULATIONS & HELPERS
+    const calculateTotals = (currentItems: EstimateLineItem[], taxRate: number, discount: number) => {
+        const subtotal = currentItems.reduce((acc, item) => acc + (item.total_price || 0), 0);
+        const taxAmount = (subtotal * taxRate) / 100;
+        const total = subtotal + taxAmount - discount;
+        const paid = formData.amount_paid || 0;
+
+        setFormData(prev => ({
+            ...prev,
+            subtotal,
+            tax_rate: taxRate,
+            tax_amount: taxAmount,
+            discount_amount: discount,
+            total_amount: total,
+            balance_due: total - paid,
+            payment_status: total - paid <= 0 ? 'paid' : (paid > 0 ? 'partially_paid' : 'unpaid')
+        }));
     };
 
+    const handleItemsChange = (newItems: EstimateLineItem[]) => {
+        setItems(newItems);
+        calculateTotals(newItems, formData.tax_rate || 0, formData.discount_amount || 0);
+    };
+
+    const getSmsConsentInfo = () => {
+        if (serverConsent) {
+            let color = "bg-slate-100 text-slate-700 border-slate-300";
+            if (serverConsent.status === "confirmed" && serverConsent.canSend) {
+                color = "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold";
+            } else if (serverConsent.status === "confirmed" && !serverConsent.canSend) {
+                color = "bg-blue-100 text-blue-900 border-blue-300 font-medium";
+            } else if (serverConsent.status === "declined" || serverConsent.status === "revoked") {
+                color = "bg-red-100 text-red-800 border-red-200";
+            } else if (serverConsent.status === "phone_mismatch") {
+                color = "bg-amber-100 text-amber-900 border-amber-300 font-medium";
+            }
+
+            return {
+                status: serverConsent.status,
+                label: serverConsent.label || (serverConsent.status === "confirmed" ? "SMS Consent: Confirmed" : "SMS Consent: Not Collected"),
+                canSend: Boolean(serverConsent.canSend),
+                color,
+                reason: serverConsent.reason || "Status de consentimento obtido do servidor.",
+                verbalPendingCampaign: Boolean(serverConsent.verbalPendingCampaign)
+            };
+        }
+
+        if (linkedLead) {
+            const hasConsent = linkedLead.sms_consent === true || linkedLead.client_answers?.smsConsent === true;
+            if (hasConsent) {
+                return {
+                    status: "confirmed",
+                    label: "SMS Consent: Confirmed",
+                    canSend: true,
+                    color: "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold",
+                    reason: "Consentimento de SMS registrado no formulário web."
+                };
+            }
+        }
+
+        return {
+            status: "not_collected",
+            label: "SMS Consent: Not Collected",
+            canSend: false,
+            color: "bg-slate-100 text-slate-700 border-slate-300",
+            reason: "Nenhum consentimento de SMS foi registrado para o telefone deste orçamento."
+        };
+    };
+
+    const smsConsentInfo = getSmsConsentInfo();
+
+    const showValidationError = (message: string, targetElementId?: string, title?: string) => {
+        setValidationState({
+            isOpen: true,
+            title: title || "Validation Required",
+            message,
+            targetElementId
+        });
+    };
+
+    // 3. ASYNC CALLBACKS & ACTIONS
     const loadSmsConsentStatus = useCallback(async () => {
         if (!id && !formData.lead_id && !formData.client_phone) return;
         try {
@@ -245,28 +357,7 @@ const EstimateEditor = () => {
         }
     };
 
-    const getLocalTodayIsoDate = (): string => {
-        const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
 
-    const todayIsoDate = getLocalTodayIsoDate();
-
-    const [formData, setFormData] = useState<Partial<Estimate>>({
-        status: 'Draft',
-        subtotal: 0,
-        tax_amount: 0,
-        discount_amount: 0,
-        total_amount: 0,
-        valid_until: todayIsoDate,
-        terms: "Payment due upon receipt. Proposal valid for 30 days."
-    });
-
-    const [items, setItems] = useState<EstimateLineItem[]>([]);
-    const [serviceJob, setServiceJob] = useState<any>(null);
 
     const loadData = useCallback(async () => {
         setIsLoading(true);
@@ -423,77 +514,6 @@ const EstimateEditor = () => {
         loadData();
     }, [isUserLoading, user?.organization?.id, loadData]);
 
-    const getSmsConsentInfo = () => {
-        if (serverConsent) {
-            let color = "bg-slate-100 text-slate-700 border-slate-300";
-            if (serverConsent.status === "confirmed" && serverConsent.canSend) {
-                color = "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold";
-            } else if (serverConsent.status === "confirmed" && !serverConsent.canSend) {
-                color = "bg-blue-100 text-blue-900 border-blue-300 font-medium";
-            } else if (serverConsent.status === "declined" || serverConsent.status === "revoked") {
-                color = "bg-red-100 text-red-800 border-red-200";
-            } else if (serverConsent.status === "phone_mismatch") {
-                color = "bg-amber-100 text-amber-900 border-amber-300 font-medium";
-            }
-
-            return {
-                status: serverConsent.status,
-                label: serverConsent.label || (serverConsent.status === "confirmed" ? "SMS Consent: Confirmed" : "SMS Consent: Not Collected"),
-                canSend: Boolean(serverConsent.canSend),
-                color,
-                reason: serverConsent.reason || "Status de consentimento obtido do servidor.",
-                verbalPendingCampaign: Boolean(serverConsent.verbalPendingCampaign)
-            };
-        }
-
-        if (linkedLead) {
-            const hasConsent = linkedLead.sms_consent === true || linkedLead.client_answers?.smsConsent === true;
-            if (hasConsent) {
-                return {
-                    status: "confirmed",
-                    label: "SMS Consent: Confirmed",
-                    canSend: true,
-                    color: "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold",
-                    reason: "Consentimento de SMS registrado no formulário web."
-                };
-            }
-        }
-
-        return {
-            status: "not_collected",
-            label: "SMS Consent: Not Collected",
-            canSend: false,
-            color: "bg-slate-100 text-slate-700 border-slate-300",
-            reason: "Nenhum consentimento de SMS foi registrado para o telefone deste orçamento."
-        };
-    };
-
-    const smsConsentInfo = getSmsConsentInfo();
-
-
-    const calculateTotals = (currentItems: EstimateLineItem[], taxRate: number, discount: number) => {
-        const subtotal = currentItems.reduce((acc, item) => acc + (item.total_price || 0), 0);
-        const taxAmount = (subtotal * taxRate) / 100;
-        const total = subtotal + taxAmount - discount;
-        const paid = formData.amount_paid || 0;
-
-        setFormData(prev => ({
-            ...prev,
-            subtotal,
-            tax_rate: taxRate,
-            tax_amount: taxAmount,
-            discount_amount: discount,
-            total_amount: total,
-            balance_due: total - paid,
-            payment_status: total - paid <= 0 ? 'paid' : (paid > 0 ? 'partially_paid' : 'unpaid')
-        }));
-    };
-
-    const handleItemsChange = (newItems: EstimateLineItem[]) => {
-        setItems(newItems);
-        calculateTotals(newItems, formData.tax_rate || 0, formData.discount_amount || 0);
-    };
-
     const handleShare = () => {
         if (!formData.public_token) {
             toast.error("Public token missing. Save the estimate first.");
@@ -503,22 +523,6 @@ const EstimateEditor = () => {
         const shareUrl = `${window.location.host.includes('localhost') ? 'http' : 'https'}://${window.location.host}/estimate/${slice}#contract`;
         navigator.clipboard.writeText(shareUrl);
         toast.success("Share link copied to clipboard!");
-    };
-
-    const [validationState, setValidationState] = useState<{
-        isOpen: boolean;
-        title?: string;
-        message: string;
-        targetElementId?: string;
-    }>({ isOpen: false, message: "" });
-
-    const showValidationError = (message: string, targetElementId?: string, title?: string) => {
-        setValidationState({
-            isOpen: true,
-            title: title || "Validation Required",
-            message,
-            targetElementId
-        });
     };
 
     const handleGeneratePDF = async () => {
