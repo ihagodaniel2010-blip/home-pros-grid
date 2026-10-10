@@ -26,6 +26,79 @@ const AdminLayout = () => {
   const userRole = user?.organization?.role;
   const orgId = user?.organization?.id;
 
+  // Operations Nav Items
+  const operationsNavItems = useMemo(
+    () => [
+      { label: t("admin.dashboard"), icon: LayoutDashboard, path: "/admin" },
+      { label: "Client Requests", icon: Inbox, path: "/admin/inbox", badge: newLeads },
+      { label: t("admin.estimates"), icon: FileText, path: "/admin/estimates" },
+      { label: "Projects", icon: Wrench, path: "/admin/jobs" },
+      { label: "Client Receipts", icon: Receipt, path: "/admin/client-receipts" },
+    ],
+    [t, newLeads]
+  );
+
+  // Financial Nav Items
+  const financialNavItems = useMemo(
+    () => [
+      { label: "Expenses / Material Receipts", icon: FileText, path: "/admin/expenses" },
+      { label: "Reimbursements / Partner Settlements", icon: DollarSign, path: "/admin/reimbursements" },
+      { label: "Reports", icon: PieChart, path: "/admin/reports" },
+      { label: "Tax Center", icon: Calculator, path: "/admin/tax-center" },
+    ],
+    []
+  );
+
+  // Company & Site Nav Items
+  const companyNavItems = useMemo(
+    () => [
+      { label: "Website CMS", icon: Globe, path: "/admin/website" },
+      { label: "Services", icon: Store, path: "/admin/services" },
+      { label: "Service Areas", icon: MapPin, path: "/admin/locations" },
+      { label: t("nav.portfolio"), icon: Images, path: "/admin/portfolio" },
+      { label: t("admin.reviews"), icon: BarChart3, path: "/admin/reviews" },
+      { label: "Communications", icon: Mail, path: "/admin/communications" },
+      { label: "Company Profile", icon: Building2, path: "/admin/company" },
+    ],
+    [t]
+  );
+
+  // System & SaaS Nav Items
+  const systemNavItems = useMemo(
+    () => [
+      { label: t("admin.settings"), icon: Settings, path: "/admin/settings" },
+      { label: "Billing & Credits", icon: CreditCard, path: "/admin/billing" },
+      { label: "Lead Market", icon: Store, path: "/admin/lead-market" },
+      { label: "Lead Settings", icon: Settings, path: "/admin/lead-settings" },
+      { label: t("admin.analytics"), icon: BarChart3, path: "/admin/analytics" },
+      { label: "Estimate Assistant", icon: FileText, path: "/admin/estimate-assistant" },
+      { label: "Notifications", icon: Bell, path: "/admin/notifications", badge: unreadCount },
+      { label: "Client Link", icon: Link2, path: "/admin/client-link" },
+    ],
+    [t, unreadCount]
+  );
+
+  const filteredOperations = useMemo(() => {
+    if (userRole === "worker") {
+      return operationsNavItems.filter(item => item.path === "/admin");
+    }
+    return operationsNavItems;
+  }, [operationsNavItems, userRole]);
+
+  const filteredFinancial = useMemo(() => userRole === "worker" ? [] : financialNavItems, [financialNavItems, userRole]);
+  const filteredCompany = useMemo(() => userRole === "worker" ? [] : companyNavItems, [companyNavItems, userRole]);
+  const filteredSystem = useMemo(() => userRole === "worker" ? [] : systemNavItems, [systemNavItems, userRole]);
+
+  const isNavActive = (path: string) => {
+    if (path.includes("?")) {
+      return `${location.pathname}${location.search}` === path;
+    }
+    if (path === "/admin/settings") {
+      return location.pathname === path && !location.search;
+    }
+    return location.pathname === path;
+  };
+
   useEffect(() => {
     let active = true;
 
