@@ -146,7 +146,10 @@ const ServiceDetail = () => {
             </div>
 
             <div className="md:col-span-5">
-              <div className="relative aspect-4/3 rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl bg-slate-900">
+              <div 
+                className="relative aspect-[4/3] w-full min-h-[250px] rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl bg-slate-900"
+                style={{ aspectRatio: "4/3", minHeight: "250px" }}
+              >
                 <CardPhotoCarousel
                   primaryImage={category.cover_image_url}
                   additionalPhotos={
@@ -201,7 +204,10 @@ const ServiceDetail = () => {
                   onClick={() => setActiveLightboxItem(item)}
                   className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col"
                 >
-                  <div className="relative aspect-4/3 bg-slate-900 flex items-center justify-center overflow-hidden">
+                  <div 
+                    className="relative aspect-[4/3] w-full min-h-[200px] bg-slate-900 flex items-center justify-center overflow-hidden"
+                    style={{ aspectRatio: "4/3", minHeight: "200px" }}
+                  >
                     {item.media_type === "video" ? (
                       <div className="w-full h-full relative">
                         <video src={item.signedUrl} className="w-full h-full object-cover" />

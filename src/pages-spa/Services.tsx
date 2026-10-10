@@ -126,7 +126,10 @@ const Services = () => {
                       to={`/services/${s.slug}`}
                       className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full"
                     >
-                      <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
+                      <div 
+                        className="relative aspect-[4/3] w-full overflow-hidden bg-slate-900 shrink-0"
+                        style={{ aspectRatio: "4/3", minHeight: "220px" }}
+                      >
                         <CardPhotoCarousel
                           primaryImage={s.cover_image_url}
                           additionalPhotos={catPhotos}

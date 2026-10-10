@@ -98,7 +98,10 @@ const ServicesShowcase = () => {
         }
       });
 
-      const photosToUse = matchedPhotos.length > 0 ? matchedPhotos : allPortfolioUrls;
+      let photosToUse = matchedPhotos;
+      if (photosToUse.length === 0 && allPortfolioUrls.length > 0) {
+        photosToUse = allPortfolioUrls;
+      }
 
       map[catName.toLowerCase().trim()] = photosToUse;
       map[catSlug.toLowerCase().trim()] = photosToUse;
@@ -190,7 +193,10 @@ const ServicesShowcase = () => {
                     to={`/services/${cat.slug}`}
                     className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/90 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col h-full cursor-pointer block"
                   >
-                    <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
+                    <div 
+                      className="relative aspect-[4/3] w-full overflow-hidden bg-slate-900 shrink-0"
+                      style={{ aspectRatio: "4/3", minHeight: "220px" }}
+                    >
                       <CardPhotoCarousel
                         primaryImage={cat.cover_image_url}
                         additionalPhotos={catPhotos}
@@ -298,7 +304,10 @@ const ServicesShowcase = () => {
                     className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col"
                     onClick={() => setActiveLightboxItem(item)}
                   >
-                    <div className="relative aspect-4/3 overflow-hidden bg-slate-900 flex items-center justify-center">
+                    <div 
+                      className="relative aspect-[4/3] w-full overflow-hidden bg-slate-900 flex items-center justify-center"
+                      style={{ aspectRatio: "4/3", minHeight: "200px" }}
+                    >
                       {item.media_type === "video" ? (
                         <div className="w-full h-full relative">
                           <video src={item.signedUrl} className="w-full h-full object-cover" />
