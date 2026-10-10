@@ -57,30 +57,42 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
           <Home className="w-5 h-5 text-amber-400" />
         </div>
         <h4 className="text-sm font-bold text-white tracking-tight leading-snug">{title}</h4>
+        <span className="text-[10px] text-amber-400/90 font-semibold uppercase tracking-wider mt-1">H &amp; A Construction</span>
       </div>
     );
   }
 
   if (allImages.length === 1) {
     return (
-      <img
-        src={allImages[0]}
-        alt={`${title} photo`}
-        className={className}
-        loading="lazy"
-        onError={(e) => {
-          const target = e.target as HTMLImageElement;
-          target.style.display = "none";
-        }}
-      />
+      <div className="relative w-full h-full overflow-hidden bg-slate-900 flex items-center justify-center">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0b2a4a] via-[#103b66] to-slate-900 flex flex-col items-center justify-center p-6 text-center z-0">
+          <Home className="w-6 h-6 text-amber-400 mb-1" />
+          <span className="text-xs font-bold text-white">{title}</span>
+        </div>
+        <img
+          src={allImages[0]}
+          alt={`${title} photo`}
+          className={`${className} relative z-10 transition-opacity duration-500`}
+          loading="lazy"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.style.opacity = "0";
+          }}
+        />
+      </div>
     );
   }
 
   return (
     <div
-      className="relative w-full h-full overflow-hidden group"
+      className="relative w-full h-full overflow-hidden bg-slate-900 group"
       onClick={onClick}
     >
+      <div className="absolute inset-0 bg-gradient-to-br from-[#0b2a4a] via-[#103b66] to-slate-900 flex flex-col items-center justify-center p-6 text-center z-0">
+        <Home className="w-6 h-6 text-amber-400 mb-1" />
+        <span className="text-xs font-bold text-white">{title}</span>
+      </div>
+
       {allImages.map((imgUrl, idx) => (
         <img
           key={`${imgUrl}-${idx}`}
@@ -91,6 +103,10 @@ export const CardPhotoCarousel: React.FC<CardPhotoCarouselProps> = ({
             idx === currentIndex ? "opacity-100 z-10 scale-100" : "opacity-0 z-0 scale-105 pointer-events-none"
           }`}
           loading="lazy"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.style.opacity = "0";
+          }}
         />
       ))}
 
