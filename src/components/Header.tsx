@@ -215,20 +215,12 @@ const Header = () => {
                     </button>
                   </>
                 ) : (
-                  <>
-                    <button
-                      onClick={() => { setLoginOpen(false); navigate("/login"); }}
-                      className="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-lg"
-                    >
-                      Client Portal Login
-                    </button>
-                    <button
-                      onClick={() => { setLoginOpen(false); navigate("/admin/login"); }}
-                      className="w-full text-left px-3 py-2 text-xs font-bold text-[#0b2a4a] hover:bg-blue-50 rounded-lg"
-                    >
-                      Admin Staff Login
-                    </button>
-                  </>
+                  <button
+                    onClick={() => { setLoginOpen(false); navigate("/admin/login"); }}
+                    className="w-full text-left px-3 py-2 text-xs font-bold text-[#0b2a4a] hover:bg-blue-50 rounded-lg"
+                  >
+                    Admin Staff Login
+                  </button>
                 )}
               </div>
             )}
@@ -284,9 +276,9 @@ const Header = () => {
               <Link to="/contact" onClick={() => setMobileOpen(false)} className="hover:text-amber-400">Contact</Link>
             </nav>
 
-            {/* Dedicated Mobile Admin & Client Portal Access Section */}
+            {/* Dedicated Mobile Admin Access Section */}
             <div className="pt-4 border-t border-slate-700/80 space-y-2.5">
-              <p className="text-[11px] font-extrabold uppercase tracking-wider text-amber-400">Portal &amp; Admin Access</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-wider text-amber-400">Admin Access</p>
               {user ? (
                 <div className="flex flex-col gap-2">
                   <button
@@ -303,20 +295,12 @@ const Header = () => {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => { setMobileOpen(false); navigate("/admin/login"); }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-11 rounded-xl flex items-center justify-center gap-1.5 shadow-md"
-                  >
-                    <Shield className="w-4 h-4" /> Portal Admin Login
-                  </button>
-                  <button
-                    onClick={() => { setMobileOpen(false); navigate("/login"); }}
-                    className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs h-11 rounded-xl flex items-center justify-center gap-1.5 border border-white/15"
-                  >
-                    <User className="w-4 h-4" /> Client Portal
-                  </button>
-                </div>
+                <button
+                  onClick={() => { setMobileOpen(false); navigate("/admin/login"); }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-11 rounded-xl flex items-center justify-center gap-1.5 shadow-md"
+                >
+                  <Shield className="w-4 h-4" /> Admin Staff Login
+                </button>
               )}
             </div>
 

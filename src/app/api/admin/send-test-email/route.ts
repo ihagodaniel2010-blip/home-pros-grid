@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { verifyAdminAuth } from "@/lib/server/admin-auth";
 
 const NO_CACHE_HEADERS = {
   "Cache-Control": "no-store, private, no-cache, must-revalidate",
@@ -18,6 +19,15 @@ function renderTemplateText(templateText: string, variables: Record<string, any>
 }
 
 export async function POST(request: Request) {
+  // 1. Authenticate and authorize admin user
+  const auth = await verifyAdminAuth(request);
+  if (!auth.isAllowed) {
+    return NextResponse.json(
+      { success: false, message: auth.error || "Unauthorized access." },
+      { status: auth.status, headers: NO_CACHE_HEADERS }
+    );
+  }
+
   try {
     let body: any = {};
     try {

@@ -1,143 +1,58 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe, Building2, Store, Receipt, DollarSign, Calculator, Link2, Bell, PieChart, CreditCard, Mail, Menu, X, Wrench, Loader2 } from "lucide-react";
+import { LayoutDashboard, Inbox, Settings, LogOut, BarChart3, Images, MapPin, FileText, Globe, Building2, Store, Receipt, DollarSign, Calculator, Link2, Bell, PieChart, CreditCard, Mail, Menu, X, Wrench, Loader2, ShieldAlert } from "lucide-react";
 import ErrorBoundary from "./ErrorBoundary";
 import { adminLogout, fetchAdminSession } from "@/lib/admin-auth";
+import { isAdminAllowed } from "@/lib/admin-allowlist";
 import { getLeads } from "@/lib/leads";
 import { useNotifications } from "@/lib/notifications";
 import { useLanguage } from "@/context/LanguageContext";
 import { useUser } from "@/context/UserContext";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
-  const { user, isLoading: userLoading } = useUser();
+  const { user, logout, isLoading: userLoading } = useUser();
   const { unreadCount, loadNotifications } = useNotifications();
   const [newLeads, setNewLeads] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthed, setIsAuthed] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const userRole = user?.organization?.role;
-
   const orgId = user?.organization?.id;
-
-  useEffect(() => {
-    if (userLoading) return;
-    let mounted = true;
-    getLeads(orgId)
-      .then(leads => {
-        if (mounted) setNewLeads((leads || []).filter(l => l.status === "New").length);
-      })
-      .catch(err => {
-        console.warn("[AdminLayout] Error fetching new leads badge:", err);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [location.pathname, userLoading, orgId]); // Update badge when path changes
-
-  useEffect(() => {
-    if (isAuthed && orgId) {
-      loadNotifications(orgId);
-    }
-  }, [isAuthed, orgId]);
-
-
-  // Operations Nav Items
-  const operationsNavItems = useMemo(
-    () => [
-      { label: t("admin.dashboard"), icon: LayoutDashboard, path: "/admin" },
-      { label: "Client Requests", icon: Inbox, path: "/admin/inbox", badge: newLeads },
-      { label: t("admin.estimates"), icon: FileText, path: "/admin/estimates" },
-      { label: "Projects", icon: Wrench, path: "/admin/jobs" },
-      { label: "Client Receipts", icon: Receipt, path: "/admin/client-receipts" },
-    ],
-    [t, newLeads]
-  );
-
-  // Financial Nav Items
-  const financialNavItems = useMemo(
-    () => [
-      { label: "Expenses / Material Receipts", icon: FileText, path: "/admin/expenses" },
-      { label: "Reimbursements / Partner Settlements", icon: DollarSign, path: "/admin/reimbursements" },
-      { label: "Reports", icon: PieChart, path: "/admin/reports" },
-      { label: "Tax Center", icon: Calculator, path: "/admin/tax-center" },
-    ],
-    []
-  );
-
-  // Company & Site Nav Items
-  const companyNavItems = useMemo(
-    () => [
-      { label: "Website CMS", icon: Globe, path: "/admin/website" },
-      { label: "Services", icon: Store, path: "/admin/services" },
-      { label: "Service Areas", icon: MapPin, path: "/admin/locations" },
-      { label: t("nav.portfolio"), icon: Images, path: "/admin/portfolio" },
-      { label: t("admin.reviews"), icon: BarChart3, path: "/admin/reviews" },
-      { label: "Communications", icon: Mail, path: "/admin/communications" },
-      { label: "Company Profile", icon: Building2, path: "/admin/company" },
-    ],
-    [t]
-  );
-
-  // System & SaaS Nav Items
-  const systemNavItems = useMemo(
-    () => [
-      { label: t("admin.settings"), icon: Settings, path: "/admin/settings" },
-      { label: "Billing & Credits", icon: CreditCard, path: "/admin/billing" },
-      { label: "Lead Market", icon: Store, path: "/admin/lead-market" },
-      { label: "Lead Settings", icon: Settings, path: "/admin/lead-settings" },
-      { label: t("admin.analytics"), icon: BarChart3, path: "/admin/analytics" },
-      { label: "Estimate Assistant", icon: FileText, path: "/admin/estimate-assistant" },
-      { label: "Notifications", icon: Bell, path: "/admin/notifications", badge: unreadCount },
-      { label: "Client Link", icon: Link2, path: "/admin/client-link" },
-    ],
-    [t, unreadCount]
-  );
-
-  const filteredOperations = useMemo(() => {
-    if (userRole === "worker") {
-      return operationsNavItems.filter(item => item.path === "/admin");
-    }
-    return operationsNavItems;
-  }, [operationsNavItems, userRole]);
-
-  const filteredFinancial = useMemo(() => userRole === "worker" ? [] : financialNavItems, [financialNavItems, userRole]);
-  const filteredCompany = useMemo(() => userRole === "worker" ? [] : companyNavItems, [companyNavItems, userRole]);
-  const filteredSystem = useMemo(() => userRole === "worker" ? [] : systemNavItems, [systemNavItems, userRole]);
-
-  const isNavActive = (path: string) => {
-    if (path.includes("?")) {
-      return `${location.pathname}${location.search}` === path;
-    }
-    if (path === "/admin/settings") {
-      return location.pathname === path && !location.search;
-    }
-    return location.pathname === path;
-  };
 
   useEffect(() => {
     let active = true;
 
-    // If UserContext has an authenticated user, authorize immediately
+    if (userLoading) return;
+
     if (user) {
-      setIsAuthed(true);
-      setIsLoading(false);
+      const allowed = isAdminAllowed(user.email);
+      if (active) {
+        setIsAuthed(true);
+        setIsAuthorized(allowed);
+        setIsLoading(false);
+      }
       return;
     }
-
-    // Wait for UserContext to finish initial loading before checking fallback session
-    if (userLoading) return;
 
     fetchAdminSession()
       .then((session) => {
         if (!active) return;
-        if (session?.email) {
+        if (session?.email && isAdminAllowed(session.email)) {
           setIsAuthed(true);
+          setIsAuthorized(true);
+        } else if (session?.email) {
+          setIsAuthed(true);
+          setIsAuthorized(false);
         } else {
           setIsAuthed(false);
+          setIsAuthorized(false);
           navigate("/admin/login", { replace: true });
         }
       })
@@ -145,6 +60,7 @@ const AdminLayout = () => {
         console.error("Auth check error in AdminLayout:", err);
         if (!active) return;
         setIsAuthed(false);
+        setIsAuthorized(false);
         navigate("/admin/login", { replace: true });
       })
       .finally(() => {
@@ -156,9 +72,30 @@ const AdminLayout = () => {
     };
   }, [user, userLoading, navigate]);
 
+  useEffect(() => {
+    if (!isAuthorized || userLoading || !orgId) return;
+    let mounted = true;
+    getLeads(orgId)
+      .then(leads => {
+        if (mounted) setNewLeads((leads || []).filter(l => l.status === "New").length);
+      })
+      .catch(err => {
+        console.warn("[AdminLayout] Error fetching new leads badge:", err);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [location.pathname, userLoading, orgId, isAuthorized]);
+
+  useEffect(() => {
+    if (isAuthed && isAuthorized && orgId) {
+      loadNotifications(orgId);
+    }
+  }, [isAuthed, isAuthorized, orgId, loadNotifications]);
+
   // Restrict direct URL access for worker
   useEffect(() => {
-    if (isAuthed && userRole === "worker") {
+    if (isAuthed && isAuthorized && userRole === "worker") {
       const allowedPaths = ["/admin", "/admin/inbox"];
       const currentPath = location.pathname;
       if (!allowedPaths.includes(currentPath)) {
@@ -166,10 +103,58 @@ const AdminLayout = () => {
         navigate("/admin", { replace: true });
       }
     }
-  }, [isAuthed, userRole, location.pathname, navigate]);
+  }, [isAuthed, isAuthorized, userRole, location.pathname, navigate]);
 
-  if (isLoading) return null;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0b2a4a]">
+        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      </div>
+    );
+  }
+
   if (!isAuthed) return null;
+
+  // Render Access Denied 403 screen without loading any protected data
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-[#081a2f] text-white">
+        <div className="max-w-md w-full bg-white text-slate-900 border border-slate-200 rounded-2xl p-8 shadow-2xl text-center">
+          <div className="w-16 h-16 bg-red-100 border border-red-200 rounded-full flex items-center justify-center mx-auto mb-6 text-red-600">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <Badge variant="outline" className="mb-4 bg-red-50 text-red-700 border-red-200 font-bold px-3 py-1">
+            HTTP 403 — Acesso Negado
+          </Badge>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-2">
+            Acesso Não Autorizado
+          </h1>
+          <p className="text-slate-600 text-sm mb-6 leading-relaxed">
+            A conta Google <strong className="text-slate-900">{user?.email || "conectada"}</strong> não possui permissões administrativas para gerenciar o portal da <strong>H &amp; A Construction LLC</strong>.
+          </p>
+          <div className="space-y-3">
+            <Button
+              onClick={async () => {
+                await adminLogout();
+                await logout();
+                navigate("/admin/login", { replace: true });
+              }}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold h-11 rounded-xl shadow-md transition-all"
+            >
+              Encerrar Sessão e Fazer Login
+            </Button>
+            <Button
+              onClick={() => navigate("/")}
+              variant="outline"
+              className="w-full border-slate-300 text-slate-700 hover:bg-slate-100 font-bold h-11 rounded-xl"
+            >
+              Voltar ao Site Público
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row" style={{ background: "#f4f6f9" }}>

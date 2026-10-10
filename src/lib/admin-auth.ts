@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { isAdminAllowed } from "@/lib/admin-allowlist";
 
 export type AdminSession = {
   email: string;
@@ -33,8 +34,13 @@ export const fetchAdminSession = async (): Promise<AdminSession | null> => {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error || !session?.user) return null;
 
+    const email = session.user.email || "";
+    if (!isAdminAllowed(email)) {
+      return null;
+    }
+
     return {
-      email: session.user.email || "Unknown",
+      email,
     };
   } catch (e) {
     console.error("fetchAdminSession error:", e);
@@ -45,6 +51,9 @@ export const fetchAdminSession = async (): Promise<AdminSession | null> => {
 export const adminLogout = async (): Promise<void> => {
   if (!supabase) return;
   await supabase.auth.signOut();
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("ha_construction_user_session");
+  }
 };
 
 export type LoginAttempt = {
@@ -56,7 +65,5 @@ export type LoginAttempt = {
 };
 
 export const fetchLoginAttempts = async (status?: string): Promise<LoginAttempt[]> => {
-  // Login attempts tracking should be moved to a Supabase table if needed
-  // For now returning empty to satisfy the UI
   return [];
 };

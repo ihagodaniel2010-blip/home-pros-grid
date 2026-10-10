@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { isAdminAllowed } from "@/lib/admin-allowlist";
 
 export interface Organization {
   id: string;
@@ -91,8 +92,24 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const mapSupabaseUser = async (authUser: User): Promise<UserSession> => {
+    const isAllowedAdmin = isAdminAllowed(authUser.email);
     const orgs = await fetchUserOrganizations(authUser.id);
-    const finalOrgs = orgs.length > 0 ? orgs : [DEFAULT_ORGANIZATION];
+    
+    let finalOrgs: Organization[] = [];
+    if (orgs.length > 0) {
+      finalOrgs = orgs;
+    } else if (isAllowedAdmin) {
+      finalOrgs = [DEFAULT_ORGANIZATION];
+    } else {
+      // Non-admin user gets non-owner worker role by default
+      finalOrgs = [{
+        id: DEFAULT_ORG_ID,
+        name: "H&A Construction LLC",
+        slug: "ha-construction",
+        role: "worker"
+      }];
+    }
+
     return {
       id: authUser.id,
       name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email || "User",
@@ -105,7 +122,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Safety timeout: ensure loading state clears even if Supabase hangs
     const timeoutId = setTimeout(() => {
       console.warn("Auth initialization safety timer expired. Forcing isLoading = false.");
       setIsLoading(false);
@@ -121,7 +137,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!isMounted) return;
         initialCheckDone = true;
 
-        // Execute asynchronously outside the Supabase Auth lock stack
         setTimeout(async () => {
           if (!isMounted) return;
           try {
@@ -130,12 +145,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (isMounted) setUser(mappedUser);
               localStorage.removeItem(USER_STORAGE_KEY);
             } else {
-              const stored = localStorage.getItem(USER_STORAGE_KEY);
-              if (stored && isMounted) {
-                setUser(JSON.parse(stored));
-              } else if (isMounted) {
-                setUser(null);
-              }
+              // Strictly clear user if no valid Supabase session exists
+              if (isMounted) setUser(null);
+              localStorage.removeItem(USER_STORAGE_KEY);
             }
           } catch (error) {
             console.error("Auth state change error:", error);
@@ -149,7 +161,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }, 0);
       });
 
-      // Fallback if onAuthStateChange hasn't fired in 1 second
+      // Fallback check if onAuthStateChange hasn't fired in 1 second
       setTimeout(() => {
         if (isMounted && !initialCheckDone) {
           supabase.auth.getSession().then(({ data }) => {
@@ -160,6 +172,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (data.session?.user) {
                   const mappedUser = await mapSupabaseUser(data.session.user);
                   if (isMounted) setUser(mappedUser);
+                } else {
+                  if (isMounted) setUser(null);
                 }
               } catch (err) {
                 console.error("Auth fallback check error:", err);
@@ -180,23 +194,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearTimeout(timeoutId);
       };
     } else {
-      try {
-        const stored = localStorage.getItem(USER_STORAGE_KEY);
-        if (stored) {
-          setUser(JSON.parse(stored));
-        }
-      } catch {
-        // ignore
-      } finally {
-        setIsLoading(false);
-        clearTimeout(timeoutId);
-      }
+      setIsLoading(false);
+      clearTimeout(timeoutId);
     }
   }, []);
 
   const login = useCallback(async (userData: UserSession) => {
     setUser(userData);
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
   }, []);
 
   const logout = useCallback(async () => {
@@ -226,7 +230,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/experiences`,
+        redirectTo: `${window.location.origin}/admin`,
       },
     });
 
@@ -258,4 +262,3 @@ export const useUser = () => {
   }
   return context;
 };
-

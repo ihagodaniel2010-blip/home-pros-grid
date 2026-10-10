@@ -197,21 +197,28 @@ const isRateLimited = (ip) => {
   return recent.length > RATE_LIMIT_MAX;
 };
 
+const ALLOWED_ADMIN_EMAILS = [
+  "hugoluizfds11@gmail.com",
+  "adelmoferreira6328@gmail.com"
+];
+
 const requireAdmin = (req, res, next) => {
-  if (!req.session?.user?.email) {
-    return res.status(401).json({ error: "Unauthorized" });
+  const email = (req.session?.user?.email || "").toLowerCase();
+  if (!email || !ALLOWED_ADMIN_EMAILS.includes(email)) {
+    return res.status(401).json({ error: "Unauthorized: Invalid or missing administrative session" });
   }
   return next();
 };
 
 app.post("/api/auth/login", async (req, res) => {
   const { email } = req.body || {};
+  const cleanEmail = String(email || "").trim().toLowerCase();
   const ip = req.ip || "unknown";
   const userAgent = req.get("user-agent") || "";
 
   if (isRateLimited(ip)) {
     await recordLoginAttempt({
-      email: String(email || ""),
+      email: cleanEmail,
       ip,
       userAgent,
       outcome: "fail",
@@ -220,9 +227,20 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(429).json({ error: "Muitas tentativas" });
   }
 
-  req.session.user = { email: ADMIN_EMAIL };
+  if (!cleanEmail || !ALLOWED_ADMIN_EMAILS.includes(cleanEmail)) {
+    await recordLoginAttempt({
+      email: cleanEmail,
+      ip,
+      userAgent,
+      outcome: "fail",
+      reason: "unauthorized_email",
+    });
+    return res.status(403).json({ error: "Acesso negado: Conta de e-mail não autorizada." });
+  }
+
+  req.session.user = { email: cleanEmail };
   await recordLoginAttempt({
-    email: String(email || ADMIN_EMAIL),
+    email: cleanEmail,
     ip,
     userAgent,
     outcome: "success",
@@ -231,23 +249,11 @@ app.post("/api/auth/login", async (req, res) => {
   if (req.accepts("html")) {
     return res.redirect("/admin");
   }
-  return res.json({ ok: true, email: ADMIN_EMAIL, redirect: "/admin" });
+  return res.json({ ok: true, email: cleanEmail, redirect: "/admin" });
 });
 
 app.get("/api/auth/login", async (req, res) => {
-  const ip = req.ip || "unknown";
-  const userAgent = req.get("user-agent") || "";
-
-  req.session.user = { email: ADMIN_EMAIL };
-  await recordLoginAttempt({
-    email: ADMIN_EMAIL,
-    ip,
-    userAgent,
-    outcome: "success",
-    reason: "success",
-  });
-
-  return res.redirect("/admin");
+  return res.redirect("/admin/login");
 });
 
 app.post("/api/auth/logout", (req, res) => {

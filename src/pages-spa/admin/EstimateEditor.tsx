@@ -24,9 +24,15 @@ import RegisterPaymentModal from "@/components/admin/estimates/RegisterPaymentMo
 import EstimateValidationModal from "@/components/admin/estimates/EstimateValidationModal";
 import CountersignModal from "@/components/admin/estimates/CountersignModal";
 import { generateProfessionalPDF } from "@/lib/pdf-generator";
+import { authenticatedFetch } from "@/lib/api-client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 
 const EstimateEditor = () => {
     const { id } = useParams();
@@ -44,6 +50,13 @@ const EstimateEditor = () => {
     const [isCountersignModalOpen, setIsCountersignModalOpen] = useState(false);
     const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+    const [isRecordConsentOpen, setIsRecordConsentOpen] = useState(false);
+    const [verbalConsentMethod, setVerbalConsentMethod] = useState<"verbal_phone" | "verbal_in_person">("verbal_phone");
+    const [verbalConsentConfirmed, setVerbalConsentConfirmed] = useState(false);
+    const [verbalConsentNotes, setVerbalConsentNotes] = useState("");
+    const [isSavingConsent, setIsSavingConsent] = useState(false);
+    const [serverConsent, setServerConsent] = useState<any>(null);
+
     const [isSendingEmail, setIsSendingEmail] = useState(false);
     const [isSendingSMS, setIsSendingSMS] = useState(false);
     const [leadContactPrefs, setLeadContactPrefs] = useState<string[]>([]);
@@ -59,6 +72,73 @@ const EstimateEditor = () => {
         if (cleaned.length === 10) return `+1${cleaned}`;
         if (cleaned.length === 11 && cleaned.startsWith("1")) return `+${cleaned}`;
         return null;
+    };
+
+    const loadSmsConsentStatus = useCallback(async () => {
+        if (!id && !formData.lead_id && !formData.client_phone) return;
+        try {
+            const params = new URLSearchParams();
+            if (id) params.append("estimateId", id);
+            if (formData.lead_id) params.append("leadId", formData.lead_id);
+            if (formData.client_phone) params.append("phone", formData.client_phone);
+
+            const res = await authenticatedFetch(`/api/admin/sms-consent-status?${params.toString()}`);
+            const data = await res.json();
+            if (data.success && data.consent) {
+                setServerConsent(data.consent);
+            }
+        } catch (err) {
+            console.error("Error fetching server SMS consent status:", err);
+        }
+    }, [id, formData.lead_id, formData.client_phone]);
+
+    useEffect(() => {
+        if (isUserLoading) return;
+        loadSmsConsentStatus();
+    }, [isUserLoading, loadSmsConsentStatus]);
+
+    const handleSaveVerbalConsent = async () => {
+        if (!verbalConsentConfirmed) {
+            toast.error("Você deve marcar a caixa de confirmação declarando que o cliente autorizou verbalmente o envio de SMS.");
+            return;
+        }
+
+        const phone = formData.client_phone || linkedLead?.phone || "";
+        if (!phone || phone.trim().length < 7) {
+            toast.error("Por favor, informe e salve um número de telefone válido para o cliente antes de registrar o consentimento.");
+            return;
+        }
+
+        setIsSavingConsent(true);
+        try {
+            const res = await authenticatedFetch("/api/admin/record-sms-consent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    estimateId: id || undefined,
+                    leadId: formData.lead_id || undefined,
+                    method: verbalConsentMethod,
+                    confirmed: true,
+                    notes: verbalConsentNotes
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                toast.success("Registro de consentimento verbal salvo com sucesso!");
+                setIsRecordConsentOpen(false);
+                setVerbalConsentConfirmed(false);
+                setVerbalConsentNotes("");
+                await loadSmsConsentStatus();
+            } else {
+                toast.error(`Falha ao registrar consentimento: ${data.message || "Erro no servidor"}`);
+            }
+        } catch (err: any) {
+            console.error("Error saving verbal consent:", err);
+            toast.error("Erro inesperado ao salvar consentimento verbal.");
+        } finally {
+            setIsSavingConsent(false);
+        }
     };
 
     const handleSendEstimateEmail = async () => {
@@ -78,7 +158,7 @@ const EstimateEditor = () => {
 
         setIsSendingEmail(true);
         try {
-            const res = await fetch("/api/admin/send-test-email", {
+            const res = await authenticatedFetch("/api/admin/send-test-email", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -135,7 +215,7 @@ const EstimateEditor = () => {
 
         setIsSendingSMS(true);
         try {
-            const res = await fetch("/api/admin/send-sms", {
+            const res = await authenticatedFetch("/api/admin/send-sms", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -155,7 +235,7 @@ const EstimateEditor = () => {
                 setFormData(prev => ({ ...prev, status: 'Sent', sent_at: nowIso }));
                 toast.success(`Estimate SMS sent successfully! Status updated to Sent.`);
             } else {
-                toast.error(`SMS dispatch notice: ${data.message || "Twilio unconfigured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER."}`);
+                toast.error(`SMS dispatch notice: ${data.message || "Twilio unconfigured."}`);
             }
         } catch (err: any) {
             console.error("Estimate SMS dispatch error:", err);
@@ -344,49 +424,47 @@ const EstimateEditor = () => {
     }, [isUserLoading, user?.organization?.id, loadData]);
 
     const getSmsConsentInfo = () => {
-        if (!formData.lead_id || !linkedLead) {
+        if (serverConsent) {
+            let color = "bg-slate-100 text-slate-700 border-slate-300";
+            if (serverConsent.status === "confirmed" && serverConsent.canSend) {
+                color = "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold";
+            } else if (serverConsent.status === "confirmed" && !serverConsent.canSend) {
+                color = "bg-blue-100 text-blue-900 border-blue-300 font-medium";
+            } else if (serverConsent.status === "declined" || serverConsent.status === "revoked") {
+                color = "bg-red-100 text-red-800 border-red-200";
+            } else if (serverConsent.status === "phone_mismatch") {
+                color = "bg-amber-100 text-amber-900 border-amber-300 font-medium";
+            }
+
             return {
-                status: "no_lead",
-                label: "SMS consent: No lead linked (Manual Estimate)",
-                canSend: false,
-                color: "bg-gray-100 text-gray-700 border-gray-300",
-                reason: "This estimate was created manually without a linked lead consent record."
+                status: serverConsent.status,
+                label: serverConsent.label || (serverConsent.status === "confirmed" ? "SMS Consent: Confirmed" : "SMS Consent: Not Collected"),
+                canSend: Boolean(serverConsent.canSend),
+                color,
+                reason: serverConsent.reason || "Status de consentimento obtido do servidor.",
+                verbalPendingCampaign: Boolean(serverConsent.verbalPendingCampaign)
             };
         }
 
-        const hasConsent = linkedLead.sms_consent === true || linkedLead.client_answers?.smsConsent === true;
-        if (!hasConsent) {
-            return {
-                status: "refused",
-                label: "SMS consent: Not provided / Refused",
-                canSend: false,
-                color: "bg-red-100 text-red-800 border-red-200",
-                reason: "Customer explicitly selected NO or did not provide SMS consent."
-            };
+        if (linkedLead) {
+            const hasConsent = linkedLead.sms_consent === true || linkedLead.client_answers?.smsConsent === true;
+            if (hasConsent) {
+                return {
+                    status: "confirmed",
+                    label: "SMS Consent: Confirmed",
+                    canSend: true,
+                    color: "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold",
+                    reason: "Consentimento de SMS registrado no formulário web."
+                };
+            }
         }
-
-        const normEstPhone = normalizePhoneE164Client(formData.client_phone);
-        const normLeadPhone = normalizePhoneE164Client(linkedLead.phone);
-
-        if (!normEstPhone || !normLeadPhone || normEstPhone !== normLeadPhone) {
-            return {
-                status: "phone_mismatch",
-                label: "SMS consent: Phone number changed (re-consent required)",
-                canSend: false,
-                color: "bg-amber-100 text-amber-900 border-amber-300 font-medium",
-                reason: `Phone number on estimate (${formData.client_phone || 'N/A'}) does not match original consent number (${linkedLead.phone || 'N/A'}).`
-            };
-        }
-
-        const timestamp = linkedLead.sms_consent_timestamp || linkedLead.client_answers?.smsConsentTimestamp;
-        const formattedDate = timestamp ? new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Confirmed";
 
         return {
-            status: "confirmed",
-            label: `SMS consent: Confirmed — ${formattedDate}`,
-            canSend: true,
-            color: "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold",
-            reason: "Valid SMS consent recorded for this lead and phone number."
+            status: "not_collected",
+            label: "SMS Consent: Not Collected",
+            canSend: false,
+            color: "bg-slate-100 text-slate-700 border-slate-300",
+            reason: "Nenhum consentimento de SMS foi registrado para o telefone deste orçamento."
         };
     };
 
@@ -788,10 +866,20 @@ const EstimateEditor = () => {
                                     {isSendingSMS ? <Loader2 className="h-4 w-4 animate-spin text-emerald-600" /> : <Phone className="h-4 w-4 text-emerald-600" />}
                                     Send Estimate SMS
                                 </Button>
-                                <span className={cn("text-[11px] px-2.5 py-0.5 rounded-full border inline-flex items-center gap-1 font-medium shadow-xs", smsConsentInfo.color)}>
-                                    {smsConsentInfo.status === 'confirmed' ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <ShieldAlert className="h-3 w-3 text-amber-600" />}
-                                    {smsConsentInfo.label}
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                    <span className={cn("text-[11px] px-2.5 py-0.5 rounded-full border inline-flex items-center gap-1 font-medium shadow-xs", smsConsentInfo.color)}>
+                                        {smsConsentInfo.status === 'confirmed' ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <ShieldAlert className="h-3 w-3 text-amber-600" />}
+                                        {smsConsentInfo.label}
+                                    </span>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setIsRecordConsentOpen(true)}
+                                        className="h-6 px-2 text-[10px] font-bold border-blue-300 text-blue-700 hover:bg-blue-50 rounded-lg shrink-0"
+                                    >
+                                        Record SMS Consent
+                                    </Button>
+                                </div>
                             </div>
                             <Button
                                 variant="outline"
@@ -978,6 +1066,100 @@ const EstimateEditor = () => {
                     onCountersigned={() => loadData()}
                 />
             )}
+
+            {/* Record Verbal SMS Consent Modal */}
+            <Dialog open={isRecordConsentOpen} onOpenChange={setIsRecordConsentOpen}>
+                <DialogContent className="max-w-md bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <Phone className="h-5 w-5 text-blue-600" />
+                            Record Verbal SMS Consent
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-600 mt-1">
+                            Registre a autorização verbal concedida diretamente pelo cliente por telefone ou pessoalmente.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-3 text-slate-800 text-xs">
+                        <div>
+                            <label className="block font-bold text-slate-700 mb-1.5">Método de Consentimento Verbal</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setVerbalConsentMethod("verbal_phone")}
+                                    className={cn(
+                                        "p-3 rounded-xl border text-left flex flex-col gap-1 transition-all",
+                                        verbalConsentMethod === "verbal_phone"
+                                            ? "border-blue-600 bg-blue-50/80 text-blue-900 font-bold shadow-xs"
+                                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                    )}
+                                >
+                                    <span className="text-xs font-bold">📞 Verbal Phone</span>
+                                    <span className="text-[10px] opacity-80 font-normal">Por Telefone</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setVerbalConsentMethod("verbal_in_person")}
+                                    className={cn(
+                                        "p-3 rounded-xl border text-left flex flex-col gap-1 transition-all",
+                                        verbalConsentMethod === "verbal_in_person"
+                                            ? "border-blue-600 bg-blue-50/80 text-blue-900 font-bold shadow-xs"
+                                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                    )}
+                                >
+                                    <span className="text-xs font-bold">🤝 Verbal In Person</span>
+                                    <span className="text-[10px] opacity-80 font-normal">Pessoalmente</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
+                            <strong>Nota de Conformidade:</strong> O envio de mensagens SMS via consentimento verbal permanecerá retido até a aprovação da nova campanha A2P 10DLC. O registro será gravado com data, hora, método e seu usuário responsável.
+                        </div>
+
+                        <div className="flex items-start gap-2 pt-1">
+                            <Checkbox
+                                id="verbal-confirm"
+                                checked={verbalConsentConfirmed}
+                                onCheckedChange={(checked) => setVerbalConsentConfirmed(Boolean(checked))}
+                                className="mt-0.5"
+                            />
+                            <label htmlFor="verbal-confirm" className="text-xs text-slate-700 leading-snug cursor-pointer select-none">
+                                <strong>Confirmação Expressa:</strong> Confirmo que o cliente autorizou verbalmente o envio de SMS para o telefone ({formData.client_phone || 'Telefone do cliente'}).
+                            </label>
+                        </div>
+
+                        <div>
+                            <label htmlFor="verbal-notes" className="block font-bold text-slate-700 mb-1">Observações Opcionais</label>
+                            <Textarea
+                                id="verbal-notes"
+                                value={verbalConsentNotes}
+                                onChange={(e) => setVerbalConsentNotes(e.target.value)}
+                                placeholder="Ex: Cliente autorizou durante chamada no dia 10/10..."
+                                className="text-xs h-20 rounded-xl border-slate-300"
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsRecordConsentOpen(false)}
+                            className="h-10 text-xs rounded-xl"
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={handleSaveVerbalConsent}
+                            disabled={isSavingConsent || !verbalConsentConfirmed}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 text-xs rounded-xl gap-2 shadow-md"
+                        >
+                            {isSavingConsent ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                            Salvar Registro de Consentimento
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
